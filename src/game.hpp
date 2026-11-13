@@ -37,7 +37,7 @@ struct Player {
     Vec velocity,safe;
     int support=-1, facing=1, hp=0, sprintDirection=0;
     float aim=0,coyote=0,jumpBuffer=0,jumpAge=0,windup=0,flash=0,muzzle=0,fireDelay=0,fireBuffer=0;
-    float flip=0,flipDirection=1;
+    float flip=0,flipDirection=1,turn=1,landed=0;
     bool crouched=false,sprinting=false,aiming=false,airJumpUsed=false;
     Gait gait;
 };
@@ -54,6 +54,8 @@ struct Enemy {
     int hp,maxHp,facing=1,volley=0;
     float aim=0,warning=0,hit=0,vertical=0,jump=0,vx=0,distance=0;
     bool alive=true;
+    // Animation state. These never affect the rules of the simulation except where noted.
+    float turn=1,raise=0,flinch=0,kick=0,recoil=0,landed=0,stride=0;
 };
 struct Supply { SupplyKind kind; Vec p; bool used=false; };
 struct Shot {
@@ -71,6 +73,12 @@ struct Particle {
     ParticleKind kind;
 };
 struct Message { Vec p; std::string text; Color color; float life,maxLife; };
+struct Corpse {
+    Enemy body;
+    Vec v;
+    float angle=0,spin=0,rest=0,age=0,life=0;
+    bool settled=false;
+};
 struct Ring { Vec p; Color color; float life,maxLife,radius; };
 struct StyleCall { std::string text; Color color; float life=0,maxLife=1; int combo=0; };
 
@@ -115,6 +123,7 @@ public:
     std::vector<Particle> particles;
     std::vector<Message> messages;
     std::vector<Ring> rings;
+    std::vector<Corpse> corpses;
     StyleCall style;
 
 private:
@@ -156,6 +165,8 @@ private:
     void burst(Vec p,Color color,int count,float speed,ParticleKind kind=ParticleKind::spark);
     void message(Vec p,std::string text,Color color,float duration=1.05f);
     void updateParticles(float dt);
+    void updateCorpses(float dt);
+    void bury(const Enemy& e);
 };
 Vec solveKnee(Vec hip,Vec ankle,float thigh,float shin,int forward);
 }

@@ -159,6 +159,36 @@ void comboScoring() {
     CHECK(game.hitStop > 0 || game.punch > 0);
     CHECK(!game.rings.empty());
     CHECK(game.score > 0);
+    // Defeated enemies leave a falling body that settles, then fades away.
+    CHECK(game.corpses.size() >= 2);
+    for (int i = 0; i < 1200 && !game.corpses.empty(); ++i) game.tick();
+    CHECK(game.corpses.empty());
+}
+
+void reactions() {
+    using namespace vl;
+    Silent audio;
+    Game game(audio);
+    game.start(0, startSave());
+    game.entry = 0;
+    run(game, 30);
+    auto& e = game.enemies[0];
+    e.kind = EnemyKind::ranger;
+    e.hp = e.maxHp = 100000;
+    e.box = {game.player.box.x + 140.f, game.player.box.bottom() - 54.f, 35, 54};
+    e.origin = {e.box.x, e.box.y}; e.base = game.player.box.bottom(); e.patrol = 0;
+    game.input(Key::automatic, true);
+    float peakFlinch = 0, raise = 0;
+    for (int i = 0; i < 240; ++i) { game.tick(); peakFlinch = std::max(peakFlinch, e.flinch); raise = std::max(raise, e.raise); }
+    CHECK(peakFlinch > .5f);
+    CHECK(raise > .9f);
+    // The operative turns smoothly instead of snapping.
+    game.input(Key::automatic, false);
+    game.pointer({100, 300});
+    run(game, 4);
+    CHECK(std::abs(game.player.turn) < 1.f);
+    run(game, 120);
+    CHECK(game.player.turn == -1.f);
 }
 
 void deterministic() {
@@ -194,6 +224,7 @@ int main() {
     chordsDriveTheGame();
     airFlip();
     comboScoring();
+    reactions();
     deterministic();
     stageData();
     if (failures) { std::cerr << failures << " check(s) failed\n"; return EXIT_FAILURE; }

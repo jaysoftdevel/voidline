@@ -54,7 +54,7 @@ Run the tests with `ctest --test-dir build --output-on-failure` after `./build.s
 
 ## Diagnostics
 
-Render a short, deterministic scene through the renderer with an offscreen SDL driver. Scenes are `1` to `5`, `menu`, `create`, `armory`, `intro`, `stand0` to `stand2`, `flip` and `slow`.
+Render a short, deterministic scene through the renderer with an offscreen SDL driver. Scenes are `1` to `5`, `menu`, `create`, `armory`, `intro`, `stand0` to `stand2`, `flip` and `slow`, `walk`, `boss` and `gallery0` to `gallery2`.
 
 ```bash
 SDL_VIDEODRIVER=offscreen SDL_AUDIODRIVER=dummy \

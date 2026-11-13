@@ -26,12 +26,13 @@ Options parseOptions(int argc,char** argv) {
         else if (arg=="--scene") result.scene=value();
         else if (arg=="--screenshot") result.screenshot=value();
         else if (arg=="--save-file") result.save=fs::absolute(value());
+        else if (arg=="--width") result.width=std::clamp(std::stoi(value()),720,3840);
         else if (arg=="--help") {
             std::cout<<"VOIDLINE "<<version<<"\nUsage: voidline [--windowed] [--save-file PATH]\n"
                 "Move: A/D or arrows. Jump (twice to flip): Space, W, Up or K. Sprint: Shift. Crouch: C, S, Down or Ctrl.\n"
                 "Fire: mouse, F or J. Bullet time: Q, X or right mouse. Reload: R. Weapons: 1-4, E or mouse wheel.\n"
                 "Pause: Esc or P. Fullscreen: F11. A gamepad is supported when connected.\n"
-                "Diagnostics: --smoke-test [--frames N] [--scene 1..5|menu|create|armory|intro|stand[0-3]|flip|slow] [--screenshot PATH.ppm]\n";
+                "Diagnostics: --smoke-test [--frames N] [--width PIXELS] [--scene 1..5|menu|create|armory|intro|stand[0-2]|gallery[0-2]|walk|flip|slow] [--screenshot PATH.ppm]\n";
             std::exit(0);
         } else if (arg=="--version") {
             std::cout<<"VOIDLINE "<<version<<" (native Linux)\n"; std::exit(0);
@@ -39,7 +40,7 @@ Options parseOptions(int argc,char** argv) {
     }
     if (result.frames<0 || (result.smoke && result.frames==0)) throw std::runtime_error("Frame count must be positive.");
     const bool named=result.scene=="menu" || result.scene=="create" || result.scene=="armory" || result.scene=="intro" ||
-        result.scene=="flip" || result.scene=="slow" || result.scene.rfind("stand",0)==0;
+        result.scene=="flip" || result.scene=="slow" || result.scene.rfind("stand",0)==0 || result.scene.rfind("gallery",0)==0 || result.scene=="walk" || result.scene=="boss";
     if (result.smoke && !named && !(result.scene.size()==1 && result.scene[0]>='1' && result.scene[0]<='5'))
         throw std::runtime_error("Unknown smoke-test scene.");
     return result;
@@ -48,7 +49,7 @@ Options parseOptions(int argc,char** argv) {
 struct Engine::Platform {
     SDL_Window* window=nullptr;
     void* context=nullptr;
-    explicit Platform(bool smoke) {
+    Platform(bool smoke,int width) {
         if (SDL_Init(sdl::video)<0) throw std::runtime_error(SDL_GetError());
         if (SDL_Init(sdl::audio)<0) std::cerr<<"SDL audio initialization: "<<SDL_GetError()<<'\n';
         if (SDL_Init(sdl::gameController)<0) std::cerr<<"Gamepad support unavailable: "<<SDL_GetError()<<'\n';
@@ -57,7 +58,7 @@ struct Engine::Platform {
         SDL_GL_SetAttribute(18,3); // Context minor version.
         SDL_GL_SetAttribute(21,1); // Core profile.
         const U32 flags=sdl::openGL|sdl::resizable|sdl::highDPI|(smoke?sdl::hidden:0);
-        window=SDL_CreateWindow("VOIDLINE",sdl::centered,sdl::centered,1200,600,flags);
+        window=SDL_CreateWindow("VOIDLINE",sdl::centered,sdl::centered,width,width/2,flags);
         if (!window) { const std::string error=SDL_GetError(); SDL_Quit(); throw std::runtime_error(error); }
         SDL_SetWindowMinimumSize(window,720,360);
         context=SDL_GL_CreateContext(window);
@@ -76,7 +77,7 @@ struct Engine::Platform {
 
 Engine::Engine(const Options& options):config(options) {
     const auto root=fs::read_symlink("/proc/self/exe").parent_path();
-    platform=std::make_unique<Platform>(config.smoke);
+    platform=std::make_unique<Platform>(config.smoke,config.width);
     if (!config.windowed && SDL_SetWindowFullscreen(platform->window,sdl::fullscreen)<0)
         std::cerr<<"Fullscreen unavailable: "<<SDL_GetError()<<'\n';
     vsync=SDL_GL_SetSwapInterval(config.smoke?0:1)==0 && !config.smoke;

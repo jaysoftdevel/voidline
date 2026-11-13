@@ -52,7 +52,7 @@ Vec solveKnee(Vec hip,Vec ankle,float thigh,float shin,int forward) {
 float Game::random() { return std::generate_canonical<float,22>(rng); }
 void Game::resetTransient() {
     release();
-    shots.clear(); hostile.clear(); particles.clear(); messages.clear(); rings.clear();
+    shots.clear(); hostile.clear(); particles.clear(); messages.clear(); rings.clear(); corpses.clear();
     style={}; combo=0; comboTimer=0; flash=0; pain=0; punch=0; hitStop=0; timeScale=1; slowing=slowLocked=false;
     shake=0; entry=2.65f;
 }
@@ -171,7 +171,7 @@ void Game::tick(float dt) {
     if (mode!=Mode::active) return;
     shoot(dt); moveEnemies(dt); moveShots(dt);
     if (mode!=Mode::active) return;
-    triggers(); updateParticles(dt);
+    triggers(); updateParticles(dt); updateCorpses(dt);
     const float target=clamp(player.box.x-width*.34f+player.velocity.x*.28f,0,stage->worldWidth-width);
     camera=mix(camera,target,1-std::exp(-4.9f*dt));
     if (mode==Mode::active && bossDead && std::abs(player.box.center().x-stage->exit.x)<48 &&
@@ -282,6 +282,8 @@ void Game::movePlayer(float dt) {
         message({p.box.center().x,p.box.y-14},"FLIP",hex(0xffe27a),.55f);
     }
     p.flip=std::max(0.f,p.flip-dt);
+    p.turn=approach(p.turn,float(p.facing),dt*9.5f);
+    p.landed=std::max(0.f,p.landed-dt*4.f);
     if (p.jumpAge>0) p.jumpAge+=dt;
     const bool rising=p.velocity.y<0;
     const bool releasedEarly=p.jumpAge>.13f && !held(Key::jump) && p.velocity.y<-80;
@@ -312,6 +314,7 @@ void Game::movePlayer(float dt) {
             const float impact=p.velocity.y-surface.velocity.y;
             if (attached<0 && impact>185) {
                 landing=clamp((impact-105)/525,.16f,1);
+                p.landed=landing;
                 const char* surfaceSound=surface.ground?footSounds[index]:"step-grate";
                 audio.event("land",.30f+landing*.66f,0,1.05f-landing*.15f+random()*.06f);
                 audio.event(surfaceSound,.26f+landing*.37f,0,.75f+random()*.11f);
@@ -519,12 +522,19 @@ void Game::moveEnemies(float dt) {
     for (auto& e:enemies) {
         if (!e.alive) continue;
         e.hit=std::max(0.f,e.hit-dt);
+        e.flinch=std::max(0.f,e.flinch-dt*4.5f);
+        e.kick=approach(e.kick,0,dt*5.f);
+        e.recoil=std::max(0.f,e.recoil-dt*6.f);
+        e.landed=std::max(0.f,e.landed-dt*5.f);
+        e.turn=approach(e.turn,float(e.facing),dt*(e.kind==EnemyKind::stalker?14.f:8.f));
         const float oldX=e.box.x;
         const Vec origin{e.box.center().x,e.box.y+e.box.h*.43f};
         const Vec target{p.center().x,p.y+p.h*.43f}, d=target-origin;
         if (std::abs(d.x)>690) continue;
         const bool inRange=std::abs(d.x)<e.reach && std::abs(d.y)<240;
         const bool boss=e.kind==EnemyKind::boss;
+        // The weapon comes up when the target is in range and drops back after a moment.
+        e.raise=approach(e.raise,inRange||e.warning>0?1.f:0.f,dt*(inRange?5.5f:1.6f));
         if (boss && std::abs(d.x)<555 && !bossActive) {
             bossActive=true; message({origin.x,e.box.y-18},stage->boss,hex(stage->accent),1.7f);
             shake=8; audio.event("launch",.76f);
@@ -543,6 +553,7 @@ void Game::moveEnemies(float dt) {
             if (stalker || (inRange && e.warning<=0 && std::abs(d.x)>(boss?188:171)))
                 targetSpeed=e.facing*e.speed*pace*(inRange?1.f:.35f);
             else if (!inRange && !boss) targetSpeed=e.facing*e.speed*.60f*pace;
+            if (e.flinch>0) targetSpeed*=.3f;
             e.vx=approach(e.vx,targetSpeed,dt*(stalker?670.f:420.f));
             e.box.x=clamp(e.box.x+e.vx*dt,e.origin.x-e.patrol,e.origin.x+e.patrol);
             if (e.box.x==e.origin.x-e.patrol || e.box.x==e.origin.x+e.patrol) {
@@ -557,7 +568,7 @@ void Game::moveEnemies(float dt) {
                 }
                 e.vertical+=1260*dt;
                 e.box.y=std::min(e.base-e.box.h,e.box.y+e.vertical*dt);
-                if (e.box.bottom()>=e.base-.01f) e.vertical=0;
+                if (e.box.bottom()>=e.base-.01f) { if (e.vertical>120) e.landed=1; e.vertical=0; }
             }
             if (boss) e.box.y=e.origin.y-(index==4?33+std::sin(time*2.4f)*24:std::max(0.f,std::sin(time*2.7f))*4);
         }
@@ -595,6 +606,7 @@ void Game::enemyFire(Enemy& e) {
     }
     if (boss && ++e.volley%3==0 && index>=1)
         hostile.push_back({{origin.x,e.base-15},{sign(player.box.x-e.box.x)*speed*1.07f,0},2.4f,e.damage*1.3f,color,0,0,true,true});
+    e.recoil=1;
     burst(origin,color,boss?10:4,98);
     audio.event("enemy",boss?.78f:.49f,(origin.x-player.box.x)/width,boss?.73f:.91f+random()*.22f);
 }
@@ -622,7 +634,7 @@ void Game::moveShots(float dt) {
             auto& e=enemies[hit];
             if (e.hit<=0) audio.event("hit-metal",.3f,(s.p.x-player.box.x)/590,.92f+random()*.23f);
             s.passed|=1u<<hit;
-            e.hp-=static_cast<int>(s.damage); e.hit=.094f;
+            e.hp-=static_cast<int>(s.damage); e.hit=.094f; e.flinch=1; e.kick=sign(s.v.x)*clamp(s.damage/60,.35f,1.f);
             if (e.hp<=0) destroy(e);
             if (s.pierce>0) --s.pierce;
             else s.life=0;
@@ -643,6 +655,58 @@ void Game::moveShots(float dt) {
     }
     std::erase_if(shots,[](const Shot& s){return s.life<=0;});
     std::erase_if(hostile,[](const Shot& s){return s.life<=0;});
+}
+void Game::bury(const Enemy& e) {
+    if (e.kind==EnemyKind::boss) return;
+    const float away=sign(e.box.center().x-player.box.center().x);
+    Corpse c;
+    c.body=e;
+    c.body.alive=false;
+    c.body.hit=.12f;
+    c.v=Vec{away*(70+random()*90),-(150+random()*110)};
+    switch (e.kind) {
+    case EnemyKind::drone: c.spin=away*(3+random()*4); c.rest=away*.5f; c.v.y=-60; c.life=1.5f; break;
+    case EnemyKind::turret: c.spin=0; c.rest=0; c.v=Vec{0,-40}; c.life=1.1f; break;
+    case EnemyKind::stalker: c.spin=away*(5+random()*3); c.rest=away*pi; c.life=1.9f; break;
+    default: c.spin=away*(2.2f+random()*1.4f); c.rest=away*1.52f; c.life=2.3f; break;
+    }
+    corpses.push_back(c);
+}
+void Game::updateCorpses(float dt) {
+    for (auto& c:corpses) {
+        c.age+=dt;
+        const bool flying=c.body.kind==EnemyKind::drone;
+        Vec center=c.body.box.center();
+        if (!c.settled) {
+            c.v.y+=(flying?900.f:1500.f)*dt;
+            c.v.x*=1-.9f*dt;
+            center+=c.v*dt;
+            const float half=c.body.box.h*.5f*(1-.3f*std::abs(std::sin(c.angle)));
+            for (const auto& surface:platforms) {
+                const auto& s=surface.box;
+                if (c.v.y<=0 || center.x<s.x || center.x>s.right()) continue;
+                const float before=center.y-c.v.y*dt+half;
+                if (before>s.y+3 || center.y+half<s.y) continue;
+                center.y=s.y-half;
+                if (c.v.y>260 && c.body.kind!=EnemyKind::turret) {
+                    c.v.y*=-.28f; c.v.x*=.6f;
+                    burst(Vec{center.x,s.y},hex(stage->cold),4,70,ParticleKind::smoke);
+                } else { c.v=Vec{}; c.settled=true; }
+                break;
+            }
+            if (c.body.kind==EnemyKind::turret) c.v.x=0;
+            c.angle+=c.spin*dt;
+            if (c.rest!=0 && std::abs(c.angle)>std::abs(c.rest) && !flying) { c.angle=c.rest; c.spin*=.2f; }
+        } else {
+            c.angle=approach(c.angle,c.rest,dt*4);
+        }
+        c.body.box.x=center.x-c.body.box.w*.5f; c.body.box.y=center.y-c.body.box.h*.5f;
+        c.body.hit=std::max(0.f,c.body.hit-dt);
+        if (flying && !c.settled && random()<dt*20) burst(center,hex(0xffa55e),1,40,ParticleKind::smoke);
+        if (c.life-c.age<.4f && c.life-c.age+dt>=.4f) burst(center,hex(0xffd9a0),6,120);
+    }
+    for (const auto& c:corpses) if (c.age>=c.life) burst(c.body.box.center(),hex(0x98b4c7),8,90,ParticleKind::smoke);
+    std::erase_if(corpses,[](const Corpse& c){return c.age>=c.life;});
 }
 void Game::ring(Vec p,Color color,float radius,float life) { rings.push_back({p,color,life,life,radius}); }
 void Game::award(Enemy& e,int base) {
@@ -675,6 +739,7 @@ void Game::award(Enemy& e,int base) {
 }
 void Game::destroy(Enemy& e) {
     e.alive=false; ++kills;
+    bury(e);
     const bool boss=e.kind==EnemyKind::boss;
     award(e,spec(e.kind).score+(boss?index*22:0));
     const Color accent=hex(stage->accent);

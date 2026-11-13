@@ -13,6 +13,12 @@ Platform faces use world-space material noise for fine grain, paint wear, brushe
 
 The uploaded gait reference informed heel contact, toe-off and swing. The simulation advances the gait by horizontal travel. Each stance foot locks to platform coordinates, including moving lifts. The renderer blends pose snapshots and solves two-segment legs. Sprint increases stride and body lean, and crouch reduces the collision height as well as the rendered stance. Jumps use a short push-off, a tucked airborne pose, variable lift and a damped landing response.
 
+## Figures and animation
+
+`src/figure.cpp` holds a shared side-view human rig used by the three operatives and the soldier enemies. It has a spine that follows the pelvis, a head that looks toward the aim, a neck, shoulders with pauldrons, two-bone arms and legs, hands and boots. Each operative has their own face, hair and headgear, and a distinct backpack. The torso carries plates, a belt, pouches, a cross strap and lamps, and the legs carry knee pads, greaves and boot soles.
+
+Motion layers on top of the foot-locked gait. The body turns through a profile instead of snapping, breathes while idle, sinks and squashes on landing, recoils from each shot and flinches when hit. Arms follow the weapon grip. Soldiers carry their rifle low until a target is in range and then raise it. Defeated enemies tumble, bounce and settle before they fade. Drones bank and spin four-blade rotors, turrets track with a gimbal and kick back, and stalkers use a diagonal gait with a lashing tail and a crouch before a lunge.
+
 ## Stylized look
 
 Actors draw after lighting and fog with heavy ink outlines, flat saturated armor shells, a scarf in the operative's color and sprite art for the weapons. The final pass applies a per-sector color grade, filmic contrast, light chromatic aberration, film grain and a vignette. Kills add a zoom punch and flash, damage adds a red edge, and bullet time adds a cool grade, speed streaks and a push-in. Shockwave rings, shell casings, motion streaks and outlined pop-up text reinforce impact. A mid-air flip rotates the whole body.

@@ -7,7 +7,7 @@
 namespace vl {
 struct Options {
     bool windowed=false,smoke=false;
-    int frames=0;
+    int frames=0,width=1200;
     std::string scene="1";
     std::filesystem::path screenshot,save;
 };

@@ -637,6 +637,41 @@ void App::sceneForTest(std::string_view scene) {
         game.pointer({700,420});
         return;
     }
+    if (scene.rfind("gallery",0)==0) {
+        // Every enemy kind lined up beside the operative, used to inspect animation and detail.
+        save.character=scene.size()>7?scene[7]-'0':0;
+        prepare(0,0);
+        game.pointer({640,420});
+        constexpr EnemyKind kinds[]{EnemyKind::ranger,EnemyKind::stalker,EnemyKind::turret,EnemyKind::drone,EnemyKind::ranger};
+        constexpr Vec sizes[]{{35,54},{54,37},{48,46},{48,30},{35,54}};
+        for (size_t i=0;i<game.enemies.size();++i) {
+            auto& e=game.enemies[i];
+            if (i<5) {
+                e.kind=kinds[i];
+                const float px=250.f+float(i)*150.f;
+                const float top=kinds[i]==EnemyKind::drone?380.f:505.f-sizes[i].y;
+                e.box={px,top,sizes[i].x,sizes[i].y};
+                e.origin={px,top}; e.base=505; e.patrol=0; e.facing=-1; e.turn=-1; e.reach=1;
+                e.hp=e.maxHp=100000;
+            } else e.box.x=6000;
+        }
+        script=[this](int frame) { input.inject(sdl::key::f,frame>80); };
+        return;
+    }
+    if (scene=="boss") {
+        prepare(0,0);
+        auto& boss=game.enemies.back();
+        game.player.box.x=boss.box.x-380; game.camera=boss.box.x-760;
+        game.player.support=-1;
+        script=[this](int frame) { input.inject(sdl::key::f,frame>10); };
+        return;
+    }
+    if (scene=="walk") {
+        prepare(0,0);
+        game.pointer({900,300});
+        script=[this](int frame) { input.inject(sdl::key::d,true); input.inject(sdl::key::f,frame>200); };
+        return;
+    }
     if (scene=="flip") {
         prepare(0,0);
         game.pointer({900,300});

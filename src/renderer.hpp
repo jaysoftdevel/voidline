@@ -97,7 +97,11 @@ private:
     void actors(const Game& game);
     void drawPlayer(const Game& game);
     void armor(Vec a,Vec b,float top,float bottom,Color tint,Color edge,bool near);
-    void drawEnemy(const Enemy& enemy,Color accent,int sector);
+    void drawEnemy(const Enemy& enemy,Color accent,int sector,float time,Vec target);
+    void drawCorpses(const Game& game);
+    struct Humanoid;
+    void humanoid(const Humanoid& figure);
+    void polygon(Vec a,Vec b,Vec c,Vec d,Color color);
     void drawParticles(const Game& game);
     void drawRings(const Game& game);
     void drawTrails(const Game& game,Vec ground);

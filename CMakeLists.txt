@@ -23,7 +23,7 @@ target_compile_options(voidline_core PRIVATE -Wall -Wextra -Wpedantic)
 target_link_libraries(voidline_core PUBLIC Threads::Threads ${VOIDLINE_RUNTIME_LIBS})
 
 add_executable(voidline
-  src/main.cpp src/engine.cpp src/app.cpp src/renderer.cpp src/world.cpp src/services.cpp)
+  src/main.cpp src/engine.cpp src/app.cpp src/renderer.cpp src/world.cpp src/figure.cpp src/services.cpp)
 target_compile_options(voidline PRIVATE -Wall -Wextra -Wpedantic)
 target_link_libraries(voidline PRIVATE voidline_core)
 add_custom_command(TARGET voidline POST_BUILD
