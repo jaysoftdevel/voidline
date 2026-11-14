@@ -113,7 +113,7 @@ private:
     bool tinting=false;
     Color shade(Color c) const { return tinting?Color{c.r*actorLight.r,c.g*actorLight.g,c.b*actorLight.b,c.a}:c; }
     Color litBy(Vec p,const Game& game) const;
-    std::array<Target,4> bloom{};
+    std::array<Target,5> bloom{};
     Vec offset,playerShift;
     CameraView cameraView;
     Vec platformRear(Vec edge,float depth) const;
@@ -195,6 +195,9 @@ private:
     void drawRookHead(const Humanoid& figure,const Face& face);
     void drawValeHead(const Humanoid& figure,const Face& face);
     void drawHelmet(const Humanoid& figure,const Face& face);
+    void drawMercerHead(const Humanoid& figure,const Face& face);
+    void drawColeHead(const Humanoid& figure,const Face& face);
+    void drawNyxHead(const Humanoid& figure,const Face& face);
     void drawArms(const Humanoid& figure,const Rig& rig);
     static ArmPose blendArms(const ArmPose& a,const ArmPose& b,float t);
     ArmPose freeArm(const Humanoid& figure,const Rig& rig,Vec shoulder,bool near) const;

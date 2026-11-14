@@ -65,6 +65,65 @@ void Renderer::drawValeHead(const Humanoid& h,const Face& f) {
     ellipse(m2,{1.1f,1.1f},h.trim.energy(1.6f));
 }
 
+// Jax Mercer: oversized breacher helmet with a square blast brow, dual filters and a solid amber visor.
+void Renderer::drawMercerHead(const Humanoid& h,const Face& f) {
+    const Vec c=f.head; const float d=f.ft,side=f.fa;
+    ellipse(c+Vec{0,-.8f},{8.7f,8.f},h.ink);
+    ellipse(c+Vec{0,-1.2f},{8.0f,7.3f},h.shell.energy(.93f));
+    polygon(c+Vec{-7.7f,-4.3f},c+Vec{7.f,-4.3f},c+Vec{7.8f,-.5f},c+Vec{-7.8f,-.5f},h.leather);
+    polygon(c+Vec{-7.f,-5.1f},c+Vec{4.9f,-6.3f},c+Vec{7.3f,-3.8f},c+Vec{-7.3f,-2.9f},h.shell.energy(1.26f));
+    const Vec a=c+Vec{-5.8f,-.5f},b=c+Vec{d*(6.1f*side+(1-side)*5.8f),-.65f};
+    line(a,b,4.8f,h.ink); line(a,b,2.85f,hex(0xfeb451).energy(2.3f));
+    halo((a+b)*.5f,11,hex(0xffa03d).alpha(.26f));
+    polygon(c+Vec{-4.6f,2.3f},c+Vec{5.8f,2.3f},c+Vec{4.7f,6.1f},c+Vec{-4.1f,6.1f},h.leather);
+    for (int i=-1;i<=1;i+=2) {
+        const Vec p=c+Vec{i*5.3f,4.3f};
+        ellipse(p,{2.15f,2.5f},h.ink); ellipse(p,{1.45f,1.8f},h.shadow.energy(1.7f));
+        line(p-Vec{1.f,0},p+Vec{1.f,0},.8f,h.trim.energy(1.7f));
+    }
+    // Reinforced squared crest and independently articulated ear protection.
+    polygon(c+Vec{-3.f,-8.8f},c+Vec{2.2f,-8.8f},c+Vec{3.f,-6.2f},c+Vec{-3.f,-6.2f},h.trim.energy(.9f));
+    ellipse(f.ear,{3.4f,4.1f},h.ink); ellipse(f.ear,{2.5f,3.1f},h.shell.energy(.8f));
+}
+
+// Darius Cole: aerodynamic falcon visor, pitched hood and a projecting recon sensor.
+void Renderer::drawColeHead(const Humanoid& h,const Face& f) {
+    const Vec c=f.head; const float d=f.ft;
+    ellipse(c+Vec{0,-1.f},{7.0f,7.5f},h.ink);
+    ellipse(c+Vec{0,-1.2f},{6.1f,6.6f},h.suit.energy(1.33f));
+    triangle(c+Vec{-6.5f,-4.6f},c+Vec{d*3.f,-11.1f},c+Vec{d*10.1f,-4.9f},h.shell.energy(.98f));
+    triangle(c+Vec{-5.8f,-3.9f},c+Vec{d*3.f,-9.f},c+Vec{d*8.8f,-3.5f},h.shadow.energy(1.8f));
+    const Vec eye=c+Vec{d*2.5f,-.8f};
+    triangle(eye+Vec{-d*5.f,-1.7f},eye+Vec{d*4.3f,-1.6f},eye+Vec{d*.3f,4.2f},h.ink);
+    line(eye+Vec{-d*3.f,-1.f},eye+Vec{d*1.1f,3.f},2.f,hex(0x7df7ff).energy(2.1f));
+    line(eye+Vec{d*1.1f,3.f},eye+Vec{d*3.3f,-1.1f},1.7f,hex(0x51d8f0).energy(2.1f));
+    halo(eye,8,h.trim.alpha(.25f));
+    polygon(c+Vec{-d*3.f,4.2f},c+Vec{d*5.f,4.2f},c+Vec{d*4.3f,7.1f},c+Vec{-d*2.7f,7.1f},h.leather);
+    // Backward swept comms fin (unique aerodynamic profile).
+    triangle(c+Vec{-d*4.4f,-5.9f},c+Vec{-d*14.4f,-10.7f},c+Vec{-d*7.1f,-2.4f},h.shell.energy(1.13f));
+    ellipse(f.ear,{1.8f,2.5f},h.trim.energy(1.2f));
+}
+
+// Sera Nyx: angular ivory-and-violet sealed helmet and floating holographic sensor blades.
+void Renderer::drawNyxHead(const Humanoid& h,const Face& f) {
+    const Vec c=f.head; const float d=f.ft;
+    ellipse(c+Vec{0,-.9f},{7.f,7.9f},h.ink);
+    ellipse(c+Vec{0,-1.2f},{6.1f,7.1f},hex(0xd7d3d8));
+    triangle(c+Vec{-d*4.8f,-5.8f},c+Vec{d*7.2f,-5.1f},c+Vec{d*5.f,5.9f},h.shadow.energy(1.8f));
+    triangle(c+Vec{-d*3.f,-3.9f},c+Vec{d*5.f,-3.5f},c+Vec{d*2.9f,3.6f},hex(0x8f42ff).energy(1.7f));
+    line(c+Vec{d*3.f,-3.9f},c+Vec{d*2.2f,2.5f},1.1f,hex(0xf3c9ff).energy(2.1f));
+    halo(c+Vec{d*2.f,-1.f},10,h.visor.alpha(.32f));
+    polygon(c+Vec{-d*3.7f,3.8f},c+Vec{d*3.2f,5.f},c+Vec{d*3.1f,7.8f},c+Vec{-d*4.f,6.2f},h.shell.energy(1.3f));
+    // Split holographic crown, placed above/behind the head, clearly unlike the other helmets.
+    for (int i=0;i<3;++i) {
+        const float angle=-2.5f+i*.31f;
+        const Vec a=c+Vec{std::cos(angle)*11.2f,std::sin(angle)*10.f};
+        const Vec b=c+Vec{std::cos(angle-.19f)*12.3f,std::sin(angle-.19f)*10.7f};
+        line(a,b,1.1f,h.trim.energy(2.1f).alpha(.82f));
+    }
+    ellipse(f.ear,{2.5f,3.3f},h.ink); ellipse(f.ear,{1.8f,2.5f},hex(0xdbd5db));
+}
+
 // Soldiers wear a closed helmet with a glowing visor and a chin guard. The visor dies out when the soldier falls.
 void Renderer::drawHelmet(const Humanoid& h,const Face& f) {
     const Color ink=h.ink;

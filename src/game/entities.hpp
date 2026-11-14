@@ -11,9 +11,9 @@ inline constexpr std::array<float,weaponCount> muzzleReach{44,48,53,26,38,46,66}
 inline constexpr float flipSeconds=.58f;
 // Seconds the weapon stays raised after the last aiming input.
 inline constexpr float readyHold=1.6f;
-enum class Key { left,right,jump,fire,automatic,reload,sprint,crouch,slow,count };
+enum class Key { left,right,jump,fire,automatic,reload,sprint,crouch,slow,interact,count };
 enum class Mode { active,paused,failed,complete };
-enum class ParticleKind { spark,smoke,chip,casing,puff,weapon,ember };
+enum class ParticleKind { spark,smoke,chip,casing,puff,weapon,ember,blood,stain };
 // Background happenings that play out behind the action. They never touch the simulation except for light and rumble.
 enum class AmbientKind { blast,flyer,fountain,streak,lightning,searchlight,steam,spores };
 struct Ambient {

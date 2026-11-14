@@ -1,4 +1,4 @@
-# VOIDLINE 2.9.7
+# VOIDLINE 2.10.2
 
 VOIDLINE is a native C++ 2D shooter for Linux and Windows 11 with 20 sectors, six operatives, difficulty levels and an armory. Destroy the guardian in each sector and reach extraction to turn mission score into upgrade points and see the next part of the Vega-9 rescue story.
 
@@ -25,7 +25,7 @@ Progress lives in `${XDG_DATA_HOME:-$HOME/.local/share}/voidline/campaign.json`.
 
 ## Two-player co-op
 
-1. Both players launch VOIDLINE **2.9.7** and open **Multiplayer**.
+1. Both players launch VOIDLINE **2.9.8** and open **Multiplayer**.
 2. On the host, choose **Host Game**, select a difficulty, and select **Generate Session Key**. The lobby waits for player 2. Copy the key and share it with your partner.
 3. On the other computer, choose **Join Game**, paste the key, and select **Connect**. After host approval, **each player selects and locks in a character** from the six-operative roster. The mission does not start until both lock in. The shared prologue plays before deployment and either player can request to skip it for both. They deploy together in **Chapter 1, The Descent**.
 
@@ -166,10 +166,53 @@ SDL_VIDEODRIVER=offscreen SDL_AUDIODRIVER=dummy \
   ./run.sh --smoke-test --windowed --scene slow --frames 90 --screenshot slow.ppm
 ```
 
+## Frame counter, synchronized co-op pause and momentum combat (v2.9.8)
+
+**FPS:** Settings → Show FPS counter toggles a small measured FPS readout. Settings → FPS display corner cycles top left / top right / bottom left / bottom right. The settings persist in the existing campaign JSON; the default is off. The readout uses real frame time, including graphics presentation, averaged over about half a second. It is positioned clear of the main gameplay HUD.
+
+**Co-op pause:** Esc, P or controller Pause freezes the simulation for **both players**, including enemies, timers, bullets and objectives. The initiating player is the only one who can select **RESUME GAME**. The partner sees the message **Waiting for other player** and cannot resume for them. A guest's pause/resume request goes through the host, which announces the authoritative state to both clients. Incoming TCP packets continue to be processed so disconnects and pause/resume commands still work. Pausing never starts a new mission or changes save data.
+
+**Momentum:** Three consecutive kills without losing the streak now grant an extra focus boost and score bonus; every fifth kill in a streak partially refills the current magazine. Kill-chain callouts and ring/audio cues make the rewards visible. Being wounded or allowing the combo timer to expire resets the chain. This adds no new saved data.
+
+The multiplayer protocol is **VL7**, which requires matching v2.9.8 clients on Linux and Windows; older VL6 clients cannot join. Windows compilation and mixed-OS connection must still be verified on native Windows hardware.
+
 ## Animated prologue and bundled assets (v2.9.7)
 
 A new seven-shot 31.5-second prologue explains the Europa colony, the Tideworks flood, the Helix machine lockdown, Neri's distress call, the Aster rescue cutter, and the mission to restore the Terminus uplink. Every shot has continuous camera moves and procedural animated signal, radar, atmospheric dust and rescue-ship effects. Solo and co-op prologues can be skipped by mouse, Enter, Space or Escape; in co-op either player can skip and the host advances the scheduled deployment for both. The animated startup splash is unchanged; **post-level story stills and the following level-summary page remain static**. No operative model is superimposed on the prologue artwork.
 
 The `scripts/pack-assets.py` tool builds `game.vpak` (all original artwork, audio, font atlases and font metrics) for both platforms. Runtime image/audio decoders now read the archive in memory, including OGG music through libsndfile virtual I/O. The copyable tester runtime contains **only `assets/game.vpak`**, the executable, libraries, launch scripts and required license notices. Source media remain in the developer tree to allow editing/repacking; do not distribute the source tree as the tester runtime. The package is obfuscated to stop direct opening as a picture/audio track, not encrypted DRM.
 
-The multiplayer protocol is now `VL6`; old `VL5` (v2.9.6) game builds cannot connect. Windows and Linux use the same byte-level session packets, player choice handshake and world serialization. Native Windows compilation and an actual mixed-OS co-op session must still be checked on Windows hardware.
+The multiplayer protocol is now `VL7`; old `VL6` (v2.9.7) game builds cannot connect. Windows and Linux use the same byte-level session packets, player choice handshake and world serialization. Native Windows compilation and an actual mixed-OS co-op session must still be checked on Windows hardware.
+
+## Combat effects, expanded sectors and visual-overhaul pass (v2.9.9)
+
+This update strengthens combat readability and spectacle with heavier enemy hit sparks, stronger player damage feedback and blood-like red hit spray.
+
+Every level now starts with a safer insertion zone, longer traversal and additional vertical routes, lifts, ledges and cover obstacles. Mission generation was extended so later sectors play longer and feel denser instead of just wider.
+
+Rendering received a broader atmosphere pass: denser backdrops, stronger bloom/glow, boosted light energy and deeper post-processing. Enemy silhouettes also gained more shared detail and movement patterns were refined for drones, interceptors, stalkers, scavengers and snipers.
+
+## VOIDLINE v2.10.0 — Cooperative puzzle missions and visual combat pass
+
+The multiplayer lobby now offers two distinct modes. **Campaign** retains the familiar 20 shared-route missions. **Cooperative** contains six new two-route levels where the host begins on an upper gantry and the guest begins on the lower floor. Each route has relays that open doors for the other player; the operator must hold the pad until the teammate passes the gate, after which the gate stays open. Both operatives must reach extraction. The game host remains authoritative over relay charge and completion.
+
+Host setup is a mode/difficulty choice followed by sharing a key or accepting a discovered LAN guest. Join now automatically discovers local hosts and keeps manual session-key entry as an alternative. Both players select and lock their operatives before deployment. The server advertises the chosen game mode to the guest lobby after host approval.
+
+Boss encounters escalate at two health thresholds, with extra volleys and distinct feedback. Each level has exploration-triggered sector-specific scripted set pieces. More red blood-like hit particles fall to the floor and briefly stain it, while robot hits retain metal sparks.
+
+The network session key protocol is now VL8. Both players need v2.10.0; no loose artwork/audio is introduced, and `game.vpak` remains the runtime asset source.
+
+
+## Cooperative shared insertion and split-route missions (v2.10.1)
+
+In the six Cooperative missions, **both operatives spawn side by side on the same ground-level insertion deck**. Follow the signs at the fork: **Player 1 climbs the fixed steps or elevator to the upper route**, while **Player 2 continues through the lower industrial route**. Alternating objectives require one player to hold a relay pad while the other passes a locked gate. Each receiver must cross before the gate is permanently secured; the roles alternate on subsequent relays.
+
+Checkpoints regroup both players safely at floor level, with nearby re-entry steps for the upper route. The multiplayer lobby now correctly delivers the game-mode announcement before character lock-in. Cooperative multiplayer uses the **VL9** session key and versioned LAN discovery/handshake, rejecting older 2.10.0 builds instead of mixing incompatible stage geometry. Both players must use v2.10.1.
+
+## Mechanical co-op doors and varied sectors (v2.10.2)
+
+Cooperative mode retains the shared starting bay. The separated upper and lower routes now use animated mechanical sliding doors, floor pressure plates and **E**-operated levers. One partner holds a pressure plate or engages a six-second lever while the other crosses. Once crossed, the gate is secured permanently, and a checkpoint will not bypass unsolved doors. Each player must alternate operating the controls and passing the doors.
+
+The 20-sector campaign is longer, substantially harder, and uses varied biome- and section-specific traversals (stepped shafts, maintenance lifts, bridge paths, elevated firefights, flooded deck paths and high gantries). Cooperative missions are longer too, with more doors and changing encounter layouts. The multiplayer protocol is **VL10**; both computers must run 2.10.2.
+
+Input: **E** operates levers. Weapon cycling remains available via the mouse wheel or **V**. Keyboard bindings can be customized in Settings.

@@ -5,7 +5,7 @@
 namespace vl {
 // A side-view human rig. The operatives and the soldier enemies share it. All positions are in screen space.
 struct Renderer::Humanoid {
-    enum class Look { voss, rook, vale, soldier };
+    enum class Look { voss, rook, vale, mercer, cole, nyx, soldier };
     Look look=Look::soldier;
     Vec ground;
     int facing=1,stride=1;

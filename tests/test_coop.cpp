@@ -1,5 +1,6 @@
 #include "support.hpp"
 #include "net/world.hpp"
+#include "net/pause.hpp"
 #include <chrono>
 #include <thread>
 
@@ -28,11 +29,11 @@ void handshake() {
         return;
     }
     const auto key=host.key();
-    CHECK(key.starts_with("VL6-") && key.size()==40 && host.receive().empty());
+    CHECK(key.starts_with("VL10-") && key.size()==41 && host.receive().empty());
     CHECK(!wrong.join("not-a-session-key"));
-    for (const auto old:{"VL1-","VL2-","VL3-","VL4-","VL5-"}) {
-        CHECK(!wrong.join(std::string(old)+key.substr(4)));
-        CHECK(wrong.error().find("2.9.7")!=std::string::npos);
+    for (const auto old:{"VL1-","VL2-","VL3-","VL4-","VL5-","VL6-","VL7-","VL8-","VL9-"}) {
+        CHECK(!wrong.join(std::string(old)+key.substr(5)));
+        CHECK(wrong.error().find("2.10.2")!=std::string::npos);
     }
     auto wrongKey=key;
     wrongKey.back()=wrongKey.back()=='0'?'1':'0';
@@ -65,8 +66,14 @@ void handshake() {
     CHECK(until(host,guest,[&] { return host.state()==State::connected && guest.state()==State::connected; }));
     CHECK(host.hosting() && !guest.hosting());
     CHECK(host.receive().empty() && guest.receive().empty());
-    CHECK(guest.send(net::Packet::operative,std::array<uint8_t,1>{5}));
+    // The host's Cooperative/Campaign mode advertisement must pass through
+    // the shared packet validator. This was previously rejected as > pauseState.
+    CHECK(host.send(net::Packet::lobbyMode,std::array<uint8_t,1>{1}));
     std::vector<net::Bytes> messages;
+    CHECK(until(host,guest,[&] { messages=guest.receive(); return !messages.empty(); }));
+    CHECK(messages.size()==1 && messages[0].size()==2 &&
+          messages[0][0]==static_cast<uint8_t>(net::Packet::lobbyMode) && messages[0][1]==1);
+    CHECK(guest.send(net::Packet::operative,std::array<uint8_t,1>{5}));
     CHECK(until(host,guest,[&] { messages=host.receive(); return !messages.empty(); }));
     CHECK(messages.size()==1 && messages.front().front()==static_cast<uint8_t>(net::Packet::operative) && messages.front().size()==2 && messages.front()[1]==5);
     // Each side independently announces its own lock-in; the selection must
@@ -87,6 +94,30 @@ void handshake() {
           messages.front()[0]==static_cast<uint8_t>(net::Packet::skipOpening) &&
           net::decodeTiming(std::span<const uint8_t>(messages.front()).subspan(1),skip) &&
           skip.mission==1 && skip.first==123450 && skip.second==0);
+    // Cross-platform pause requests and state broadcasts use fixed-width little-endian fields.
+    net::PauseState frozen{true,net::PauseOwner::guest};
+    const auto pauseReq=net::encodePauseRequest(7,true);
+    uint32_t generation=0;
+    bool requested=false;
+    CHECK(net::decodePauseRequest(pauseReq,generation,requested) && generation==7 && requested);
+    CHECK(!net::decodePauseRequest({pauseReq.data(),4},generation,requested));
+    CHECK(guest.send(net::Packet::pauseRequest,pauseReq));
+    CHECK(until(host,guest,[&] { messages=host.receive(); return !messages.empty(); }));
+    CHECK(messages.size()==1 && messages[0][0]==static_cast<uint8_t>(net::Packet::pauseRequest));
+    CHECK(net::decodePauseRequest(std::span(messages[0]).subspan(1),generation,requested) && generation==7 && requested);
+    CHECK(host.send(net::Packet::pauseState,net::encodePauseState(7,frozen)));
+    CHECK(until(host,guest,[&] { messages=guest.receive(); return !messages.empty(); }));
+    net::PauseState confirmed{};
+    CHECK(messages.size()==1 && messages[0][0]==static_cast<uint8_t>(net::Packet::pauseState));
+    CHECK(net::decodePauseState(std::span(messages[0]).subspan(1),generation,confirmed));
+    CHECK(generation==7 && confirmed.active && confirmed.owner==net::PauseOwner::guest);
+    CHECK(!net::changePause(confirmed,net::PauseOwner::host,false));
+    CHECK(confirmed.active);
+    CHECK(net::changePause(confirmed,net::PauseOwner::guest,false) && !confirmed.active);
+    CHECK(!net::changePause(confirmed,net::PauseOwner::guest,false));
+    CHECK(net::changePause(confirmed,net::PauseOwner::host,true) && confirmed.active);
+    CHECK(!net::changePause(confirmed,net::PauseOwner::guest,true));
+    CHECK(net::changePause(confirmed,net::PauseOwner::host,false) && !confirmed.active);
     // A full session must immediately reject extra connections on Windows
     // as well as Linux, without disrupting the accepted guest.
     CHECK(third.join(key));
@@ -215,8 +246,138 @@ void synchronizedClock() {
     CHECK(timing.mission==1 && timing.first==9300 && timing.second==9300+net::openingDuration);
     CHECK(!net::decodeTiming(std::span(plan).first(plan.size()-1),timing));
 }
+void cooperativePuzzles() {
+    Silent audio;
+    const auto save=fullSave();
+    for (int i=0;i<cooperativeSectorCount;++i) {
+        const auto& s=cooperativeStages[i];
+        CHECK(!s.relays.empty() && s.relays.size()==size_t(4+i));
+        CHECK(s.relays.front().barrier.x>700.f);
+        CHECK(s.worldWidth>s.exit.x && s.exit.y==s.ground.front().y);
+        // The shared landing is clear, with a gradual accessible climb to
+        // the higher route and room for two full-size characters below it.
+        CHECK(s.ground.front().x==0.f && s.ground.front().w>=400.f);
+        CHECK(std::any_of(s.ledges.begin(),s.ledges.end(),[](const Rect& p){
+            return p.x<220.f && p.y>430.f && p.y<480.f;
+        }));
+        CHECK(std::any_of(s.ledges.begin(),s.ledges.end(),[](const Rect& p){
+            return p.x>=280.f && p.x<380.f && p.y>370.f && p.y<410.f;
+        }));
+        CHECK(std::any_of(s.ledges.begin(),s.ledges.end(),[](const Rect& p){
+            return p.x>370.f && p.y==326.f;
+        }));
+        CHECK(s.enemies.back().kind==EnemyKind::boss);
+        for (size_t j=0;j<s.relays.size();++j) {
+            CHECK(s.relays[j].operatorPlayer==int(j%2==0?0:1));
+            CHECK(s.relays[j].pad.x<s.relays[j].barrier.x);
+            CHECK(s.relays[j].control==(j%3==1?RelayControl::lever:RelayControl::pressurePlate));
+        }
+        if (i>0) CHECK(s.worldWidth>cooperativeStages[i-1].worldWidth);
+    }
+    Game host(audio),guest(audio);
+    host.startCoop(0,save,3,true);
+    guest.startCoop(0,save,3,true);
+    CHECK(host.coop && host.puzzleMode && host.stage==&cooperativeStages[0]);
+    CHECK(host.player.box.bottom()==512.f);
+    CHECK(host.teammate().player.box.bottom()==512.f);
+    CHECK(std::abs(host.player.box.center().x-host.teammate().player.box.center().x)<=55.f);
+    CHECK(host.player.support>=0 && host.teammate().player.support>=0);
+    CHECK(host.player.safe.y==host.teammate().player.safe.y);
+    for (const auto& enemy:host.enemies)
+        CHECK(enemy.box.x>host.teammate().player.box.right()+250.f);
+    CHECK(host.enemies.size()==host.stage->enemies.size());
+    const auto& first=host.stage->relays[0];
+    // An unpowered gate is not bypassable by running or double jumping.
+    Game blocked(audio);
+    blocked.startCoop(0,save,3,true);
+    for (auto& enemy:blocked.enemies) enemy.alive=false;
+    auto runner=blocked.teammate();
+    runner.player.box={first.barrier.x-42.f,first.barrier.bottom()-56.f,32,56};
+    runner.player.velocity={}; runner.player.support=0;
+    blocked.setTeammate(runner);
+    Controls tryGate;
+    tryGate.held=keyBit(Key::right)|keyBit(Key::jump);
+    tryGate.pressed=keyBit(Key::jump);
+    blocked.applyControls(tryGate,true);
+    run(blocked,90);
+    CHECK(blocked.teammate().player.box.right()<=first.barrier.x+.1f);
+    CHECK(!blocked.relayOpen(0));
+    CHECK(first.operatorPlayer==0 && !host.relayOpen(0));
+    host.player.box={first.pad.x-16.f,first.pad.y-56.f,32,56};
+    host.updateRelays(.8f);
+    CHECK(host.relayOpen(0) && !host.relayStates[0].latched);
+    host.player.box.x=first.pad.x-150.f;
+    host.updateRelays(.5f);
+    CHECK(!host.relayOpen(0));
+    host.player.box.x=first.pad.x-16.f;
+    host.updateRelays(.8f);
+    auto partner=host.teammate();
+    partner.player.box={first.barrier.right()+60.f,first.barrier.bottom()-56.f,32,56};
+    host.setTeammate(partner);
+    host.updateRelays(.02f);
+    CHECK(host.relayStates[0].latched);
+    host.player.box.x=first.pad.x-150.f;
+    host.updateRelays(.9f);
+    CHECK(host.relayOpen(0));
+    const auto& second=host.stage->relays[1];
+    CHECK(second.operatorPlayer==1 && second.control==RelayControl::lever);
+    partner=host.teammate();
+    partner.player.box={second.pad.x-16.f,second.pad.y-56.f,32,56};
+    host.setTeammate(partner);
+    host.updateRelays(.7f);
+    CHECK(!host.relayOpen(1)); // Standing beside the lever is not enough.
+    Controls pull;
+    pull.held=keyBit(Key::interact);
+    host.applyControls(pull,true);
+    host.updateRelays(.6f);
+    CHECK(host.relayOpen(1) && host.relayStates[1].lease>0);
+    host.applyControls({},true);
+    host.updateRelays(.9f);
+    CHECK(host.relayOpen(1)); // Lever keeps the door open temporarily.
+    host.updateRelays(7.f);
+    CHECK(!host.relayOpen(1) && host.relayStates[1].lease==0.f);
+    host.applyControls(pull,true);
+    host.updateRelays(.6f);
+    CHECK(host.relayOpen(1));
+    host.applyControls({},true);
+    host.player.box={second.barrier.right()+60.f,second.barrier.bottom()-56.f,32,56};
+    host.updateRelays(.02f);
+    CHECK(host.relayStates[1].latched && host.relayStates[1].openness>.8f);
+    const auto packet=net::encodeMission(3,1,7,CoopMode::cooperative);
+    int index=-1,level=-1; uint32_t mission=0;
+    CoopMode mode=CoopMode::campaign;
+    CHECK(net::decodeMission(packet,index,level,mission,&mode));
+    CHECK(index==3 && level==1 && mission==7 && mode==CoopMode::cooperative);
+    CHECK(!net::decodeMission(std::span(packet).first(packet.size()-1),index,level,mission,&mode));
+    const auto frame=net::encodeWorld(host,{}, {7,19});
+    std::vector<net::Sound> sounds;
+    CHECK(net::decodeWorld(frame,guest,sounds));
+    CHECK(guest.puzzleMode && guest.relayStates.size()==host.relayStates.size());
+    CHECK(guest.relayStates[0].latched && guest.relayStates[1].latched);
+    CHECK(guest.relayOpen(0) && guest.relayOpen(1));
+    CHECK(guest.relayStates[1].openness==host.relayStates[1].openness);
+    CHECK(guest.relayStates[1].lease==host.relayStates[1].lease);
+    // Checkpoint retries must ALSO regroup both players without dropping the
+    // host on an isolated gantry. Re-entry steps exist beside checkpoints.
+    const auto checkpoint=host.stage->beacons.front();
+    CHECK(std::any_of(host.stage->ledges.begin(),host.stage->ledges.end(),[&](const Rect& p){
+        return p.x>checkpoint.x && p.x<checkpoint.x+150.f && p.y>430.f && p.y<470.f;
+    }));
+    host.player.box={checkpoint.x-16.f,checkpoint.y-56.f,32.f,56.f};
+    host.player.support=0;
+    host.player.velocity={};
+    for (auto& enemy:host.enemies) enemy.alive=false;
+    host.tick(); // production checkpoint trigger, not a test-only shortcut
+    CHECK(host.activeBeacon==0);
+    host.retry();
+    CHECK(host.player.box.bottom()==checkpoint.y);
+    CHECK(host.teammate().player.box.bottom()==checkpoint.y);
+    CHECK(std::abs(host.player.box.center().x-host.teammate().player.box.center().x)<100.f);
+}
+
 void runCoopTests() {
     synchronizedClock();
     handshake();
     sharedSimulation();
+    cooperativePuzzles();
 }

@@ -13,6 +13,14 @@ void App::sceneForTest(std::string_view scene) {
         save.cleared=sectorCount-1; sector=sectorCount-1; showMap(); return;
     }
     if (scene=="menu") { show(View::menu); return; }
+    if (scene=="settings-fps") {
+        settings.fpsCounter=true; settings.fpsCorner=1;
+        settingsReturn=View::menu; show(View::settings); return;
+    }
+    if (scene=="fps-game") {
+        settings.fpsCounter=true; settings.fpsCorner=3;
+        launch(0); game.entry=0; return;
+    }
     if (scene=="splash") { show(View::splash); startup=0; return; }
     if (scene.rfind("operative",0)==0) {
         const int chosen=scene.size()>9?std::clamp(int(scene[9]-'0'),0,5):0;
@@ -42,6 +50,32 @@ void App::sceneForTest(std::string_view scene) {
     if (scene=="multiplayer-host") {
         openMultiplayer(); lobby=Lobby::host;
         network.host("127.0.0.1",0); return;
+    }
+    if (scene=="cooperative-menu") {
+        openMultiplayer(); lobby=Lobby::host; coopMode=CoopMode::cooperative; return;
+    }
+    if (scene=="cooperative-insertion") {
+        save.character=3; save.cleared=5;
+        game.startCoop(0,save,5,true);
+        coopMode=CoopMode::cooperative;
+        game.entry=0;
+        game.camera=0;
+        show(View::play);
+        for (auto& enemy:game.enemies) enemy.damage=0;
+        return;
+    }
+    if (scene=="cooperative-gate") {
+        save.character=3; save.cleared=5;
+        game.startCoop(0,save,5,true);
+        coopMode=CoopMode::cooperative;
+        game.entry=0;
+        game.camera=0;
+        game.player.box={498,326-56,32,56};
+        game.player.support=1;
+        game.updateRelays(.8f);
+        show(View::play);
+        for (auto& enemy:game.enemies) enemy.damage=0;
+        return;
     }
     if (scene=="create") { newGame(); return; }
     if (scene=="controls") {

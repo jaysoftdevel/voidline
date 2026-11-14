@@ -125,6 +125,7 @@ int Engine::run() {
         const auto now=Clock::now();
         const float elapsed=std::chrono::duration<float>(now-previous).count();
         previous=now;
+        app->sampleFrame(config.smoke?1.f/60:elapsed);
         app->update(config.smoke?1.f/60:std::min(elapsed,.10f));
         const auto afterUpdate=Clock::now();
         renderer->begin();

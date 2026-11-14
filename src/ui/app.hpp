@@ -3,6 +3,7 @@
 #include "render/renderer.hpp"
 #include "services/services.hpp"
 #include "net/world.hpp"
+#include "net/pause.hpp"
 #include <functional>
 
 namespace vl {
@@ -11,6 +12,7 @@ public:
     App(SDL_Window* window,Renderer& renderer,Audio& audio,Storage& storage);
     void event(const SDL_Event& event);
     void update(float dt);
+    void sampleFrame(float seconds);
     void draw();
     void launch(int sector);
     void sceneForTest(std::string_view scene);
@@ -40,7 +42,9 @@ private:
     enum class Lobby {menu,host,join};
     Lobby lobby=Lobby::menu;
     int coopDifficulty=1,coopCharacter=0,remoteCharacter=-1;
+    CoopMode coopMode=CoopMode::campaign;
     bool characterLocked=false,remoteLocked=false,rosterPreview=false;
+    bool modeAnnounced=false;
     bool openingSkipped=false,skipRequested=false;
     uint32_t mission=0,simulationTick=0,lastSnapshotTick=0;
     net::HostClock hostClock;
@@ -52,6 +56,10 @@ private:
     WorldMotion previousWorld;
     float netFrame=0,netInterpolation=1;
     bool coopStarted=false,coopPaused=false,snapshot=false;
+    net::PauseState sharedPause{};
+    bool pauseReplyPending=false;
+    float fpsWindowSeconds=0;
+    int fpsWindowFrames=0,fpsDisplayed=60;
     Controls pendingControls{};
     std::vector<net::Sound> netSounds;
     void event(std::string_view name,float gain,float pan,float rate) override;
@@ -59,6 +67,8 @@ private:
     void multiplayer();
     void openMultiplayer();
     void leaveCoop(const std::string& message={});
+    void requestCoopPause();
+    void setCoopPause(net::PauseState next);
     void pollCoop(float dt);
     void advanceCoop(float dt);
     void startCoop(int index,bool retry=false);

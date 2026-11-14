@@ -7,7 +7,7 @@ namespace vl {
 // a mouse button and a gamepad control, and all of them are evaluated every frame.
 enum class Act {
     left, right, jump, fire, assist, reload, sprint, crouch, slow,
-    next, previous, weapon1, weapon2, weapon3, weapon4, weapon5, weapon6, weapon7, pause, count
+    next, previous, weapon1, weapon2, weapon3, weapon4, weapon5, weapon6, weapon7, pause, interact, count
 };
 constexpr size_t actCount = static_cast<size_t>(Act::count);
 

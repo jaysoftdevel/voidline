@@ -3,15 +3,17 @@
 #include <utility>
 
 namespace vl {
-void Game::startCoop(int sector,const Save& loadout,int guestCharacter) {
-    start(sector,loadout);
+void Game::startCoop(int sector,const Save& loadout,int guestCharacter,bool cooperative) {
+    start(sector,loadout,cooperative);
     coop=true;
     auto guest=loadout;
     guest.character=guestCharacter<0?(loadout.character+1)%characters.size():guestCharacter;
     swapOperatives();
     setupLoadout(guest);
     swapOperatives();
-    spawnPartner({59,stage->ground.front().y});
+    // A shared deployment point, two side-by-side spawn pads. They must choose
+    // their own routes once they reach the signposted fork.
+    spawnPartner({puzzleMode?148.f:59.f,stage->ground.front().y});
     for (auto& enemy:enemies) {
         enemy.hp=enemy.maxHp=static_cast<int>(std::lround(enemy.maxHp*1.45f));
     }
@@ -19,6 +21,7 @@ void Game::startCoop(int sector,const Save& loadout,int guestCharacter) {
 
 // The movement and weapon routines operate on one operative at a time.
 void Game::swapOperatives() {
+    controllingPartner=!controllingPartner;
     std::swap(operative,partner);
     std::swap(localInput,partnerInput);
 }

@@ -33,11 +33,11 @@ void App::keyBindings() {
     });
     // Mouse wheel and the left and right mouse buttons are fixed, so only the keyboard rows are listed.
     constexpr Act rows[]{Act::left,Act::right,Act::jump,Act::crouch,Act::sprint,Act::fire,Act::assist,Act::slow,Act::reload,
-                         Act::next,Act::weapon1,Act::weapon2,Act::weapon3,Act::weapon4,Act::weapon5,Act::weapon6,Act::weapon7,Act::pause};
-    constexpr int perColumn=9;
+                         Act::next,Act::weapon1,Act::weapon2,Act::weapon3,Act::weapon4,Act::weapon5,Act::weapon6,Act::weapon7,Act::pause,Act::interact};
+    constexpr int perColumn=10;
     for (int i=0;i<static_cast<int>(std::size(rows));++i) {
         const Act act=rows[i];
-        const float x=55.f+(i/perColumn)*560, y=172.f+(i%perColumn)*38;
+        const float x=55.f+(i/perColumn)*560, y=172.f+(i%perColumn)*35;
         r.rect({x,y,530,34},hex(0x152531)); r.outline({x,y,530,34},hex(0x344858));
         r.text({x+12,y+23},actionInfo(act).label,15,white,true);
         for (size_t s=0;s<keysPerAction;++s) {

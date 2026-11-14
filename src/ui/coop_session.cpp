@@ -18,13 +18,50 @@ void App::event(std::string_view name,float gain,float pan,float rate) {
         netSounds.push_back({std::string(name),clamp(gain,0,4),clamp(pan,-1,1),clamp(rate,.06f,4)});
 }
 
+void App::setCoopPause(net::PauseState next) {
+    sharedPause=next;
+    coopPaused=next.active;
+    pauseReplyPending=false;
+    input.reset();
+    input.suppressUntilReleased(Act::fire);
+    pendingControls={};
+    mouseAiming=mouseMoved=false;
+    accumulator=netFrame=0;
+    if (network.hosting() && coopStarted) {
+        game.release();
+        game.applyControls({},true); // Clear held guest input before freezing/resuming.
+    }
+    SDL_ShowCursor(coopPaused?1:0);
+    audio.pace(1);
+}
+
+void App::requestCoopPause() {
+    if (!coopStarted || view!=View::play || network.state()!=net::Session::State::connected || pauseReplyPending) return;
+    const bool host=network.hosting();
+    const auto caller=host?net::PauseOwner::host:net::PauseOwner::guest;
+    if (coopPaused && sharedPause.owner!=caller) return;
+    const bool wantPaused=!coopPaused;
+    if (!host) {
+        if (!network.send(net::Packet::pauseRequest,net::encodePauseRequest(mission,wantPaused))) return;
+        if (wantPaused) { // Freeze local input immediately; host confirms the authoritative owner.
+            setCoopPause({true,caller});
+            pauseReplyPending=true;
+        } else pauseReplyPending=true; // Remain paused until the host acknowledges resume.
+        return;
+    }
+    auto next=sharedPause;
+    if (!net::changePause(next,caller,wantPaused)) return;
+    setCoopPause(next);
+    network.send(net::Packet::pauseState,net::encodePauseState(mission,next));
+}
+
 void App::openMultiplayer() {
     network.close();
     lobby=Lobby::menu; lanPage=0; rosterPreview=false;
     coopCharacter=std::clamp(save.character,0,static_cast<int>(characters.size())-1);
-    remoteCharacter=-1; characterLocked=remoteLocked=false;
+    remoteCharacter=-1; characterLocked=remoteLocked=false; modeAnnounced=false;
     openingSkipped=skipRequested=false;
-    coopDifficulty=settings.difficulty;
+    coopDifficulty=settings.difficulty; coopMode=CoopMode::campaign;
     advertisedAddress=net::Session::localAddress();
     show(View::multiplayer);
 }
@@ -32,11 +69,12 @@ void App::openMultiplayer() {
 void App::leaveCoop(const std::string& message) {
     network.close();
     coopStarted=coopPaused=snapshot=false;
+    sharedPause={}; pauseReplyPending=false;
     mission=0; epilogueAt=0; pendingControls={}; netSounds.clear();
     game.release();
     input.reset();
     lobby=Lobby::menu;
-    characterLocked=remoteLocked=false;
+    characterLocked=remoteLocked=false; modeAnnounced=false;
     remoteCharacter=-1; openingSkipped=skipRequested=false;
     SDL_StopTextInput();
     audio.pace(1);
@@ -46,6 +84,7 @@ void App::leaveCoop(const std::string& message) {
 
 void App::prepareCoop() {
     coopStarted=true; coopPaused=snapshot=false;
+    sharedPause={}; pauseReplyPending=false;
     pendingControls={}; netSounds.clear();
     previousPlayer=game.player; previousPartner=game.teammate().player;
     previousCamera=game.camera; previousWorld.capture(game);
@@ -65,9 +104,10 @@ void App::startCoop(int index,bool retry) {
     using State=net::Session::State;
     if (!network.hosting() || network.state()!=State::connected ||
         !characterLocked || !remoteLocked || remoteCharacter<0) return;
-    const bool valid=mission==0?(index==0 && !retry):
+    const int limit=coopMode==CoopMode::cooperative?cooperativeSectorCount:sectorCount;
+    const bool valid=index>=0 && index<limit && (mission==0?(index==0 && !retry):
         retry?(view==View::failed && index==game.index):
-              (view==View::cleared && index==game.index+1 && index<sectorCount);
+              (view==View::cleared && index==game.index+1 && index<limit));
     if (!valid) return;
     ++mission;
     if (retry) game.retry();
@@ -76,9 +116,9 @@ void App::startCoop(int index,bool retry) {
         loadout.difficulty=coopDifficulty;
         loadout.cleared=index;
         loadout.character=coopCharacter;
-        game.startCoop(index,loadout,remoteCharacter);
+        game.startCoop(index,loadout,remoteCharacter,coopMode==CoopMode::cooperative);
     }
-    if (!network.send(net::Packet::prepare,net::encodeMission(game.index,coopDifficulty,mission))) return;
+    if (!network.send(net::Packet::prepare,net::encodeMission(game.index,coopDifficulty,mission,coopMode))) return;
     prepareCoop();
 }
 
@@ -95,6 +135,38 @@ void App::receiveCoop(std::span<const uint8_t> data) {
     net::Timing timing{};
     bool valid=false;
 
+    if (kind==Packet::pauseRequest && network.hosting() && coopStarted) {
+        uint32_t requestedMission=0;
+        bool wantPaused=false;
+        valid=net::decodePauseRequest(body,requestedMission,wantPaused) && requestedMission==mission;
+        if (!valid) { network.fail("Invalid co-op pause request."); return; }
+        if (view==View::play && game.mode==Mode::active) {
+            auto next=sharedPause;
+            if (net::changePause(next,net::PauseOwner::guest,wantPaused)) setCoopPause(next);
+        }
+        // A late request after sector completion or a concurrent pause gets
+        // the authoritative state instead of disconnecting an otherwise valid peer.
+        network.send(Packet::pauseState,net::encodePauseState(mission,sharedPause));
+        return;
+    }
+    if (kind==Packet::pauseState && !network.hosting() && coopStarted) {
+        uint32_t announcedMission=0;
+        net::PauseState next{};
+        valid=net::decodePauseState(body,announcedMission,next) && announcedMission==mission;
+        if (valid && view==View::play && game.mode==Mode::active) setCoopPause(next);
+        else if (!valid) network.fail("Invalid co-op pause state.");
+        return;
+    }
+
+    if (kind==Packet::lobbyMode && mission==0 && !network.hosting() &&
+        network.state()==net::Session::State::connected) {
+        if (body.size()!=1 || body[0]>1 || modeAnnounced) {
+            network.fail("Invalid or repeated multiplayer mode advertisement."); return;
+        }
+        coopMode=static_cast<CoopMode>(body[0]);
+        modeAnnounced=true;
+        return;
+    }
     if (kind==Packet::operative && mission==0 && network.state()==net::Session::State::connected) {
         valid=body.size()==1 && body[0]<characters.size() && !remoteLocked;
         if (valid) {
@@ -158,18 +230,21 @@ void App::receiveCoop(std::span<const uint8_t> data) {
         }
         if (kind==Packet::prepare) {
             int index=0,level=0;
+            CoopMode selectedMode=CoopMode::campaign;
             uint32_t generation=0;
-            valid=net::decodeMission(body,index,level,generation) && generation==mission+1 &&
+            valid=net::decodeMission(body,index,level,generation,&selectedMode) && generation==mission+1 &&
                 (mission==0?index==0:
-                 (view==View::failed && index==game.index) || (view==View::cleared && index==game.index+1));
+                 (view==View::failed && index==game.index && selectedMode==coopMode) ||
+                 (view==View::cleared && index==game.index+1 && selectedMode==coopMode));
             if (valid) {
                 mission=generation;
+                coopMode=selectedMode;
                 Save loadout;
                 loadout.difficulty=level; loadout.cleared=index;
                 loadout.character=remoteCharacter;
                 valid=characterLocked && remoteLocked && remoteCharacter>=0;
                 if (!valid) { network.fail("Missing operative lock-in before deployment."); return; }
-                game.startCoop(index,loadout,coopCharacter);
+                game.startCoop(index,loadout,coopCharacter,coopMode==CoopMode::cooperative);
                 prepareCoop();
                 probeHost();
             }
@@ -216,6 +291,11 @@ void App::pollCoop(float dt) {
     if (coopStarted && !network.hosting()) netInterpolation=clamp(netInterpolation+dt/net::snapshotInterval);
     const auto prior=network.state();
     network.poll();
+    if (network.hosting() && !modeAnnounced &&
+        network.state()==net::Session::State::connected) {
+        modeAnnounced=network.send(net::Packet::lobbyMode,
+            std::array<uint8_t,1>{static_cast<uint8_t>(coopMode)});
+    }
     for (const auto& data:network.receive()) {
         receiveCoop(data);
         if (network.state()==net::Session::State::idle) break;
@@ -312,7 +392,7 @@ Controls App::readCoopControls() const {
     };
     map(Key::left,Act::left); map(Key::right,Act::right); map(Key::jump,Act::jump);
     map(Key::fire,Act::fire); map(Key::automatic,Act::assist); map(Key::sprint,Act::sprint);
-    map(Key::crouch,Act::crouch); map(Key::slow,Act::slow);
+    map(Key::crouch,Act::crouch); map(Key::slow,Act::slow); map(Key::interact,Act::interact);
     if (input.pressed(Act::reload)) result.pressed|=keyBit(Key::reload);
     for (int i=0;i<static_cast<int>(weaponCount);++i)
         if (input.pressed(static_cast<Act>(static_cast<int>(Act::weapon1)+i))) result.weapon=i;
@@ -334,6 +414,10 @@ void App::sendWorld() {
 void App::advanceCoop(float dt) {
     if (view==View::coopLoading) {
         loadCoop();
+        return;
+    }
+    if (coopPaused) { // TCP/pings continue via pollCoop; gameplay clock stays frozen for both peers.
+        audio.pace(1);
         return;
     }
     audio.pace(game.timeScale);
@@ -379,6 +463,7 @@ void App::advanceCoop(float dt) {
 void App::showCoopOutcome() {
     if (view!=View::play || (game.mode!=Mode::complete && game.mode!=Mode::failed)) return;
     coopPaused=false;
+    sharedPause={}; pauseReplyPending=false;
     audio.event(game.mode==Mode::complete?"complete":"failure");
     if (game.mode==Mode::complete) beginEpilogue();
     else show(View::failed);

@@ -119,7 +119,7 @@ void App::driveGame(float dt) {
     };
     apply(Key::left,Act::left); apply(Key::right,Act::right); apply(Key::jump,Act::jump);
     apply(Key::fire,Act::fire); apply(Key::automatic,Act::assist); apply(Key::sprint,Act::sprint);
-    apply(Key::crouch,Act::crouch); apply(Key::slow,Act::slow);
+    apply(Key::crouch,Act::crouch); apply(Key::slow,Act::slow); apply(Key::interact,Act::interact);
     if (input.pressed(Act::reload)) game.input(Key::reload,true);
     game.hold(Key::reload,false);
     for (int i=0;i<static_cast<int>(weaponCount);++i) if (input.pressed(static_cast<Act>(static_cast<int>(Act::weapon1)+i))) game.select(i);

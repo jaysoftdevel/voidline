@@ -6,6 +6,93 @@ using namespace vl::scene;
 namespace vl {
 void Renderer::objects(const Game& g) {
     const Color cold=hex(g.stage->cold),tone=metal(g.stage->biome);
+    if (g.puzzleMode) {
+        // A clear shared insertion bay and readable fork. These markers are
+        // environmental art; collision is handled by the actual walkways.
+        const float floor=g.stage->ground.front().y;
+        const Vec staging{124.f+offset.x,floor+offset.y};
+        if (visible(124,220)) {
+            rect({staging.x-82,staging.y-6,178,6},hex(0x173443));
+            line({staging.x-80,staging.y-7},{staging.x+96,staging.y-7},2.f,hex(0x7ceaca).energy(1.6f));
+            text({staging.x-76,staging.y-85},"SHARED INSERTION  /  TEAM DEPLOYMENT",10,hex(0xe3f9fc),true);
+            text({staging.x-76,staging.y-66},"MOVE RIGHT TO SPLIT ROUTES",9,hex(0xaacbd9),true);
+        }
+        const Vec fork{286.f+offset.x,floor+offset.y};
+        if (visible(286,200)) {
+            line(fork+Vec{-15.f,-20.f},fork+Vec{-15.f,-142.f},2.f,hex(0x7edfff).energy(1.6f));
+            line(fork+Vec{-15.f,-142.f},fork+Vec{-21.f,-131.f},2.f,hex(0x7edfff));
+            line(fork+Vec{-15.f,-142.f},fork+Vec{-9.f,-131.f},2.f,hex(0x7edfff));
+            line(fork+Vec{24.f,-21.f},fork+Vec{100.f,-21.f},2.f,hex(0xffbf75).energy(1.4f));
+            line(fork+Vec{100.f,-21.f},fork+Vec{90.f,-27.f},2.f,hex(0xffbf75));
+            line(fork+Vec{100.f,-21.f},fork+Vec{90.f,-15.f},2.f,hex(0xffbf75));
+            text(fork+Vec{-128.f,-155.f},"PLAYER 1  /  UPPER SWITCHES",9,hex(0x99ddff),true);
+            text(fork+Vec{30.f,-34.f},"PLAYER 2  /  LOWER ROUTE",9,hex(0xffce8e),true);
+        }
+    }
+    if (g.puzzleMode) for (size_t i=0;i<g.stage->relays.size();++i) {
+        const auto& relay=g.stage->relays[i];
+        const auto& state=g.relayStates[i];
+        const bool active=g.relayOpen(i);
+        const Color ready=hex(0x7effcf), warning=hex(0xff8e67), steel=hex(0x506c7c);
+        const Color tint=active?ready:warning;
+        const Vec pad=relay.pad+offset;
+        if (visible(relay.pad.x,120)) {
+            if (relay.control==RelayControl::pressurePlate) {
+                // Floor switch: a sprung plate visibly sinks under the operator.
+                const float depression=state.charge*4.f;
+                rect({pad.x-48,pad.y-7,96,9},hex(0x162835));
+                rect({pad.x-43,pad.y-8+depression,86,6},steel.energy(.75f));
+                rect({pad.x-35,pad.y-10+depression,70*state.charge,3},ready.energy(1.7f));
+                for (int k=0;k<4;++k) rect({pad.x-38+k*23,pad.y-6+depression,13,2},tint.alpha(.8f));
+                outline({pad.x-48,pad.y-7,96,10},hex(0x67808f));
+                text({pad.x-44,pad.y-30},"STAND ON PLATE",10,hex(0xd8f9fa),true);
+            } else {
+                // A mounted lever with an actual rotating handle and charge panel.
+                const Vec mount{pad.x,pad.y-28};
+                rect({mount.x-16,mount.y-5,32,30},hex(0x14212c));
+                outline({mount.x-16,mount.y-5,32,30},steel);
+                ellipse(mount,{7,7},hex(0x283d4a));
+                const float angle=-1.15f+state.charge*1.95f;
+                const Vec grip=mount+Vec{std::sin(angle)*23.f,-std::cos(angle)*23.f};
+                line(mount,grip,5,steel.energy(1.1f));
+                ellipse(grip,{6,6},tint.energy(1.8f));
+                rect({mount.x-10,mount.y+12,20*state.charge,4},ready.energy(1.7f));
+                text({pad.x-43,pad.y-94},"HOLD E  /  OPERATE LEVER",9,hex(0xd8f9fa),true);
+                if (state.lease>0 && !state.latched)
+                    text({pad.x-34,pad.y-78},"OPEN "+std::to_string(int(std::ceil(state.lease)))+" SEC",10,ready,true);
+            }
+            text({pad.x-43,pad.y+22},relay.operatorPlayer==0?"P1 CONTROLS / P2 CROSSES":"P2 CONTROLS / P1 CROSSES",9,hex(0xc9eff4),true);
+            halo(pad-Vec{0,12},15+state.charge*20,ready.alpha(.11f+state.charge*.28f));
+        }
+        if (visible(relay.barrier.x,100)) {
+            const Rect b{relay.barrier.x+offset.x,relay.barrier.y+offset.y,
+                         relay.barrier.w,relay.barrier.h};
+            // Mechanized bulkhead: guide rails, upper motor, two sliding
+            // shutter leaves, moving seams, and a status strip.
+            // Side rails only: the opening itself must stay transparent once
+            // the shutter retracts, so the characters and world remain visible.
+            rect({b.x-11,b.y-12,10,b.h+14},hex(0x0b1823));
+            rect({b.right()+1,b.y-12,10,b.h+14},hex(0x0b1823));
+            rect({b.x-8,b.y-9,6,b.h+9},steel.energy(.7f));
+            rect({b.right()+3,b.y-9,6,b.h+9},steel.energy(.7f));
+            const float shutter=1.f-state.openness;
+            if (shutter>.003f) {
+                const float visibleHeight=b.h*shutter;
+                const Rect leaf{b.x+2,b.y,b.w-4,visibleHeight};
+                gradient(leaf,hex(0x3d5360).alpha(.97f),hex(0x111e29).alpha(.99f));
+                for (float y=leaf.y+11;y<leaf.bottom()-5;y+=19.f) {
+                    line({leaf.x+3,y},{leaf.right()-3,y},2.f,hex(0x708998).alpha(.54f));
+                    rect({leaf.x+4,y-3,6,5},tint.energy(1.15f));
+                }
+                line({leaf.x+1,leaf.bottom()-3},{leaf.right()-1,leaf.bottom()-3},3.f,tint.energy(1.4f));
+            }
+            rect({b.x-14,b.y-18,b.w+28,16},hex(0x243844));
+            outline({b.x-14,b.y-18,b.w+28,16},steel);
+            for (int k=0;k<3;++k) ellipse({b.x+11+k*12.f,b.y-10},{2.8f,2.8f},tint.energy(active?2.f:1.3f));
+            halo({b.center().x,b.y-10},24,tint.alpha(.26f));
+            text({b.x-18,b.y-27},state.latched?"SECURED":active?"DOOR OPEN":"SEALED DOOR",10,tint,true);
+        }
+    }
     for (const auto& vent:g.stage->vents) {
         if (!visible(vent.x)) continue;
         const Vec p{vent.x+offset.x,vent.y+offset.y};

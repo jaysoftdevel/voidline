@@ -9,7 +9,7 @@ constexpr ActionInfo actions[] = {
     {"Move left", true}, {"Move right", true}, {"Jump / flip", true}, {"Fire", true}, {"Auto-aim fire", true},
     {"Reload", true}, {"Sprint", true}, {"Crouch", true}, {"Bullet time", true}, {"Next weapon", true},
     {"Previous weapon", true}, {"Weapon 1", true}, {"Weapon 2", true}, {"Weapon 3", true}, {"Weapon 4", true},
-    {"Weapon 5", true}, {"Weapon 6", true}, {"Weapon 7", true}, {"Pause", true}
+    {"Weapon 5", true}, {"Weapon 6", true}, {"Weapon 7", true}, {"Pause", true}, {"Operate lever", true}
 };
 static_assert(sizeof(actions) / sizeof(actions[0]) == actCount);
 }
@@ -37,7 +37,7 @@ Binding defaultBinding(Act act) {
     case Act::sprint: keys({key::shiftLeft, key::shiftRight}); b.button = pad::stick; break;
     case Act::crouch: keys({key::c, key::s, key::down}); b.button = pad::b; break;
     case Act::slow: keys({key::q, key::x}); b.mouse = buttonRight; b.button = pad::leftShoulder; b.trigger = pad::leftTrigger; break;
-    case Act::next: keys({key::e}); b.button = pad::y; break;
+    case Act::next: keys({key::v}); b.button = pad::y; break;
     case Act::weapon1: keys({key::one}); break;
     case Act::weapon2: keys({key::two}); break;
     case Act::weapon3: keys({key::three}); break;
@@ -46,6 +46,7 @@ Binding defaultBinding(Act act) {
     case Act::weapon6: keys({key::six}); break;
     case Act::weapon7: keys({key::seven}); break;
     case Act::pause: keys({key::p}); b.button = pad::start; break;
+    case Act::interact: keys({key::e}); b.button = pad::up; break;
     case Act::previous: case Act::count: break;
     }
     return b;

@@ -10,12 +10,21 @@ public:
     Game(const Game&)=delete;
     Game& operator=(const Game&)=delete;
     void setTeammate(const Operative& value) { partner=value; }
-    void start(int sector,const Save& save);
-    void startCoop(int sector,const Save& loadout,int guestCharacter=-1);
+    void start(int sector,const Save& save,bool cooperative=false);
+    void startCoop(int sector,const Save& loadout,int guestCharacter=-1,bool cooperative=false);
     void retry();
     void applyControls(const Controls& controls,bool second=false,bool pointerMoved=true);
     const Operative& teammate() const { return partner; }
-    bool coop=false;
+    struct RelayState {
+        float charge=0;  // Plate charge or lever activation hold
+        bool latched=false;
+        float lease=0;   // Lever grants a temporary opening so the partner can cross
+        float openness=0; // Replicated shutter animation, zero closed and one raised
+    };
+    bool coop=false,puzzleMode=false;
+    std::vector<RelayState> relayStates;
+    bool relayOpen(size_t index) const;
+    void updateRelays(float dt);
     bool atExtraction(const Player& body) const;
     void syncLifts() { moveLifts(0); }
     void tick(float dt=step);
@@ -87,6 +96,8 @@ public:
     std::vector<Ring> rings;
     std::vector<Corpse> corpses;
     StyleCall style;
+    uint32_t setpieceMask=0;
+    int bossPhase=0;
 
 private:
     struct Checkpoint {
@@ -98,6 +109,7 @@ private:
         std::vector<Supply> supplies;
         std::vector<Explosive> crates;
         Operative partner;
+        std::vector<RelayState> relayStates;
     } backup;
     AudioSink& audio;
     Save campaign;
@@ -106,6 +118,7 @@ private:
     std::array<bool,static_cast<size_t>(Key::count)>& keys=localInput.keys;
     Vec& stickAim=localInput.stickAim;
     bool& stickActive=localInput.stickActive;
+    bool controllingPartner=false;
     void swapOperatives();
     void releaseBoth();
     void updateCamera(float dt);
@@ -142,6 +155,7 @@ private:
     void shoot(float dt);
     void moveEnemies(float dt);
     void enemyFire(Enemy& e,float targetX);
+    void scriptedSetpieces();
     void moveShots(float dt);
     void destroy(Enemy& e);
     void explode(Vec at,float radius,float damage,Color color);

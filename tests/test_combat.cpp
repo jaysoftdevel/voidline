@@ -35,6 +35,33 @@ void comboScoring() {
     for (int i = 0; i < 1200 && !game.corpses.empty(); ++i) game.tick();
     CHECK(game.corpses.empty());
 }
+void momentumRewards() {
+    Silent audio;
+    Game game(audio);
+    game.start(0,fullSave());
+    game.entry=0;
+    game.slowEnergy=0;
+    auto& magazine=game.guns[game.gun];
+    magazine.ammo=std::max(0,magazine.capacity-8);
+    const int before=magazine.ammo;
+    for (int n=0;n<5;++n) {
+        auto& enemy=game.enemies[n];
+        enemy.hp=enemy.maxHp=1;
+        game.damageEnemy(enemy,20,enemy.box.center(),{1,0},false);
+    }
+    CHECK(game.combo==5 && game.bestCombo==5);
+    CHECK(game.slowEnergy>.45f); // Kill returns plus the three-kill momentum surge.
+    CHECK(magazine.ammo>before && magazine.ammo<=magazine.capacity);
+    CHECK(game.score>0);
+    CHECK(std::any_of(game.messages.begin(),game.messages.end(),[](const auto& m) {
+        return m.text.find("MOMENTUM")!=std::string::npos;
+    }));
+    CHECK(std::any_of(game.messages.begin(),game.messages.end(),[](const auto& m) {
+        return m.text.find("AMMO SURGE")!=std::string::npos;
+    }));
+    game.tick(3.3f);
+    CHECK(game.combo==0); // A broken streak must not carry rewards to the next encounter.
+}
 void reactions() {
     using namespace vl;
     Silent audio;
@@ -145,15 +172,18 @@ void piercingBeyondThirtyTwoEnemies() {
     CHECK(game.enemies.size()>32);
     for (auto& e:game.enemies) e.alive=false;
     game.crates.clear();
+    // This test isolates the 33rd enemy piercing path from stage geometry.
+    std::erase_if(game.platforms,[](const Platform& p){return !p.ground;});
     auto& first=game.enemies[0];
     auto& later=game.enemies[32];
     auto place=[](Enemy& e,float x) {
         e.alive=true; e.kind=EnemyKind::turret; e.hp=e.maxHp=100;
-        e.box={x,455,31,36}; e.origin={x,455}; e.damage=0; e.reach=0;
+        e.box={x,432,31,36}; e.origin={x,432}; e.damage=0; e.reach=0;
     };
     const float floor=game.stage->ground.front().y;
     place(first,250); place(later,290);
-    game.shots.push_back({{244,floor-35},{1200,0},1,20,hex(0xffffff),1});
+    first.box.y=floor-43; later.box.y=floor-43;
+    game.shots.push_back({{244,floor-25},{1200,0},1,20,hex(0xffffff),1});
     run(game,10);
     CHECK(first.hp==80 && later.hp==80);
 }
@@ -162,6 +192,7 @@ void piercingBeyondThirtyTwoEnemies() {
 
 void runCombatTests() {
     comboScoring();
+    momentumRewards();
     reactions();
     explosives();
     coverAndCrates();

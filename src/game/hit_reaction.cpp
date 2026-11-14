@@ -25,11 +25,17 @@ void Game::registerHit(Enemy& e,Vec point,Vec direction,float damage,bool crit) 
     e.bar=2.6f;
 
     const Color spark=crit?hex(0xffe27a):hex(0xffd9a0);
-    burstCone(point,dir*-1.f,.9f,spark,crit?8:4,190);
-    burstCone(point,dir,.75f,hex(0xffb36a),crit?7:3,260);
-    burstCone(point,dir*-1.f,1.1f,hex(0x93a5ac),2+int(push*3),135,ParticleKind::chip);
+    burstCone(point,dir*-1.f,.95f,spark,crit?9:5,205);
+    burstCone(point,dir,.82f,hex(0xffb36a),crit?8:4,285);
+    burstCone(point,dir*-1.f,1.18f,hex(0x93a5ac),3+int(push*4),150,ParticleKind::chip);
+    burstCone(point,dir*-1.f,.72f,hex(0x6d7480),2,62,ParticleKind::puff);
     if (soldier) burstCone(point,dir*-1.f,.8f,hex(0xcfd4da),1,45,ParticleKind::puff);
+    if (e.kind==EnemyKind::ranger || e.kind==EnemyKind::scavenger || e.kind==EnemyKind::stalker) {
+        burstCone(point,dir*-1.f,1.1f,hex(0xbc2335),crit?15:8,crit?250.f:165.f,ParticleKind::blood);
+        burstCone(point,dir,.9f,hex(0x7d1522),crit?7:4,120,ParticleKind::blood);
+    }
     if (damage>=40) ring(point,hex(0xfff0c8),14+push*12,.18f);
+    if (crit) ring(point,hex(0xffc15d),18+push*16,.22f);
 
     // Floating numbers are merged while the gun is firing quickly, so rapid fire stays readable.
     e.pending+=damage;
@@ -63,7 +69,8 @@ void Game::updateEnemyFeedback(Enemy& e,float dt) {
     // Below 45% health. The closer to death, the more it smokes.
     const float distress=1-fraction/.45f;
     const auto& w=e.wounds[static_cast<size_t>((e.woundCount-1)%static_cast<int>(e.wounds.size()))];
-    if (random()<dt*(4+10*distress)) burst(e.box.center()+w.local,hex(0x59616a),1,26,ParticleKind::puff);
-    if (random()<dt*(1.5f+5*distress)) burstCone(e.box.center()+w.local,{0,-1},1.3f,hex(0xffc27a),2,110);
+    if (random()<dt*(5+12*distress)) burst(e.box.center()+w.local,hex(0x59616a),1,28,ParticleKind::puff);
+    if (random()<dt*(2.f+6*distress)) burstCone(e.box.center()+w.local,{0,-1},1.3f,hex(0xffc27a),2,120);
+    if (random()<dt*(1.2f+4*distress)) burstCone(e.box.center()+w.local,e.hitDir,1.0f,hex(0x88b6ff),1,90);
 }
 } // namespace vl

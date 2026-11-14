@@ -42,6 +42,25 @@ void Game::award(Enemy& e,int base) {
         const Color tint=combo>=5?hex(0xff5f7e):combo>=3?hex(0xffd35c):hex(0x7ff2ff);
         style={title,tint,1.7f,1.7f,combo};
     }
+    // Momentum milestones turn precision/fast kills into tangible resources,
+    // rewarding proactive play without adding new network/save state.
+    if (combo>=3 && combo%3==0) {
+        slowEnergy=std::min(1.f,slowEnergy+.18f);
+        const int bonusPoints=std::lround((12+index*2)*difficulty->score);
+        score+=bonusPoints;
+        message(top-Vec{0,32},"MOMENTUM +"+std::to_string(bonusPoints),hex(0x7ff2ff),1.4f);
+        ring(e.box.center(),hex(0x7ff2ff),42,.45f);
+        audio.event("upgrade",.36f,0,1.15f);
+    }
+    if (combo>=5 && combo%5==0) {
+        auto& current=guns[gun];
+        const int restored=std::min(current.capacity-current.ammo,std::max(1,current.capacity/4));
+        current.ammo+=restored; // A loaded magazine does not exceed its capacity.
+        if (restored>0) {
+            message(top-Vec{0,56},"AMMO SURGE +"+std::to_string(restored),hex(0xffd35c),1.5f);
+            audio.event("reload",.43f,0,1.2f);
+        }
+    }
     slowEnergy=std::min(1.f,slowEnergy+(boss?.5f:.07f));
     hitStop=std::max(hitStop,boss?.16f:.05f);
     punch=std::max(punch,boss?1.f:.38f);
@@ -106,10 +125,15 @@ void Game::hurt(float damage,bool force) {
     auto& p=player;
     if (mode!=Mode::active || (p.flash>0 && !force)) return;
     p.hp=std::max(0,p.hp-int(std::ceil(damage*damageTaken))); p.flash=.69f;
-    burst({p.box.center().x,p.box.y+20},hex(0xff795d),10,132);
+    const Vec hit{p.box.center().x,p.box.y+20};
+    burst(hit,hex(0xff795d),14,150);
+    burstCone(hit,{float(-p.facing),-.2f},1.05f,hex(0xde2a34),12,184,ParticleKind::blood);
+    burstCone(hit,{float(-p.facing),0.15f},1.25f,hex(0x9c101e),8,146,ParticleKind::blood);
+    burst(hit,hex(0x5a0a12),4,38,ParticleKind::puff);
     shake=std::max(shake,8.7f); audio.event("hurt");
     hitStop=std::max(hitStop,.07f); punch=std::max(punch,.6f); pain=1; combo=0; comboTimer=0;
-    ring({p.box.center().x,p.box.y+20},hex(0xff795d),52,.36f);
+    ring(hit,hex(0xff795d),52,.36f);
+    ring(hit,hex(0xde2a34),31,.24f);
     if (!p.hp) { releaseBoth(); mode=Mode::failed; }
 }
 } // namespace vl

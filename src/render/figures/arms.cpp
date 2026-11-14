@@ -141,6 +141,20 @@ void Renderer::drawArm(const Humanoid& h,const ArmPose& a,bool near,bool grippin
     const Vec armAxis=normal(e-s),armSide{armAxis.y,-armAxis.x};
     ellipse(s,{near?4.8f:3.7f,near?4.3f:3.3f},ink);
     ellipse(s,{near?4.0f:2.9f,near?3.5f:2.5f},cap);
+    if (near && h.look==Look::mercer) {
+        // Angular shield-pauldron, a full extra plate outside the shoulder.
+        polygon(s-armSide*6.f-armAxis*2.8f,s+armSide*6.f-armAxis*2.8f,
+                s+armSide*6.2f+armAxis*5.9f,s-armSide*6.f+armAxis*5.9f,h.trim.energy(.82f));
+        line(s-armSide*4.4f,s+armSide*4.4f,1.5f,hex(0xf2c495).alpha(.9f));
+    } else if (near && h.look==Look::cole) {
+        triangle(s-armSide*4.6f-armAxis*3.f,s+armSide*4.4f-armAxis*3.1f,
+                 s+armAxis*7.1f,h.shell.energy(1.4f));
+        ellipse(s+armAxis*2.f,{1.2f,1.3f},h.trim.energy(2.3f));
+    } else if (near && h.look==Look::nyx) {
+        polygon(s-armSide*4.6f-armAxis*1.8f,s+armSide*4.6f-armAxis*1.8f,
+                s+armSide*3.3f+armAxis*5.f,s-armSide*3.3f+armAxis*5.f,hex(0xdcd7df));
+        line(s+armSide*3.f-armAxis*.5f,s+armAxis*4.8f,1.3f,h.trim.energy(2.f));
+    }
     if (near) {
         line(s-armSide*3.2f+armAxis*.5f,s+armSide*3.2f+armAxis*.5f,.9f,h.edge.alpha(.85f));
         line(s-armSide*3.6f+armAxis*2.6f,s+armSide*3.6f+armAxis*2.6f,1.3f,h.look==Look::voss?ink.alpha(.75f):h.trim.energy(1.1f));

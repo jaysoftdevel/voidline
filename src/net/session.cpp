@@ -5,7 +5,7 @@
 
 namespace vl::net {
 namespace {
-constexpr std::string_view prefix="VL6-";
+constexpr std::string_view prefix="VL10-";
 constexpr uint8_t heartbeat=0;
 using namespace std::chrono_literals;
 
@@ -63,8 +63,8 @@ bool Session::host(const std::string& address,uint16_t port) {
 bool Session::join(const std::string& key) {
     close();
     if (!socketRuntime()) { fail("Could not initialize networking."); return false; }
-    if (key.starts_with("VL1-") || key.starts_with("VL2-") || key.starts_with("VL3-") || key.starts_with("VL4-") || key.starts_with("VL5-")) {
-        fail("Update both players to VOIDLINE 2.9.7 or newer for cross-platform multiplayer."); return false;
+    if (key.starts_with("VL1-") || key.starts_with("VL2-") || key.starts_with("VL3-") || key.starts_with("VL4-") || key.starts_with("VL5-") || key.starts_with("VL6-") || key.starts_with("VL7-") || key.starts_with("VL8-") || key.starts_with("VL9-")) {
+        fail("Both players must run VOIDLINE 2.10.2 for matching doors and level layouts."); return false;
     }
     if (!key.starts_with(prefix) || key.size()!=prefix.size()+2*(6+token.size())) {
         fail("Enter the complete session key from the host."); return false;
@@ -126,8 +126,10 @@ void Session::readySocket() {
     lowLatency(peer);
     status=State::handshake; heard=sent=Clock::now();
     if (!hostSide) {
-        if (lanJoin) send(Packet::helloLan);
-        else send(Packet::hello,token);
+        if (lanJoin) {
+            constexpr std::array<uint8_t,4> lanProtocol{'V','L','1','0'};
+            send(Packet::helloLan,lanProtocol);
+        } else send(Packet::hello,token);
         status=State::approval;
     }
 }
@@ -167,7 +169,8 @@ bool Session::process(std::span<const uint8_t> data) {
         const bool keyed=data[0]==static_cast<uint8_t>(Packet::hello) &&
             data.size()==token.size()+1 &&
             std::equal(token.begin(),token.end(),data.begin()+1);
-        const bool discovered=data.size()==1 && data[0]==static_cast<uint8_t>(Packet::helloLan);
+        const bool discovered=data.size()==5 && data[0]==static_cast<uint8_t>(Packet::helloLan) &&
+            data[1]=='V' && data[2]=='L' && data[3]=='1' && data[4]=='0';
         if (!keyed && !discovered) { dropCandidate(); return false; }
         status=State::approval;
         heard=Clock::now();
@@ -188,7 +191,7 @@ bool Session::process(std::span<const uint8_t> data) {
         fail("Received a message before the session was approved."); return false;
     }
     if (data.size()==1 && data[0]==heartbeat) return true;
-    if (data[0]<static_cast<uint8_t>(Packet::ready) || data[0]>static_cast<uint8_t>(Packet::skipOpening) || packets.size()>=128) {
+    if (data[0]<static_cast<uint8_t>(Packet::ready) || data[0]>static_cast<uint8_t>(Packet::lobbyMode) || packets.size()>=128) {
         fail("Received an invalid multiplayer message."); return false;
     }
     packets.emplace_back(data.begin(),data.end());

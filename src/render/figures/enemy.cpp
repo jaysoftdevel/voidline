@@ -39,6 +39,13 @@ void Renderer::drawEnemy(const Enemy& e,Color accent,Biome biome,float time,Vec 
     v.x=v.center.x; v.y=v.center.y;
     v.ground={v.x,e.box.bottom()+offset.y};
 
+    // Shared extra read detail so enemies feel less flat at gameplay scale.
+    const Vec spineTop=v.center+Vec{0,-e.box.h*.34f};
+    line(spineTop,spineTop+Vec{0,e.box.h*.28f},1.1f,v.black.alpha(.55f));
+    line(spineTop+Vec{-6,e.box.h*.02f},spineTop+Vec{6,e.box.h*.02f},1.1f,v.plate.alpha(.85f));
+    ellipse(v.center+Vec{-5,e.box.h*.23f},{1.8f,1.3f},v.alert.alpha(.65f));
+    ellipse(v.center+Vec{5,e.box.h*.23f},{1.8f,1.3f},v.alert.alpha(.65f));
+
     switch (e.kind) {
     case EnemyKind::drone: drawDrone(v); break;
     case EnemyKind::turret: drawTurret(v); break;
@@ -88,6 +95,14 @@ void Renderer::drawEnemy(const Enemy& e,Color accent,Biome biome,float time,Vec 
         line(at+Vec{-13,3},at+Vec{13,3},3,v.accent.energy(1.9f));
         ellipse(at+Vec{0,-23},{12,7},v.black);
         line(at+Vec{-8,-22},at+Vec{8,-22},3,v.alert.energy(2));
+    }
+    if (e.kind==EnemyKind::boss && e.alive && e.hp<e.maxHp*.7f) {
+        const float rage=1.f-float(e.hp)/std::max(1,e.maxHp);
+        const Color pulse=mix(v.accent,hex(0xff634d),rage);
+        const float ripple=16.f+std::fmod(time*22.f,35.f);
+        halo(at+Vec{0,-e.box.h*.26f},ripple,pulse.alpha(.12f+rage*.19f));
+        line(at+Vec{-e.box.w*.28f,-e.box.h*.18f},at+Vec{e.box.w*.28f,-e.box.h*.18f},
+             2.4f,pulse.energy(1.5f).alpha(.48f+rage*.35f));
     }
     if (e.elite && e.alive) {
         const Vec marker{v.x,v.y-e.box.h*.5f-18};

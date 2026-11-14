@@ -13,7 +13,7 @@ void Game::moveEnemies(float dt) {
     const auto& pattern=patterns[static_cast<int>(stage->biome)];
     for (auto& e:enemies) {
         if (!e.alive) continue;
-        const float pace=difficulty->pace*(1+later*.018f)*(e.elite?1.15f:1.f);
+        const float pace=difficulty->pace*(1+later*.023f)*(e.elite?1.15f:1.f);
         e.hit=std::max(0.f,e.hit-dt);
         updateEnemyFeedback(e,dt);
         e.flinch=std::max(0.f,e.flinch-dt*4.5f);
@@ -43,11 +43,26 @@ void Game::moveEnemies(float dt) {
             bossActive=true; message({origin.x,e.box.y-18},stage->boss,hex(stage->accent),1.7f);
             shake=8; audio.event("launch",.76f);
         }
+        if (boss && bossActive) {
+            const float integrity=float(e.hp)/std::max(1,e.maxHp);
+            const int phase=integrity<.35f?2:integrity<.70f?1:0;
+            if (phase>bossPhase) {
+                bossPhase=phase;
+                ring(e.box.center(),phase==2?hex(0xff7453):hex(stage->accent),phase==2?160.f:110.f,.55f);
+                burst(e.box.center(),hex(0xffb568),phase==2?35:20,280);
+                message(e.box.center()-Vec{0,120},phase==2?"OVERDRIVE  /  PHASE III":"GUARDIAN SHIELDS BROKEN",
+                        hex(0xffd48a),2.1f);
+                shake=std::max(shake,phase==2?13.f:8.f);
+                audio.event("guardian",.75f,0,phase==2?1.23f:.89f);
+                e.warning=.4f;
+            }
+        }
 
         if (e.kind==EnemyKind::drone || e.kind==EnemyKind::interceptor) {
             const bool interceptor=e.kind==EnemyKind::interceptor;
-            e.box.x=e.origin.x+std::sin(time*(interceptor?2.45f:1.42f)+e.phase)*(interceptor?112.f:72.f);
-            e.box.y=e.origin.y+std::sin(time*(interceptor?3.3f:2.37f)+e.phase)*(interceptor?32.f:19.f);
+            const float sway=std::sin(time*(interceptor?4.1f:2.9f)+e.phase*.7f);
+            e.box.x=e.origin.x+std::sin(time*(interceptor?2.45f:1.42f)+e.phase)*(interceptor?118.f:76.f)+sway*(interceptor?22.f:10.f);
+            e.box.y=e.origin.y+std::sin(time*(interceptor?3.3f:2.37f)+e.phase)*(interceptor?36.f:22.f)+std::cos(time*(interceptor?2.1f:1.4f)+e.phase)*6.f;
             e.facing=sign(d.x);
         } else if (e.kind==EnemyKind::turret) {
             e.facing=sign(d.x);
@@ -58,8 +73,9 @@ void Game::moveEnemies(float dt) {
             const bool heavy=e.kind==EnemyKind::bulwark || e.kind==EnemyKind::juggernaut;
             if (inRange || (scavenger && std::abs(d.x)<390)) e.facing=sign(d.x);
             float targetSpeed=0;
-            if (scavenger && std::abs(d.x)<390) targetSpeed=e.facing*e.speed*pace;
+            if (scavenger && std::abs(d.x)<390) targetSpeed=e.facing*e.speed*pace*(std::abs(d.x)<170?-.55f:1.f);
             else if (sniper && std::abs(d.x)<210) targetSpeed=-e.facing*e.speed*pace;
+            else if (sniper && std::abs(d.x)>390) targetSpeed=e.facing*e.speed*.35f*pace;
             else if (stalker || (inRange && e.warning<=0 && std::abs(d.x)>(boss?188:171)))
                 targetSpeed=e.facing*e.speed*pace*(inRange?1.f:.35f);
             else if (!inRange && !boss) targetSpeed=e.facing*e.speed*.60f*pace;
@@ -73,8 +89,9 @@ void Game::moveEnemies(float dt) {
             }
             if (stalker) {
                 e.jump=std::max(0.f,e.jump-dt);
-                if (inRange && e.jump==0 && std::abs(d.x)<(e.elite?245.f:210.f) && e.box.bottom()>=e.base-.5f) {
-                    e.vertical=e.elite?-505.f:-454.f; e.jump=1.72f/pace;
+                if (inRange && e.jump==0 && std::abs(d.x)<(e.elite?265.f:225.f) && e.box.bottom()>=e.base-.5f) {
+                    e.vertical=e.elite?-535.f:-472.f; e.jump=1.56f/pace;
+                    e.vx=e.facing*e.speed*pace*(e.elite?1.35f:1.1f);
                 }
                 e.vertical+=1260*dt;
                 e.box.y=std::min(e.base-e.box.h,e.box.y+e.vertical*dt);
@@ -122,11 +139,11 @@ void Game::enemyFire(Enemy& e,float targetX) {
     const bool boss=e.kind==EnemyKind::boss, phase=e.hp<e.maxHp*.48f;
     const int later=std::max(0,index-4);
     const auto& pattern=patterns[static_cast<int>(stage->biome)];
-    const int volley=boss?pattern.fans+(phase?2:0)+(later>=8?2:0)
+    const int volley=boss?pattern.fans+bossPhase*2+(phase?2:0)+(later>=8?2:0)
         :e.kind==EnemyKind::juggernaut?7:e.kind==EnemyKind::bulwark?3:
         e.kind==EnemyKind::interceptor?2:e.kind==EnemyKind::sniper?1:
         e.kind==EnemyKind::turret && index>=2?(e.elite?5:3):e.elite?2:1;
-    const float spread=boss?pattern.spread+(phase?.22f:0)+(later>=8?.12f:0):
+    const float spread=boss?pattern.spread+bossPhase*.12f+(phase?.22f:0)+(later>=8?.12f:0):
         e.kind==EnemyKind::sniper?0.f:e.kind==EnemyKind::juggernaut?.83f:
         e.kind==EnemyKind::bulwark?.48f:e.elite?.38f:.25f;
     const Color color=hex(boss?pattern.color:e.kind==EnemyKind::sniper?0x8feaff:
@@ -144,7 +161,7 @@ void Game::enemyFire(Enemy& e,float targetX) {
         hostile.push_back({origin,ray(e.aim+offset)*speed,2.7f,e.damage,color,0,{},boss,false});
         hostile.back().id=++nextShot;
     }
-    if (boss && ++e.volley%(phase && later>=7?2:3)==0 && index>=1) {
+    if (boss && ++e.volley%(bossPhase>=2?2:phase && later>=7?2:3)==0 && index>=1) {
         hostile.push_back({{origin.x,e.base-15},{sign(targetX-e.box.center().x)*speed*1.07f,0},2.4f,e.damage*1.3f,color,0,{},true,true});
         hostile.back().id=++nextShot;
     }

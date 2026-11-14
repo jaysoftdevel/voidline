@@ -59,6 +59,38 @@ void Renderer::drawPack(const Humanoid& h,const Rig& g) {
         line(g.at(spine*.9f,-8.f),g.at(spine*1.16f,-1.f),1.8f,ink);
         line(g.at(spine*.9f,-8.f),g.at(spine*1.16f,-1.f),.9f,h.trim.energy(.9f));
         break;
+    case Look::mercer: {
+        // Oversized blast shield / hydraulic support frame: much wider than the standard rucksack.
+        const Vec a=g.at(spine*.99f,-12.7f),b=g.at(spine*.08f,-12.7f);
+        armor(a,b,8.2f,8.f,h.leather.energy(.85f),h.edge,true);
+        for (int i=0;i<3;++i) {
+            const Vec c=g.at(spine*(.22f+i*.25f),-15.7f);
+            line(c-Vec{3.2f,0},c+Vec{3.2f,0},1.4f,ink);
+            ellipse(c,{1.f,.9f},h.trim.energy(1.85f));
+        }
+        polygon(a+Vec{-5.f,-1.f},a+Vec{6.f,-1.f},a+Vec{6.f,4.5f},a+Vec{-5.f,4.5f},h.shell.energy(.92f));
+        break;
+    }
+    case Look::cole: {
+        // Light recon antenna and folding sensor-wing give a narrow, high silhouette.
+        line(antenna,antenna+Vec{-6.5f*tf,-17.2f},1.1f,h.trim.energy(1.5f));
+        const Vec sensor=antenna+Vec{-6.5f*tf,-18.f};
+        triangle(sensor-Vec{8.f*tf,0},sensor+Vec{6.5f*tf,-2.5f},sensor+Vec{4.f*tf,2.6f},h.shell.energy(1.18f));
+        ellipse(sensor,{1.7f,1.7f},h.trim.energy(2.1f));
+        line(g.at(spine*.76f,-11.5f),g.at(spine*.15f,-14.f),2.8f,h.leather);
+        break;
+    }
+    case Look::nyx: {
+        // Symmetric pressure-cell pair with violet charge readouts.
+        for (int side=-1;side<=1;side+=2) {
+            const Vec a=g.at(spine*.95f,-12.1f)+Vec{side*4.2f,0};
+            const Vec b=g.at(spine*.18f,-12.1f)+Vec{side*4.2f,0};
+            armor(a,b,3.3f,3.3f,hex(0xcdc8d8),h.edge,true);
+            armor(mix(a,b,.21f),mix(a,b,.78f),1.4f,1.4f,h.trim.energy(1.7f),h.edge,true);
+            ellipse(b,{2.2f,1.7f},h.ink);
+        }
+        break;
+    }
     case Look::soldier:
         line(antenna,antenna+Vec{-2.f*tf,-12.f},1.1f,ink);
         ellipse(antenna+Vec{-2.f*tf,-12.5f},{1.1f,1.1f},h.visor.energy(2.2f));
@@ -115,8 +147,29 @@ void Renderer::drawTorso(const Humanoid& h,const Rig& g) {
             line(g.at(u,-5.f),g.at(u,-3.2f),.65f,h.edge.alpha(.72f));
         }
     }
+    // Unique chest armor profiles: a breacher's reinforced trapezoid, recon's narrow fins,
+    // and a specialist's pale split cuirass with an illuminated reactor triangle.
+    using Look=Humanoid::Look;
+    if (h.look==Look::mercer) {
+        polygon(g.at(spine*.95f,-5.6f),g.at(spine*.96f,7.5f),g.at(spine*.38f,7.5f),g.at(spine*.42f,-5.6f),h.trim.energy(.72f));
+        polygon(g.at(spine*.87f,-3.8f),g.at(spine*.88f,5.9f),g.at(spine*.53f,5.6f),g.at(spine*.53f,-3.8f),h.shell.energy(.85f));
+        for (int i=0;i<3;++i) line(g.at(spine*(.42f+i*.13f),-5.8f),g.at(spine*(.42f+i*.13f),7.6f),1.1f,ink);
+        ellipse(g.at(spine*.63f,5.2f),{1.9f,1.5f},h.trim.energy(2.3f));
+    } else if (h.look==Look::cole) {
+        for (int k=0;k<3;++k) {
+            const float u=spine*(.85f-k*.17f);
+            line(g.at(u,-4.4f),g.at(u-1.4f,5.3f),1.7f,h.trim.energy(k==0?1.5f:.7f));
+        }
+        triangle(g.at(spine*.86f,3.9f),g.at(spine*.54f,4.8f),g.at(spine*.61f,1.1f),h.shadow.energy(1.7f));
+    } else if (h.look==Look::nyx) {
+        polygon(g.at(spine*.94f,-3.2f),g.at(spine*.94f,6.3f),g.at(spine*.43f,5.1f),g.at(spine*.43f,-3.2f),hex(0xc4bfd0).energy(.94f));
+        triangle(g.at(spine*.86f,1.2f),g.at(spine*.62f,5.8f),g.at(spine*.51f,-1.3f),h.trim.energy(2.3f));
+        for (int k=0;k<3;++k) ellipse(g.at(spine*(.32f+k*.11f),6.1f),{.9f,.8f},h.trim.energy(1.8f));
+    }
     // Cross strap.
+    if (h.look!=Look::mercer && h.look!=Look::nyx)
     line(g.at(spine*.97f,-1.4f),g.at(spine*.32f,5.8f),2.1f,ink);
+    if (h.look!=Look::mercer && h.look!=Look::nyx)
     line(g.at(spine*.97f,-1.4f),g.at(spine*.32f,5.8f),1.3f,h.leather.energy(1.3f));
     ellipse(g.at(spine*.62f,2.4f),{1.4f,1.1f},h.edge);
     // Collar where the neck meets the chest.

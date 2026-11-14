@@ -30,15 +30,35 @@ void Game::runHorizontal(float dt,int direction,bool grounded) {
 // operative needs clearance to walk beneath them.
 void Game::collideWalls(float oldX,bool grounded) {
     auto& p=player;
-    for (const auto& surface:platforms) {
-        const auto& s=surface.box;
-        const bool lowCeiling=grounded && p.box.bottom()>=s.bottom()-.5f;
-        if ((!surface.ground && !surface.cover && !lowCeiling) || p.box.bottom()<=s.y+.5f || p.box.y>=s.bottom()) continue;
+    const auto collide=[&](const Rect& s) {
+        if (p.box.bottom()<=s.y+.5f || p.box.y>=s.bottom()) return;
         if (oldX+playerW<=s.x && p.box.right()>s.x) {
             p.box.x=s.x-playerW; p.velocity.x=0;
         } else if (oldX>=s.right() && p.box.x<s.right()) {
             p.box.x=s.right(); p.velocity.x=0;
         }
+    };
+    if (puzzleMode) for (size_t i=0;i<stage->relays.size();++i) {
+        const auto& relay=stage->relays[i];
+        const auto& shutter=relayStates[i];
+        const bool touching=p.box.overlaps(relay.barrier);
+        const bool passable=shutter.openness>=.76f && (relayOpen(i) || touching);
+        if (!passable && relay.operatorPlayer!=(controllingPartner?1:0)) {
+            // Wait for the physical shutter to raise before crossing. If the
+            // lever expires while a runner is inside, allow them to exit safely.
+            const Rect& wall=relay.barrier;
+            if (oldX+playerW<=wall.x && p.box.right()>wall.x) {
+                p.box.x=wall.x-playerW; p.velocity.x=0;
+            } else if (oldX>=wall.right() && p.box.x<wall.right()) {
+                p.box.x=wall.right(); p.velocity.x=0;
+            }
+        }
+    }
+    for (const auto& surface:platforms) {
+        const auto& s=surface.box;
+        const bool lowCeiling=grounded && p.box.bottom()>=s.bottom()-.5f;
+        if ((!surface.ground && !surface.cover && !lowCeiling) || p.box.bottom()<=s.y+.5f || p.box.y>=s.bottom()) continue;
+        collide(s);
     }
 }
 } // namespace vl

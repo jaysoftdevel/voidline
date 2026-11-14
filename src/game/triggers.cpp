@@ -43,10 +43,17 @@ void Game::checkpoints() {
     };
     for (int i=activeBeacon+1;i<static_cast<int>(stage->beacons.size());++i) {
         const Vec beacon=stage->beacons[i];
+        // Co-op checkpoints cannot bypass a still-locked earlier gate.
+        if (puzzleMode) {
+            bool ready=true;
+            for (size_t j=0;j<stage->relays.size();++j)
+                if (stage->relays[j].barrier.x<beacon.x && !relayStates[j].latched) ready=false;
+            if (!ready) continue;
+        }
         if (!near(player,beacon) && (!coop || !near(partner.player,beacon))) continue;
         activeBeacon=i; player.hp=maxHealth;
         if (coop) partner.player.hp=partner.maxHealth;
-        backup={time,score,kills,gun,bossActive,bossDead,guns,enemies,supplies,crates,partner};
+        backup={time,score,kills,gun,bossActive,bossDead,guns,enemies,supplies,crates,partner,relayStates};
         message(beacon-Vec{0,70},"CHECKPOINT ONLINE",hex(0xb9ffcf),1.75f);
         audio.event("checkpoint");
         break;

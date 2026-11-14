@@ -62,6 +62,17 @@ void Renderer::drawLegs(const Humanoid& h,const Rig& g) {
             line(mix(socket,knee,.22f),mix(socket,knee,.77f),.75f,h.edge.alpha(.77f));
             ellipse(mix(socket,knee,.37f),{.72f,.72f},h.trim.energy(1.15f));
         }
+        if (!far && h.look==Look::mercer) {
+            // Extra shin and heavy calf shield make Jax visibly stockier at gameplay scale.
+            armor(mix(knee,ankle,.15f),mix(knee,ankle,.68f),4.6f,4.1f,h.trim.energy(.72f),h.edge,true);
+            line(mix(knee,ankle,.35f)-Vec{3.2f,0},mix(knee,ankle,.35f)+Vec{3.2f,0},1.2f,ink);
+        } else if (!far && h.look==Look::cole) {
+            line(mix(knee,ankle,.22f)+Vec{2.f,0},mix(knee,ankle,.81f)+Vec{2.f,0},1.2f,h.trim.energy(1.9f));
+            triangle(toe+Vec{-2.f,-2.f},toe+Vec{4.f*dir,-2.f},toe+Vec{-2.f,-5.f},h.shell);
+        } else if (!far && h.look==Look::nyx) {
+            armor(mix(knee,ankle,.2f),mix(knee,ankle,.82f),2.2f,2.1f,hex(0xd1cbd7),h.edge,true);
+            ellipse(mix(knee,ankle,.55f),{1.f,2.f},h.trim.energy(2.2f));
+        }
         // Knee pad.
         ellipse(knee,{far?2.7f:3.5f,far?2.9f:3.8f},ink);
         ellipse(knee,{far?2.0f:2.7f,far?2.2f:3.0f},plate.energy(far?.9f:1.1f));

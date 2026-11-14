@@ -102,6 +102,7 @@ FIELDS(Ambient,v.kind,v.p,v.v,v.depth,v.life,v.maxLife,v.size,v.seed,v.variant)
 FIELDS(Message,v.p,v.text,v.color,v.life,v.maxLife,v.scale)
 FIELDS(Ring,v.p,v.color,v.life,v.maxLife,v.radius)
 FIELDS(StyleCall,v.text,v.color,v.life,v.maxLife,v.combo)
+FIELDS(Game::RelayState,v.charge,v.latched,v.lease,v.openness)
 FIELDS(Sound,v.name,v.gain,v.pan,v.rate)
 #undef FIELDS
 
@@ -118,7 +119,8 @@ template<class IO,class T> void operative(IO& io,T& op,int& character) {
 template<class IO,class T,class S> void world(IO& io,T& g,S& sounds) {
     io(g.mode,g.time,g.entry,g.shake,g.timeScale,g.punch,g.slowEnergy,g.comboTimer,g.flash,g.pain,
         g.hitMarker,g.killMarker,g.combo,g.score,g.kills,g.activeBeacon,g.bossActive,g.bossDead,
-        g.skyFlash,g.skyColor,g.style);
+        g.skyFlash,g.skyColor,g.style,g.puzzleMode,g.bossPhase,g.setpieceMask);
+    io.list(g.relayStates,24);
     io.list(g.enemies,128); wounds(io,g.enemies);
     io.list(g.supplies,128); io.list(g.crates,128);
     io.list(g.ambient,16); io.list(g.shots,240); io.list(g.hostile,240);
@@ -150,15 +152,18 @@ bool decodeControls(std::span<const uint8_t> bytes,Controls& c,uint32_t& mission
         c.weapon<static_cast<int>(weaponCount) && c.cycle>=-1 && c.cycle<=1 && c.aimMode<=AimMode::stick &&
         (c.aimMode!=AimMode::stick || (std::abs(c.aim.x)<=1.01f && std::abs(c.aim.y)<=1.01f));
 }
-Bytes encodeMission(int sector,int difficulty,uint32_t mission) {
+Bytes encodeMission(int sector,int difficulty,uint32_t mission,CoopMode mode) {
     Writer io;
-    io(sector,difficulty,mission);
+    io(sector,difficulty,mission,mode);
     return std::move(io.bytes);
 }
-bool decodeMission(std::span<const uint8_t> bytes,int& sector,int& difficulty,uint32_t& mission) {
+bool decodeMission(std::span<const uint8_t> bytes,int& sector,int& difficulty,uint32_t& mission,CoopMode* mode) {
     Reader io(bytes);
-    io(sector,difficulty,mission);
-    return io.done() && mission>0 && sector>=0 && sector<sectorCount && difficulty>=0 &&
+    CoopMode received{};
+    io(sector,difficulty,mission,received);
+    if (mode) *mode=received;
+    return io.done() && mission>0 && received>=CoopMode::campaign && received<=CoopMode::cooperative &&
+        sector>=0 && sector<(received==CoopMode::cooperative?cooperativeSectorCount:sectorCount) && difficulty>=0 &&
         difficulty<static_cast<int>(difficulties.size());
 }
 Bytes encodeTiming(Timing timing) {
@@ -194,7 +199,13 @@ bool decodeWorld(std::span<const uint8_t> bytes,Game& g,std::vector<Sound>& soun
     world(io,g,sounds);
     if (!io.done() || header.mission==0 || !validOperative(g,guest,guestCharacter) || !validOperative(g,host,hostCharacter) ||
         g.enemies.size()!=g.stage->enemies.size() || g.supplies.size()!=g.stage->supplies.size() ||
-        g.crates.size()!=g.stage->crates.size() || g.mode<Mode::active || g.mode>Mode::complete ||
+        g.crates.size()!=g.stage->crates.size() ||
+        g.relayStates.size()!=g.stage->relays.size() ||
+        g.puzzleMode!=(!g.stage->relays.empty()) ||
+        !std::all_of(g.relayStates.begin(),g.relayStates.end(),[](const Game::RelayState& r) {
+            return r.charge>=0.f && r.charge<=1.01f && r.lease>=0.f && r.lease<=6.01f &&
+                   r.openness>=0.f && r.openness<=1.01f;
+        }) || g.mode<Mode::active || g.mode>Mode::complete ||
         g.activeBeacon<-1 || g.activeBeacon>=static_cast<int>(g.stage->beacons.size()) ||
         !std::all_of(g.enemies.begin(),g.enemies.end(),validEnemy) ||
         !std::all_of(g.corpses.begin(),g.corpses.end(),[](const Corpse& c) { return validEnemy(c.body); }) ||

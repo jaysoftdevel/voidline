@@ -12,10 +12,12 @@ void Game::burst(Vec p,Color color,int count,float speed,ParticleKind kind) {
     count=std::min(count,420-int(particles.size()));
     for (int i=0;i<count;++i) {
         const bool puff=kind==ParticleKind::puff;
-        const float life=puff?.7f+random()*.9f:.18f+random()*(kind==ParticleKind::smoke?.66f:.46f);
+        const bool blood=kind==ParticleKind::blood;
+        const float life=blood?1.2f+random()*1.3f:puff?.7f+random()*.9f:.18f+random()*(kind==ParticleKind::smoke?.66f:.46f);
         const float angle=random()*2*pi;
         const Vec v=ray(angle)*(speed*(.25f+random()*.75f))-Vec{0,puff?26.f:18.f};
-        particles.push_back({p,v,color,life,life,puff?7+random()*9:1+random()*3,(random()-.5f)*(puff?2.f:12.f),angle,kind});
+        particles.push_back({p,v,color,life,life,puff?7+random()*9:blood?1.6f+random()*3.2f:1+random()*3,
+                             (random()-.5f)*(puff?2.f:12.f),angle,kind});
     }
 }
 
@@ -25,28 +27,34 @@ void Game::burstCone(Vec p,Vec direction,float spread,Color color,int count,floa
     const float base=std::atan2(direction.y,direction.x);
     for (int i=0;i<count;++i) {
         const bool puff=kind==ParticleKind::puff;
-        const float life=puff?.5f+random()*.6f:.16f+random()*(kind==ParticleKind::smoke?.5f:.42f);
+        const bool blood=kind==ParticleKind::blood;
+        const float life=blood?1.15f+random()*1.55f:puff?.5f+random()*.6f:.16f+random()*(kind==ParticleKind::smoke?.5f:.42f);
         const float angle=base+(random()-.5f)*spread;
         const Vec v=ray(angle)*(speed*(.3f+random()*.7f));
-        particles.push_back({p,v,color,life,life,puff?5+random()*6:1+random()*2.6f,(random()-.5f)*(puff?2.f:12.f),angle,kind});
+        particles.push_back({p,v,color,life,life,puff?5+random()*6:blood?1.6f+random()*3.5f:1+random()*2.6f,
+                             (random()-.5f)*(puff?2.f:12.f),angle,kind});
     }
 }
 
 void Game::updateParticles(float dt) {
     for (auto& p:particles) {
         p.life-=dt;
+        if (p.kind==ParticleKind::stain) continue;
         p.angle+=p.spin*dt;
         const Vec before=p.p;
         const bool puff=p.kind==ParticleKind::puff;
         const bool smoke=p.kind==ParticleKind::smoke || puff;
         const bool casing=p.kind==ParticleKind::casing || p.kind==ParticleKind::weapon;
-        p.v=p.v*(1.f-(smoke?2.6f:casing?.2f:.62f)*dt)+Vec{0,(smoke?-24.f:casing?1100.f:390.f)*dt};
+        p.v=p.v*(1.f-(smoke?2.6f:casing?.2f:.62f)*dt)+Vec{0,(smoke?-24.f:casing?1100.f:p.kind==ParticleKind::blood?740.f:390.f)*dt};
         p.p+=p.v*dt;
         if (p.v.y<=0 || smoke) continue;
         for (const auto& surface:platforms) {
             const auto& s=surface.box;
             if (before.y>s.y || p.p.y<s.y || p.p.x<s.x || p.p.x>s.right()) continue;
-            p.p.y=s.y-.1f; p.v.y*=p.kind==ParticleKind::weapon?-.22f:-.34f; p.v.x*=.62f; p.spin*=.55f; break;
+            p.p.y=s.y-.1f;
+            if (p.kind==ParticleKind::blood) { p.kind=ParticleKind::stain; p.v={}; p.spin=0.f; p.life=std::min(p.life,1.45f); }
+            else { p.v.y*=p.kind==ParticleKind::weapon?-.22f:-.34f; p.v.x*=.62f; p.spin*=.55f; }
+            break;
         }
     }
     for (auto& r:rings) r.life-=dt;

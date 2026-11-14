@@ -27,36 +27,48 @@ void Renderer::collectLights(const Game& g) {
             const Vec at=body.box.center()+offset;
             lights.push_back({at,106,.88f,hex(partner.character->color),ray(body.aim),.45f,false});
             if (body.muzzle>0)
-                lights.push_back({g.muzzle(partner)+offset,152,3.6f*body.muzzle/.069f,
+                lights.push_back({g.muzzle(partner)+offset,166,4.2f*body.muzzle/.069f,
                                   hex(weapons[partner.gun].color),ray(body.aim),-.1f,true});
         }
     }
     if (g.player.muzzle>0)
-        lights.push_back({g.muzzle()+offset+playerShift,178,4.8f*g.player.muzzle/.069f,hex(weapons[g.gun].color),ray(g.player.aim),-.1f,true});
+        lights.push_back({g.muzzle()+offset+playerShift,194,5.5f*g.player.muzzle/.069f,hex(weapons[g.gun].color),ray(g.player.aim),-.1f,true});
     for (size_t i=0;i<g.enemies.size();++i) {
         const auto& e=g.enemies[i];
         if (!e.alive || (e.kind!=EnemyKind::boss && e.warning<=0)) continue;
         const auto b=enemyBox(g,i);
-        if (visible(b.x,b.w)) lights.push_back({b.center()+offset,110,e.warning>0?2.16f:1.35f,accent});
+        if (visible(b.x,b.w)) lights.push_back({b.center()+offset,126,e.warning>0?2.42f:1.52f,accent});
     }
-    lights.push_back({{p.center().x+offset.x,p.y+offset.y+std::min(p.h*.31f,16.f)},128,1.05f,hex(g.character->color),ray(g.player.aim),.45f,false});
+    lights.push_back({{p.center().x+offset.x,p.y+offset.y+std::min(p.h*.31f,16.f)},142,1.14f,hex(g.character->color),ray(g.player.aim),.45f,false});
     for (int i=0;i<static_cast<int>(g.stage->beacons.size());++i) {
         const auto& at=g.stage->beacons[i];
-        if (visible(at.x)) lights.push_back({at+offset-Vec{0,47},102,1.28f,i==g.activeBeacon?hex(0x96ffc3):cold});
+        if (visible(at.x)) lights.push_back({at+offset-Vec{0,47},116,1.42f,i==g.activeBeacon?hex(0x96ffc3):cold});
     }
-    if (visible(g.stage->exit.x)) lights.push_back({g.stage->exit+offset-Vec{0,86},165,1.65f,g.bossDead?hex(0x8effc8):hex(0xff7250)});
+    if (visible(g.stage->exit.x)) lights.push_back({g.stage->exit+offset-Vec{0,86},194,1.86f,g.bossDead?hex(0x8effc8):hex(0xff7250)});
+    if (g.puzzleMode) for (size_t i=0;i<g.stage->relays.size();++i) {
+        const auto& relay=g.stage->relays[i];
+        if (visible(relay.pad.x)) lights.push_back({relay.pad+offset-Vec{0,12},120,
+            1.3f+g.relayStates[i].charge*.8f,hex(0x7effd8)});
+        if (visible(relay.barrier.x)) {
+            const auto& b=relay.barrier;
+            if (g.relayStates[i].openness<.98f)
+                blockers.push_back({b.x+offset.x,b.y+offset.y,b.w,b.h*(1.f-g.relayStates[i].openness)});
+            lights.push_back({b.center()+offset,145,g.relayOpen(i)?1.2f:1.85f,
+                g.relayOpen(i)?hex(0x7dffd3):hex(0xff8b65)});
+        }
+    }
     for (const auto& vent:g.stage->vents) if (visible(vent.x) && g.ventState(vent.phase)>0)
-        lights.push_back({Vec{vent.x,vent.y-7}+offset,98,1.78f,accent,{0,-1},.12f});
+        lights.push_back({Vec{vent.x,vent.y-7}+offset,110,2.02f,accent,{0,-1},.12f});
     for (int i=0;140+i*273<g.stage->worldWidth+215;i+=2) {
         const float x=140+i*273+hash(i+g.index*32)*90;
         if (!visible(x)) continue;
         const float y=253+hash(i+54)*126;
-        lights.push_back({Vec{x+11,y+8}+offset,215,1.86f+.17f*std::sin(g.time*2+i),accent,{.12f,1},.16f});
+        lights.push_back({Vec{x+11,y+8}+offset,250,2.12f+.22f*std::sin(g.time*2+i),accent,{.12f,1},.16f});
     }
     for (int i=0;167+511*i<g.stage->worldWidth+215;++i) {
         const float x=167+511*i;
         if (!visible(x)) continue;
-        lights.push_back({Vec{x,143+hash(i+43)*102}+offset,301,1.49f,cold,{-.19f,1},.27f});
+        lights.push_back({Vec{x,143+hash(i+43)*102}+offset,344,1.68f,cold,{-.19f,1},.27f});
     }
     for (const auto& s:g.shots) if (s.longShot || s.blast>0) {
         const auto at=shotPosition(s,true);

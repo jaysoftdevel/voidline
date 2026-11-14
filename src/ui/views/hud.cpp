@@ -49,9 +49,17 @@ void App::hud() {
         r.rect({921,77,246,4},hex(0x3e4f5b));
         r.rect({921,77,246*(1-g.reload/g.duration),4},ammo);
     }
-    const std::string objective=game.bossDead?(game.coop?"Extract together":"Reach the extraction gate"):game.bossActive?"Defeat "+std::string(game.stage->boss):"Find the sector guardian";
+    const int relays=int(std::count_if(game.relayStates.begin(),game.relayStates.end(),
+                                      [](const Game::RelayState& s){return s.latched;}));
+    const std::string objective=game.puzzleMode && relays<int(game.relayStates.size())?
+        "R"+std::to_string(relays+1)+"/"+std::to_string(game.relayStates.size())+"  /  "+
+        (game.stage->relays[static_cast<size_t>(relays)].operatorPlayer==0?
+         "P1 HOLD UP / P2 PASS BELOW":"P2 HOLD BELOW / P1 PASS UP"):
+        game.bossDead?(game.coop?"Extract together":"Reach the extraction gate"):
+        game.bossActive?"Defeat "+std::string(game.stage->boss):"Find the sector guardian";
     panel({413,16,374,47},accent);
-    label({425,35},"SECTOR "+digits(game.index+1)+"/"+digits(sectorCount),accent);
+    label({425,35},std::string(game.puzzleMode?"COOP ":"SECTOR ")+digits(game.index+1)+"/"+
+        digits(game.puzzleMode?cooperativeSectorCount:sectorCount),accent);
     r.text({540,37},objective,14,white,true);
     r.rect({425,48,350,3},hex(0x465966));
     r.rect({425,48,350*clamp(p.box.center().x/game.stage->worldWidth),3},accent);

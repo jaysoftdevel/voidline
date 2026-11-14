@@ -22,7 +22,15 @@ void Renderer::drawParticles(const Game& g) {
         const float life=particle.life/particle.maxLife;
         const Vec p=particle.p+offset;
         const Color tint=particle.color;
-        if (particle.kind==ParticleKind::smoke) {
+        if (particle.kind==ParticleKind::stain) {
+            ellipse(p,{particle.size*(1.25f+0.3f*(1-life)),particle.size*.38f},
+                    hex(0x22040c).alpha(.72f*life));
+            ellipse(p,{particle.size*.80f,particle.size*.20f},hex(0x9b1e2b).alpha(.56f*life));
+        } else if (particle.kind==ParticleKind::blood) {
+            const Vec trail=normal(particle.v)*std::max(1.5f,particle.size*1.5f);
+            line(p-trail,p,particle.size*.75f,hex(0x3a0610).alpha(life));
+            ellipse(p,{particle.size*.64f,particle.size*.64f},tint.alpha(life));
+        } else if (particle.kind==ParticleKind::smoke) {
             halo(p,particle.size*(4+9*(1-life)),tint.alpha(life*.22f));
         } else if (particle.kind==ParticleKind::puff) {
             puff(p,particle.size*(1.4f+3.2f*(1-life)),particle.angle,tint.alpha(life*.34f));

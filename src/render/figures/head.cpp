@@ -31,7 +31,7 @@ Renderer::Face Renderer::drawHead(const Humanoid& h,const Rig& g) {
     ellipse(face.ear,{1.5f,2.f},h.skin.energy(.85f));
     face.eyeA=Vec{head.x+ft*3.f*fa+(1-fa)*2.3f,head.y-.3f-g.look*.9f};
     face.eyeB=Vec{head.x+ft*3.f*fa-(1-fa)*2.3f,head.y-.3f-g.look*.9f};
-    if (h.look!=Look::soldier) {
+    if (h.look!=Look::soldier && h.look!=Look::mercer && h.look!=Look::cole && h.look!=Look::nyx) {
         // A collapsed figure has closed eyes.
         auto eye=[&](Vec p) {
             if (h.fall>.55f || h.blink>.72f) { line(p+Vec{-1.6f,0},p+Vec{1.6f,.4f},1.1f,ink); return; }
@@ -65,6 +65,9 @@ Renderer::Face Renderer::drawHead(const Humanoid& h,const Rig& g) {
     case Look::voss: drawVossHead(h,face); break;
     case Look::rook: drawRookHead(h,face); break;
     case Look::vale: drawValeHead(h,face); break;
+    case Look::mercer: drawMercerHead(h,face); break;
+    case Look::cole: drawColeHead(h,face); break;
+    case Look::nyx: drawNyxHead(h,face); break;
     case Look::soldier: drawHelmet(h,face); break;
     }
     return face;

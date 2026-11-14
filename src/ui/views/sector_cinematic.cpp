@@ -9,6 +9,7 @@ void App::sectorCinematic() {
     // Story page is deliberately one *static* pre-rendered environment picture.
     // No operative drawing, moving camera, particle animation, or time-dependent layers.
     const auto& chapter=story::chapters[game.index];
+    const bool puzzle=coopStarted && coopMode==CoopMode::cooperative;
     const auto& stage=*game.stage;
     const auto accent=hex(stage.accent);
     const auto backdrop=story::scenery(chapter.set);
@@ -19,17 +20,22 @@ void App::sectorCinematic() {
     r.rect({29,22,1143,31},hex(0x102230));
     label({48,43},"VOIDLINE  /  STORY ARCHIVE  /  SECTOR "+digits(game.index+1),accent);
     r.rect({29,523,726,49},hex(0x102230));
-    r.text({47,556},std::string(stage.name)+"  /  "+std::string(chapter.reveal),16,pale,true);
+    r.text({47,556},std::string(stage.name)+"  /  "+std::string(puzzle?"TWO ROUTES, ONE OBJECTIVE":chapter.reveal),16,pale,true);
 
     const Rect panel{772,69,399,503};
     r.gradient(panel,hex(0x162936),hex(0x0a1823));
     r.outline(panel,hex(0x516a77));
     r.rect({772,69,4,503},accent);
     label({799,102},"CHAPTER REPORT",accent);
-    r.text({797,146},chapter.title,26,white,true);
+    r.text({797,146},puzzle?"The Relay Exchange":chapter.title,26,white,true);
     r.line({797,161},{1146,161},1,hex(0x3a5364));
     float y=188;
-    for (const auto& line:chapter.lines) {
+    if (puzzle) {
+        label({799,210},"HELIX LOG  /  TWO-OPERATOR ACCESS",accent);
+        copy({799,244},"Both access routes have been reconnected. Each operative controlled one side of the relay network.",340,19,pale);
+        label({799,341},"SQUAD COMMS",accent);
+        copy({799,377},"The security locks responded only when both operatives coordinated their positions. The next facility is waiting.",340,18,pale);
+    } else for (const auto& line:chapter.lines) {
         const std::string_view speaker=line.voice==story::Voice::lead?"OPERATIVE":
             line.voice==story::Voice::partner?"TEAM COMMS":
             line.voice==story::Voice::archive?"HELIX SYSTEM LOG":

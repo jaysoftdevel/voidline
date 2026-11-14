@@ -5,6 +5,8 @@ namespace vl {
 enum class EnemyKind {drone,ranger,turret,stalker,boss,scavenger,sniper,bulwark,interceptor,juggernaut};
 enum class Biome {mine,water,biodome,forge,orbital};
 inline constexpr int sectorCount=20;
+inline constexpr int cooperativeSectorCount=6;
+enum class CoopMode : int { campaign=0, cooperative=1 };
 enum class SupplyKind {ammo,salvage,health};
 struct Character {
     const char *name,*role,*art,*color,*trait,*description;
@@ -34,6 +36,14 @@ inline constexpr CrateSpec crateSpecs[]{
 };
 inline const CrateSpec& crateSpec(CrateKind kind) { return crateSpecs[static_cast<int>(kind)]; }
 struct CratePlacement { CrateKind kind; Vec base; };
+// Alternating upper/lower route gates. The other operative must hold the relay pad.
+enum class RelayControl { pressurePlate, lever };
+struct RelayGate {
+    Rect barrier;     // Frame footprint; shutter physically closes this passage
+    Vec pad;          // Plate / wall-console activation position
+    int operatorPlayer=0;
+    RelayControl control=RelayControl::pressurePlate;
+};
 struct Stage {
     const char *name,*art,*location,*threat,*accent,*cold,*briefing,*boss;
     Biome biome;
@@ -44,6 +54,7 @@ struct Stage {
     std::vector<EnemyPlacement> enemies; std::vector<SupplyPlacement> supplies;
     std::vector<Rect> cover{};
     std::vector<CratePlacement> crates{};
+    std::vector<RelayGate> relays{};
 };
 struct Record { float time=0; int score=0; };
 struct Save {
@@ -60,7 +71,8 @@ struct Settings {
     std::array<int,keymapSize> keymap = [] { std::array<int,keymapSize> v{}; v.fill(-1); return v; }();
     int sprintMode = 0;
     bool crouchToggle = false, diagnostics = false;
-    bool audio=true,motion=true,cinematic=true,high=true;
+    bool audio=true,motion=true,cinematic=true,high=true,fpsCounter=false;
+    int fpsCorner=1; // 0 top-left, 1 top-right, 2 bottom-left, 3 bottom-right
     float music=.74f,effects=.68f; int difficulty=1;
 };
 } // namespace vl

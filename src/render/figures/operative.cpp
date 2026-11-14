@@ -20,13 +20,15 @@ Renderer::Humanoid Renderer::operativeFigure(const Character& character) const {
     };
     const auto& pal=palettes[std::clamp(index,0,5)];
     Humanoid h;
-    // Reuse the existing fully articulated male/female rigs with separate armor palettes.
-    constexpr Look rigs[]{Look::voss,Look::rook,Look::vale,Look::vale,Look::vale,Look::rook};
+    // Six independent silhouette identities: the last three are original rigs, not mirrored originals.
+    constexpr Look rigs[]{Look::voss,Look::rook,Look::vale,Look::mercer,Look::cole,Look::nyx};
     h.look=rigs[std::clamp(index,0,5)];
     h.suit=hex(pal.suit); h.shell=hex(pal.shell);
     h.trim=trim; h.edge=mix(trim,hex(0xffffff),.7f); h.shadow=hex(0x1d2430).energy(1.1f);
     h.ink=hex(0x06080d); h.skin=hex(pal.skin); h.hair=hex(pal.hair);
     h.leather=hex(pal.leather); h.glove=hex(pal.glove); h.visor=trim;
+    // Armor silhouette and wearable gear are customized in the articulated rig passes.
+    if (index>=3) h.scarf=false;
     return h;
 }
 

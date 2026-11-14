@@ -13,8 +13,8 @@
 
 namespace vl::net {
 namespace {
-constexpr std::array<uint8_t,5> query{'V','L','D','6','?'};
-constexpr std::array<uint8_t,5> answer{'V','L','D','6','!'};
+constexpr std::array<uint8_t,5> query{'V','L','D','8','?'};
+constexpr std::array<uint8_t,5> answer{'V','L','D','8','!'};
 using namespace std::chrono_literals;
 
 sockaddr_in endpoint(uint32_t address,uint16_t port) {

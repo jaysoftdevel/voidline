@@ -20,7 +20,7 @@ void Renderer::post(const Game& g,bool high,bool motionFx) {
     flush();
     gl.Disable(GL_BLEND);
 
-    const int levels=high?4:2;
+    const int levels=high?5:3;
     Texture from=lit.texture;
     for (int i=0;i<levels;++i) {
         bind(bloom[i],false); gl.UseProgram(downProgram);
@@ -45,8 +45,8 @@ void Renderer::post(const Game& g,bool high,bool motionFx) {
         {{1.03f,.92f,1.09f},{1.06f,1.10f,.94f},1.28f}, {{1.00f,.90f,.88f},{1.16f,1.02f,.86f},1.26f},
         {{.92f,.93f,1.12f},{1.06f,1.02f,1.12f},1.24f}};
     const auto& look=grades[static_cast<int>(g.stage->biome)];
-    gl.Uniform1f(uniform(presentProgram,"strength"),high?.89f:.64f);
-    gl.Uniform1f(uniform(presentProgram,"exposure"),.82f);
+    gl.Uniform1f(uniform(presentProgram,"strength"),high?.98f:.72f);
+    gl.Uniform1f(uniform(presentProgram,"exposure"),.86f);
     gl.Uniform1f(uniform(presentProgram,"time"),clockTime);
     gl.Uniform1f(uniform(presentProgram,"slow"),clamp((1-g.timeScale)/.72f));
     gl.Uniform1f(uniform(presentProgram,"hurt"),g.pain);

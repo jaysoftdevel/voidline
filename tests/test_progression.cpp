@@ -1,11 +1,30 @@
 // Upgrades, perks and campaign data.
 #include "game/detail.hpp"
 #include "support.hpp"
+#include "services/storage.hpp"
+#include <filesystem>
+#include <chrono>
 
 using namespace test;
 using namespace vl;
 
 namespace {
+void fpsSettings() {
+    const auto path=std::filesystem::temp_directory_path()/
+        ("voidline-settings-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())+".json");
+    Storage storage(path);
+    auto options=storage.settings();
+    CHECK(!options.fpsCounter && options.fpsCorner==1);
+    options.fpsCounter=true; options.fpsCorner=3;
+    storage.put(options);
+    auto read=storage.settings();
+    CHECK(read.fpsCounter && read.fpsCorner==3);
+    read.fpsCounter=false; read.fpsCorner=0; storage.put(read);
+    read=storage.settings();
+    CHECK(!read.fpsCounter && read.fpsCorner==0);
+    std::filesystem::remove(path);
+    std::filesystem::remove(path.string()+".lock");
+}
 void upgradesAndPerks() {
     using namespace vl;
     Silent audio;
@@ -87,7 +106,10 @@ void stageData() {
         const auto& stage=stages[i];
         CHECK(stage.worldWidth>length && stage.worldWidth>stage.exit.x);
         CHECK(stage.enemies.size()>enemies);
-        CHECK(stage.worldWidth>=4000.f+530.f*i);
+        CHECK(stage.worldWidth>=5800.f+730.f*i);
+        CHECK(stage.ledges.size()>=size_t(12+2*i));
+        CHECK(stage.enemies.size()<=128); // Bounded by multiplayer snapshot serialization.
+
         CHECK(stage.enemies.size()>=size_t(11+2*i));
         if (i>0) CHECK(stage.worldWidth-length>=390.f);
         if (i>0) CHECK(stage.enemies.size()-enemies>=2);
@@ -163,6 +185,7 @@ void checkpointRestore() {
 }
 
 void runProgressionTests() {
+    fpsSettings();
     upgradesAndPerks();
     rosterAndCharacters();
     stageData();

@@ -164,6 +164,8 @@ Settings Storage::settings() const {
     s.sprintMode=integer(j.get(),"sprintMode",s.sprintMode,0,2);
     s.crouchToggle=flag(j.get(),"crouchToggle",s.crouchToggle);
     s.diagnostics=flag(j.get(),"diagnostics",s.diagnostics);
+    s.fpsCounter=flag(j.get(),"fpsCounter",s.fpsCounter);
+    s.fpsCorner=integer(j.get(),"fpsCorner",s.fpsCorner,0,3);
     auto* keys=json_object_object_get(j.get(),"keymap");
     if (json_object_get_type(keys)==jsonArray && json_object_array_length(keys)==keymapSize) {
         for (size_t i=0;i<keymapSize;++i) {
@@ -280,6 +282,7 @@ void Storage::put(const Settings& s) {
     addFlag(obj,"cinematic",s.cinematic); addFlag(obj,"high",s.high);
     addReal(obj,"music",s.music); addReal(obj,"effects",s.effects); add(obj,"difficulty",s.difficulty);
     add(obj,"sprintMode",s.sprintMode); addFlag(obj,"crouchToggle",s.crouchToggle); addFlag(obj,"diagnostics",s.diagnostics);
+    addFlag(obj,"fpsCounter",s.fpsCounter); add(obj,"fpsCorner",std::clamp(s.fpsCorner,0,3));
     auto* keys=json_object_new_array();
     for (int code:s.keymap) json_object_array_add(keys,json_object_new_int64(code));
     json_object_object_add(obj,"keymap",keys);

@@ -12,10 +12,13 @@ void Game::resetTransient() {
     shake=0; entry=2.65f;
 }
 
-void Game::start(int sector,const Save& save) {
+void Game::start(int sector,const Save& save,bool cooperative) {
     coop=false; partner={}; partnerInput={};
+    puzzleMode=cooperative;
     index=sector;
-    stage=&stages[index]; campaign=save;
+    stage=cooperative?&cooperativeStages[index]:&stages[index]; campaign=save;
+    relayStates.assign(stage->relays.size(),{});
+    setpieceMask=0; bossPhase=0;
     difficulty=&difficulties[save.difficulty];
     const auto& rank=save.perks;
     speedScale=1+.04f*rank[1]; jumpScale=1+.03f*rank[1];
@@ -34,12 +37,14 @@ void Game::start(int sector,const Save& save) {
         crates.push_back({placement.kind,{base.x-spec.w*.5f,base.y-spec.h,spec.w,spec.h},spec.hits});
     }
     enemies.clear(); supplies.clear();
+    const float safeSpawnX=100.f;
+    const float safeRadius=330.f+std::min(index,8)*18.f;
     const int later=std::max(0,index-4);
     for (const auto& item:stage->enemies) {
         const auto& s=spec(item.kind);
         const bool boss=item.kind==EnemyKind::boss;
         const int id=static_cast<int>(enemies.size());
-        const float scaling=1+std::min(index,4)*(boss?.27f:.085f)+later*(boss?.11f:.042f);
+        const float scaling=1.11f+std::min(index,4)*(boss?.29f:.105f)+later*(boss?.13f:.065f);
         const int hp=std::lround(s.hp*scaling*(item.elite?1.45f:1.f)*difficulty->hp);
         const bool flying=item.kind==EnemyKind::drone || item.kind==EnemyKind::interceptor;
         const Vec origin{item.x-s.w*.5f,item.y-(flying?0:s.h)};
@@ -47,16 +52,25 @@ void Game::start(int sector,const Save& save) {
             item.kind==EnemyKind::scavenger?std::max(240.f,item.patrol):
                 item.kind==EnemyKind::sniper?std::max(110.f,item.patrol):
                 item.patrol>0?item.patrol:(boss?160.f:0.f),float((id*97+index*47)%239),
-            .66f+(id%4)*.23f,s.damage*difficulty->damage*(1+std::min(index,4)*.045f+later*.025f)
+            .66f+(id%4)*.23f,s.damage*difficulty->damage*(1.14f+std::min(index,4)*.05f+later*.034f)
                 *(item.elite?1.18f:1.f),s.reach+(item.elite?35.f:0.f),
-            s.speed*(item.elite?1.25f:1.f),hp,hp,id%2?-1:1});
+            s.speed*(1.08f+later*.009f)*(item.elite?1.25f:1.f),hp,hp,id%2?-1:1});
         enemies.back().elite=item.elite;
+        // Reposition, rather than remove, nearby enemies: both multiplayer peers
+        // must preserve the exact Stage enemy count when decoding world snapshots.
+        if (item.kind!=EnemyKind::boss && item.x<safeSpawnX+safeRadius) {
+            auto& e=enemies.back();
+            const float move=(safeSpawnX+safeRadius)-item.x+90.f;
+            e.box.x+=move; e.origin.x+=move;
+        }
     }
     for (const auto& item:stage->supplies) supplies.push_back({item.kind,{item.x,item.y-20}});
     setupLoadout(save);
     resetTransient(); backup={}; slowEnergy=1; bestCombo=0;
     score=0; kills=0; time=0; camera=0;
     activeBeacon=-1; bossActive=bossDead=false;
+    // Cooperative players share the same ground insertion bay; neither is
+    // teleported straight to the upper puzzle route.
     spawn({100,stage->ground.front().y});
     moveLifts(0);
     mode=Mode::active;
@@ -106,7 +120,7 @@ void Game::resetPose() {
 void Game::retry() {
     if (activeBeacon<0) {
         const auto save=campaign;
-        if (coop) startCoop(index,save);
+        if (coop) startCoop(index,save,partner.character?int(partner.character-characters.data()):-1,puzzleMode);
         else start(index,save);
         return;
     }
@@ -114,17 +128,21 @@ void Game::retry() {
     time=backup.time; score=backup.score; kills=backup.kills; gun=backup.gun;
     guns=backup.guns; for (auto& g:guns) g.reload=0;
     enemies=backup.enemies; supplies=backup.supplies; crates=backup.crates;
+    relayStates=backup.relayStates;
     bossActive=backup.bossActive; bossDead=backup.bossDead;
     player.support=-1;
     moveLifts(0);
     const Vec beacon=stage->beacons[activeBeacon];
-    spawn(beacon-Vec{playerW*.5f,0});
+    // Both operatives regroup at the checkpoint on the same floor. The
+    // nearby re-entry steps reconnect to the upper route after a retry.
+    const Vec hostSpawn=beacon-Vec{playerW*.5f,0};
+    spawn(hostSpawn);
     camera=clamp(beacon.x-width*.32f,0,stage->worldWidth-width);
     player.flash=.9f; entry=0; mode=Mode::active;
     if (coop) {
         partner=backup.partner;
         for (auto& g:partner.guns) g.reload=0;
-        spawnPartner(player.safe);
+        spawnPartner(puzzleMode?beacon+Vec{32.f,0}:player.safe);
     }
 }
 
@@ -184,6 +202,7 @@ void Game::tick(float dt) {
         swapOperatives();
     }
     if (mode!=Mode::active) return;
+    updateRelays(dt); scriptedSetpieces();
     moveEnemies(dt); moveShots(dt); detonateCrates();
     if (mode!=Mode::active) return;
     triggers();
@@ -195,7 +214,9 @@ void Game::tick(float dt) {
     if (mode==Mode::active) checkpoints();
     updateParticles(dt); updateCorpses(dt); updateAmbient(dt);
     updateCamera(dt);
-    if (mode==Mode::active && bossDead && atExtraction(player) && (!coop || atExtraction(partner.player))) {
+    if (mode==Mode::active && bossDead &&
+        std::all_of(relayStates.begin(),relayStates.end(),[](const RelayState& r){return r.latched;}) &&
+        atExtraction(player) && (!coop || atExtraction(partner.player))) {
         score+=std::lround((60+index*18)*difficulty->score);
         releaseBoth(); mode=Mode::complete;
     }

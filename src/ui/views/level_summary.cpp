@@ -8,6 +8,8 @@ namespace vl {
 void App::levelSummary() {
     const auto& stage=*game.stage;
     const auto& chapter=story::chapters[game.index];
+    const bool puzzle=coopStarted && coopMode==CoopMode::cooperative;
+    const int limit=puzzle?cooperativeSectorCount:sectorCount;
     const auto accent=hex(stage.accent);
     r.cover(stage.art,screen,1.06f,{.56f,.48f},white);
     r.rect(screen,hex(0x061019).alpha(.83f));
@@ -15,13 +17,13 @@ void App::levelSummary() {
     r.outline({32,26,1136,543},hex(0x536b7b));
     r.rect({32,26,5,543},accent);
     label({68,65},"PAGE 2 OF 2  /  MISSION SUMMARY",accent);
-    r.text({66,114},game.index==sectorCount-1?"Campaign complete":"Sector complete",44,white,true);
-    r.text({68,149},std::string(stage.name)+"  /  "+std::string(chapter.reveal),17,pale);
+    r.text({66,114},game.index==limit-1?(puzzle?"Cooperation complete":"Campaign complete"):"Sector complete",44,white,true);
+    r.text({68,149},std::string(stage.name)+"  /  "+std::string(puzzle?"SHARED OBJECTIVE SECURED":chapter.reveal),17,pale);
     const std::array<std::pair<std::string,std::string>,4> stats{{
         {"MISSION SCORE",std::to_string(game.score)},
         {"TARGETS DEFEATED",std::to_string(game.kills)},
         {"COMPLETION TIME",timeText(game.time)},
-        {"SECTOR PROGRESS",std::to_string(game.index+1)+" / "+std::to_string(sectorCount)}
+        {"SECTOR PROGRESS",std::to_string(game.index+1)+" / "+std::to_string(limit)}
     }};
     for (int n=0;n<4;++n) {
         const float x=67+(n%2)*550.f,y=189+(n/2)*116.f;
@@ -32,7 +34,7 @@ void App::levelSummary() {
     }
     r.text({68,473},"Story complete. Review your result before proceeding.",17,pale);
     if (coopStarted) {
-        if (network.hosting() && game.index+1<sectorCount)
+        if (network.hosting() && game.index+1<limit)
             button({68,501,280,46},"NEXT SECTOR",[this]{startCoop(game.index+1);},true,true);
         else if (!network.hosting()) label({69,527},"WAITING FOR HOST",teal);
         button({879,501,254,46},"LEAVE SESSION",[this]{leaveCoop();});

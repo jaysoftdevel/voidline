@@ -15,6 +15,16 @@ App::App(SDL_Window* win,Renderer& renderer,Audio& mixer,Storage& storage)
     refresh();
 }
 
+void App::sampleFrame(float elapsed) {
+    if (elapsed<=0 || elapsed>1.f) return; // Ignore suspended or unfocused frames.
+    fpsWindowSeconds+=elapsed;
+    ++fpsWindowFrames;
+    if (fpsWindowSeconds>=.45f) {
+        fpsDisplayed=std::clamp(static_cast<int>(std::lround(fpsWindowFrames/fpsWindowSeconds)),0,999);
+        fpsWindowFrames=0; fpsWindowSeconds=0;
+    }
+}
+
 void App::refresh() { for (int i=0;i<3;++i) slots[i]=store.get(i+1); }
 
 void App::show(View v) {
@@ -63,8 +73,7 @@ void App::closeAction() {
     if (view==View::epilogue) { skipEpilogue(); return; }
     if (coopStarted) {
         if (view==View::play) {
-            coopPaused=!coopPaused; input.reset(); mouseAiming=mouseMoved=false;
-            SDL_ShowCursor(coopPaused?1:0);
+            requestCoopPause();
         }
         else if (view==View::failed || view==View::cleared || view==View::coopLoading) leaveCoop();
         return;
@@ -264,6 +273,17 @@ void App::draw() {
         break;
     }
     if (settings.diagnostics && view!=View::coopLoading && view!=View::epilogue) diagnostics();
+    if (settings.fpsCounter) {
+        const bool left=settings.fpsCorner==0 || settings.fpsCorner==2;
+        const bool top=settings.fpsCorner<2;
+        // Keep corner placement clear of menu headings and the gameplay HUD.
+        const bool gameHud=view==View::play || view==View::pause || view==View::failed;
+        const float y=top?(gameHud?(left?152.f:120.f):48.f):(gameHud?506.f:height-35.f);
+        const Rect tile{left?10.f:width-103.f,y,93.f,27.f};
+        r.rect(tile,hex(0x06121b).alpha(.85f));
+        r.outline(tile,hex(0x3a8794).alpha(.75f));
+        r.text({tile.x+10,tile.y+19},std::to_string(fpsDisplayed)+" FPS",15,teal,true);
+    }
     if (notice>0) {
         const float w=std::min(1150.f,r.measure(notification,15)+32);
         r.rect({(width-w)*.5f,5,w,29},hex(0x142630).alpha(.97f));

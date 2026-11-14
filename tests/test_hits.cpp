@@ -165,9 +165,51 @@ void guardianFinale() {
     CHECK(flash >= .5f);
     CHECK(game.corpses.empty());
 }
+
+void heavyBloodAndScars() {
+    Silent audio;
+    Game game(audio);
+    game.start(0,fullSave());
+    auto& e=game.enemies.front();
+    e.kind=EnemyKind::ranger;
+    e.hp=e.maxHp=1000;
+    e.box={210.f,game.stage->ground.front().y-54.f,35.f,54.f};
+    e.origin={e.box.x,e.box.y}; e.base=game.stage->ground.front().y;
+    e.damage=0; e.reach=0; e.patrol=0;
+    game.damageEnemy(e,28,e.box.center(),{1.f,0.f},true);
+    CHECK(std::any_of(game.particles.begin(),game.particles.end(),[](const Particle& p) {
+        return p.kind==ParticleKind::blood;
+    }));
+    for (int i=0;i<50;++i) game.tick();
+    CHECK(std::any_of(game.particles.begin(),game.particles.end(),[](const Particle& p) {
+        return p.kind==ParticleKind::stain;
+    }));
+}
+void scriptedBossPhases() {
+    Silent audio;
+    Game game(audio);
+    game.start(0,fullSave());
+    auto& boss=game.enemies.back();
+    boss.box.x=game.player.box.x+360;
+    boss.origin.x=boss.box.x;
+    boss.damage=0;
+    game.bossActive=true;
+    boss.hp=int(boss.maxHp*.62f);
+    game.tick();
+    CHECK(game.bossPhase==1);
+    boss.hp=int(boss.maxHp*.28f);
+    game.tick();
+    CHECK(game.bossPhase==2);
+    game.player.box.x=game.stage->worldWidth*.5f;
+    game.tick();
+    CHECK((game.setpieceMask & 1u)!=0);
+    CHECK(!game.rings.empty());
+}
 }
 
 void runHitTests() {
+    heavyBloodAndScars();
+    scriptedBossPhases();
     woundsAndFeedback();
     bodyPartReactions();
     damageNumbers();

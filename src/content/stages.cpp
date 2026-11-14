@@ -113,6 +113,64 @@ void layCrossing(Stage& stage,Crossing crossing,float edge,float from,float to,i
     }
 }
 
+// Sector-specific vertical routes use actual collidable ledges, lift machinery,
+// elevated threats and rewards. The lower route remains traversable without
+// upgrades; upper routes reward climbing rather than repeating empty corridors.
+void detailBay(Stage& stage,float x,float w,float floor,int rank,int number) {
+    const int motif=(rank*3+number*5+static_cast<int>(stage.biome)*7)%7;
+    const float a=x+w*.15f, b=x+w*.40f, c=x+w*.67f;
+    const auto ledge=[&](float px,float lift,float size=116.f) {
+        stage.ledges.push_back({px,floor-lift,size,17.f});
+    };
+    switch (motif) {
+    case 0: // mine elevator shaft
+        ledge(a,68.f); ledge(b,138.f); ledge(c,210.f);
+        stage.lifts.push_back({b+136.f,floor-138.f,104.f,21.f,-71.f,3.8f,rank*.31f});
+        break;
+    case 1: // stacked maintenance platforms and diagonal climb
+        ledge(a,76.f,136.f); ledge(a+124.f,145.f,125.f); ledge(b+105.f,218.f,134.f);
+        break;
+    case 2: // mobile hydraulic lift and high traverse
+        ledge(a,92.f); ledge(c-86.f,184.f,144.f);
+        stage.lifts.push_back({b,floor-139.f,112.f,54.f,73.f,3.2f,number*.41f});
+        break;
+    case 3: // flooded lower channel, safe overhead gantry
+        ledge(a,69.f,149.f); ledge(b,136.f,159.f); ledge(c,201.f,125.f);
+        stage.cover.push_back({x+w*.72f,floor-51.f,48.f,51.f});
+        break;
+    case 4: // offset cooling racks
+        ledge(a,86.f,129.f); ledge(b,164.f); ledge(c,91.f,149.f);
+        if (rank>=5) stage.lifts.push_back({c+72.f,floor-177.f,104.f,-22.f,75.f,4.1f,rank*.19f});
+        break;
+    case 5: // high bridge connected by ascent platforms
+        ledge(a,63.f); ledge(a+121.f,121.f); ledge(b+52.f,184.f,182.f);
+        ledge(c,136.f);
+        break;
+    default: // orbital gantry with staggered service bridges
+        ledge(a,77.f,148.f); ledge(b,143.f,137.f); ledge(c,211.f,142.f);
+        if (rank>=3) stage.lifts.push_back({b+137.f,floor-139.f,99.f,42.f,-66.f,3.3f,number*.28f});
+        break;
+    }
+    if (rank>=2 && number%2==0) {
+        const float top=floor-(motif%2==0?210.f:184.f);
+        stage.supplies.push_back({number%3?SupplyKind::salvage:SupplyKind::ammo,c+23.f,top});
+    }
+    // Elevated sentries add a real reason to take cover or climb the decks.
+    if (rank>=3 && number%3==2) {
+        const EnemyPlacement turret{EnemyKind::turret,c+40.f,floor-136.f,0,rank>=10};
+        if (!stage.enemies.empty() && stage.enemies.back().kind==EnemyKind::boss)
+            stage.enemies.insert(stage.enemies.end()-1,turret);
+        else stage.enemies.push_back(turret);
+    }
+    if (rank>=7 && number%3==1)
+    {
+        const EnemyPlacement interceptor{EnemyKind::interceptor,c+34.f,floor-233.f,0,rank>=11};
+        if (!stage.enemies.empty() && stage.enemies.back().kind==EnemyKind::boss)
+            stage.enemies.insert(stage.enemies.end()-1,interceptor);
+        else stage.enemies.push_back(interceptor);
+    }
+}
+
 void populateBay(Stage& stage,const Bay& bay,float x,float w,int rank,int number,int reinforcements) {
     const float floor=bay.floor;
     const bool elite=rank>=2 && (number+rank)%3!=0;
@@ -122,7 +180,11 @@ void populateBay(Stage& stage,const Bay& bay,float x,float w,int rank,int number
     stage.ledges.push_back({deck,deckY,128,17});
     if (bay.crossing==catwalk || bay.crossing==stairs)
         stage.ledges.push_back({x+w*.18f,floor-78,98,17});
+    if (rank>=3) stage.ledges.push_back({x+w*.58f,floor-(number%2?144.f:126.f),94,17});
+    if (rank>=8 && number%2==0) stage.ledges.push_back({x+w*.38f,floor-176,82,17});
     if (number>0 || rank>=2) stage.cover.push_back({barricade,floor-43,45,43});
+    if (rank>=5) stage.cover.push_back({x+w*.46f,floor-43,42,43});
+    if (rank>=10 && number%3==0) stage.cover.push_back({x+w*.83f,floor-43,42,43});
     const auto crate=rank>=9 && number%4==2?CrateKind::reactor
         :rank>=2 && number%3!=0?CrateKind::fuel:CrateKind::charge;
     stage.crates.push_back({crate,{x+w*.61f,floor}});
@@ -174,35 +236,48 @@ Stage makeMission(const Mission& mission,int rank) {
     const int sourceCount=static_cast<int>(mission.bays.size());
     // More sectors must mean more encounters, not just larger empty walkways.
     // Repeat the mission's hand-authored traversal motifs in a staggered order.
-    const int count=std::max(sourceCount,8+rank/2);
-    const float length=8400.f+560.f*rank+18.f*rank*rank;
+    const int count=std::max(sourceCount,10+rank/2+rank/4);
+    const float length=11600.f+850.f*rank+36.f*rank*rank;
     const float arena=870.f+14.f*rank;
+    const auto bayAt=[&](int index) {
+        Bay bay=mission.bays[(index+(index/3)*(rank%3+1)+rank*2)%sourceCount];
+        // More pronounced stepped terrain, while the maximum floor delta remains
+        // within the normal jump and the crossing always offers an alternate path.
+        bay.floor=std::clamp(bay.floor+float((index*3+rank*2)%5-2)*11.f,405.f,537.f);
+        return bay;
+    };
     float walkable=length-arena;
     for (int i=0;i<count;++i)
-        walkable-=crossingWidth(mission.bays[(i+i/sourceCount)%sourceCount].crossing);
+        walkable-=crossingWidth(bayAt(i).crossing);
     const float bayWidth=walkable/count;
     Stage stage{mission.name,art[static_cast<int>(mission.biome)],mission.location,
         rank<4?"HIGH":rank<8?"SEVERE":rank<12?"EXTREME":"CRITICAL",
         mission.accent,mission.cold,mission.briefing,mission.guardian,mission.biome,
         length,{length-105,mission.arenaFloor},{},{},{},{},{},{},{}};
     float x=0;
-    const int checkpoints=std::min(7,4+rank/3);
+    stage.cover.push_back({72,stage.ground.empty()?mission.bays.front().floor-43:mission.bays.front().floor-43,48,43});
+    stage.cover.push_back({154,mission.bays.front().floor-43,40,43});
+    stage.ledges.push_back({40,mission.bays.front().floor-92,122,17});
+    if (rank>=4) stage.ledges.push_back({232,mission.bays.front().floor-138,98,17});
+    if (rank>=6) stage.lifts.push_back({312,mission.bays.front().floor-78,86,0,-86,3.6f,rank*.17f});
+    const int checkpoints=std::min(8,4+rank/2);
     const int escorts=int(rank>=4)+int(rank>=8)+int(rank>=12);
-    const int targetEnemies=36+4*rank;
+    const int targetEnemies=42+4*rank;
     const int reinforcements=std::max(0,targetEnemies-count*3-escorts-1);
     for (int i=0;i<count;++i) {
-        const auto& bay=mission.bays[(i+i/sourceCount)%sourceCount];
+        const Bay bay=bayAt(i);
         const float w=bayWidth+(i==0?80.f:i==count-1?-80.f:0.f);
         stage.ground.push_back({x,bay.floor,w,110});
         const int bayOrder=(i+rank)%count;
         const int extra=reinforcements/count+int(bayOrder<reinforcements%count);
         populateBay(stage,bay,x,w,rank,i,extra);
+        if (i>0) detailBay(stage,x,w,bay.floor,rank,i);
         for (int j=1;j<checkpoints;++j) {
             if (i==count*j/checkpoints) stage.beacons.push_back({x+36,bay.floor});
         }
         if (i==count-1) stage.beacons.push_back({x+w-61,bay.floor});
         layCrossing(stage,bay.crossing,x+w,bay.floor,
-                    i+1<count?mission.bays[(i+1+(i+1)/sourceCount)%sourceCount].floor:mission.arenaFloor,rank+i);
+                    i+1<count?bayAt(i+1).floor:mission.arenaFloor,rank+i);
         x+=w+crossingWidth(bay.crossing);
     }
 
@@ -226,8 +301,8 @@ Stage makeMission(const Mission& mission,int rank) {
 // chapters before their original guardian arenas; keep the boss and exit intact.
 // The original bridge still joins the first extension section.
 void extendOpening(Stage& stage,int sector) {
-    const int sections=sector+1;
-    const float sectionWidth=680.f;
+    const int sections=4+sector;
+    const float sectionWidth=835.f;
     const float extra=sections*sectionWidth;
     const Rect arena=stage.ground.back();
     const float seam=arena.x;
@@ -255,6 +330,10 @@ void extendOpening(Stage& stage,int sector) {
         stage.ledges.push_back({x+groundWidth-40,floor-67,108,17});
         stage.ledges.push_back({x+sectionWidth-64,floor-83,96,17});
         stage.cover.push_back({x+263,floor-43,46,43});
+        stage.cover.push_back({x+groundWidth-132,floor-43,42,43});
+        // Each early sector now has a distinct secondary upper route.
+        detailBay(stage,x+60.f,sectionWidth-120.f,floor,sector+1,i);
+        if (sector>=1) stage.lifts.push_back({x+520,floor-105.f,84.f,(i%2?28.f:-24.f),-68.f,3.2f,float(sector+i)*.21f});
         stage.crates.push_back({sector>=3 && i%2 ? CrateKind::fuel : CrateKind::charge,
                                 {x+380,floor}});
         stage.supplies.push_back({SupplyKind::ammo,x+78,floor});
@@ -292,6 +371,28 @@ const std::array<Stage,sectorCount> stages=[] {
         campaign[i]=std::move(stage);
     }
     for (size_t i=0;i<missions.size();++i) campaign[opening.size()+i]=makeMission(missions[i],static_cast<int>(i));
+    // Encounter density rises consistently, even where a route's upper
+    // architecture replaces some of its original garrison positions.
+    for (int sector=1;sector<sectorCount;++sector) {
+        auto& stage=campaign[sector];
+        const size_t desired=campaign[sector-1].enemies.size()+2;
+        while (stage.enemies.size()<desired && stage.enemies.size()<123) {
+            const size_t slot=stage.enemies.size()%stage.ground.size();
+            const auto& landing=stage.ground[slot];
+            const float x=landing.x+std::min(landing.w*.62f,landing.w-48.f);
+            stage.enemies.insert(stage.enemies.end()-1,
+                {EnemyKind::drone,x,landing.y-135.f,0,sector>=11});
+        }
+    }
+    // Keep every checkpoint accessible: procedural cover must never overlap
+    // the operative at a save beacon, including on an elevated floor.
+    for (auto& stage:campaign) {
+        std::erase_if(stage.cover,[&](const Rect& wall) {
+            return std::any_of(stage.beacons.begin(),stage.beacons.end(),[&](Vec p) {
+                return wall.overlaps({p.x-23.f,p.y-57.f,46.f,57.f});
+            });
+        });
+    }
     // Deterministic tiered roster. The spawn position remains compatible with
     // the inherited ground/flying type, so no enemy is spawned below a ledge.
     for (int sector=0;sector<sectorCount;++sector) {
