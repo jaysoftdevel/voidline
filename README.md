@@ -1,10 +1,12 @@
-# VOIDLINE 2.4.0
+# VOIDLINE 2.5.0
 
-VOIDLINE is a native Linux 2D shooter written in C++20 with 20 sectors, three operatives, difficulty levels, an armory and a skippable opening cinematic. Destroy the guardian in each sector and reach extraction to turn mission score into upgrade points.
+VOIDLINE is a native C++ 2D shooter for Linux and Windows 11 with 20 sectors, three operatives, difficulty levels, an armory and a skippable opening cinematic. Destroy the guardian in each sector and reach extraction to turn mission score into upgrade points.
 
 ## Build and run
 
-Run `./run.sh` to use the included x86-64 Linux executable. It requires glibc 2.38 or later and the runtime libraries below. The script uses the locally built executable when one is available.
+On Windows 11, see [Windows build and Direct3D 12 setup](docs/WINDOWS.md).
+
+On Linux, run `./run.sh` after building from source. A locally built executable takes precedence over a bundled executable from a previous release.
 
 Building from source requires a C++20 compiler, CMake, and the SDL2, libwebp, libpng16, libsndfile and json-c runtime libraries plus an OpenGL 3.3 core driver. Development packages are not needed because the platform ABI is declared in `src/platform.hpp`. On Debian or Ubuntu, `./install_deps.sh` installs everything.
 
@@ -21,7 +23,7 @@ Progress lives in `${XDG_DATA_HOME:-$HOME/.local/share}/voidline/campaign.json`.
 
 ## Two-player co-op
 
-1. Both players launch VOIDLINE 2.4.0 and open **Multiplayer**.
+1. Both players launch VOIDLINE 2.4.0 or later and open **Multiplayer**.
 2. On the host, choose **Host Game**, select a starting sector and difficulty, and select **Generate Session Key**. The lobby waits for player 2. Copy the key and share it with your partner.
 3. On the other computer, choose **Join Game**, paste the key, and select **Connect**. The mission starts on both computers after the connection is accepted.
 

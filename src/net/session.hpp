@@ -1,4 +1,5 @@
 #pragma once
+#include "net/socket.hpp"
 #include <array>
 #include <chrono>
 #include <cstdint>
@@ -27,14 +28,14 @@ public:
     const std::string& key() const { return code; }
     const std::string& error() const { return issue; }
     State state() const { return status; }
-    bool hosting() const { return server>=0 || hostSide; }
+    bool hosting() const { return server!=invalidSocket || hostSide; }
     static std::string localAddress();
 private:
     using Clock=std::chrono::steady_clock;
     static constexpr size_t tokenSize=12;
     static constexpr size_t maxPacket=256*1024,maxQueue=2*maxPacket;
     std::array<uint8_t,tokenSize> token{};
-    int server=-1,peer=-1;
+    Socket server=invalidSocket,peer=invalidSocket;
     bool hostSide=false;
     State status=State::idle;
     Clock::time_point heard{},sent{};

@@ -9,7 +9,7 @@
 namespace vl {
 class Renderer {
 public:
-    Renderer(SDL_Window* window,std::filesystem::path assets);
+    Renderer(SDL_Window* window,std::filesystem::path assets,bool software=false);
     ~Renderer();
     Renderer(const Renderer&)=delete;
     Renderer& operator=(const Renderer&)=delete;
@@ -64,6 +64,8 @@ private:
     SDL_Window* window;
     std::filesystem::path assets;
     GL gl;
+    bool software=false;
+    GLenum hdrFormat=GL_R11F_G11F_B10F;
     GLuint vao=0,buffer=0,drawProgram=0,lightProgram=0,waterProgram=0,
         atmosphereProgram=0,downProgram=0,upProgram=0,presentProgram=0,materialProgram=0,fxaaProgram=0;
     Texture white,radial,cloud;
@@ -100,7 +102,8 @@ private:
     Texture texture(int w,int h,const void* pixels,GLenum format=GL_RGBA8);
     Texture readTexture(const std::filesystem::path& path);
     Texture& asset(std::string_view name);
-    Target target(int w,int h,GLenum format=GL_R11F_G11F_B10F);
+    Target target(int w,int h,GLenum format=0);
+    GLenum chooseHdrFormat();
     void destroy(Target& target);
     void bind(const Target& target,bool clear);
     void output();

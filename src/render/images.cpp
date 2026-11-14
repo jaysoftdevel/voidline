@@ -9,7 +9,7 @@ void WebPFree(void*);
 struct PngImage {
     void* opaque; uint32_t version,width,height,format,flags,colormapEntries,warningOrError; char message[64];
 };
-int png_image_begin_read_from_file(PngImage*,const char*);
+int png_image_begin_read_from_memory(PngImage*,const void*,size_t);
 int png_image_finish_read(PngImage*,const void*,void*,int,void*);
 void png_image_free(PngImage*);
 }
@@ -18,9 +18,12 @@ void png_image_free(PngImage*);
 namespace vl {
 Renderer::Texture Renderer::readTexture(const std::filesystem::path& path) {
     gl.ActiveTexture(GL_TEXTURE0);
+    std::ifstream in(path,std::ios::binary);
+    const std::vector<unsigned char> encoded{std::istreambuf_iterator<char>(in),{}};
+    if (encoded.empty()) throw std::runtime_error("Could not read "+path.string());
     if (path.extension()==".png") {
         PngImage info{}; info.version=1;
-        if (!png_image_begin_read_from_file(&info,path.c_str())) {
+        if (!png_image_begin_read_from_memory(&info,encoded.data(),encoded.size())) {
             const std::string error=info.message;
             png_image_free(&info);
             throw std::runtime_error("PNG "+path.string()+": "+error);
@@ -36,10 +39,8 @@ Renderer::Texture Renderer::readTexture(const std::filesystem::path& path) {
         png_image_free(&info);
         return result;
     }
-    std::ifstream in(path,std::ios::binary);
-    const std::vector<unsigned char> bytes{std::istreambuf_iterator<char>(in),{}};
     int w=0,h=0;
-    auto* rgba=WebPDecodeRGBA(bytes.data(),bytes.size(),&w,&h);
+    auto* rgba=WebPDecodeRGBA(encoded.data(),encoded.size(),&w,&h);
     if (!rgba) throw std::runtime_error("Could not decode "+path.string());
     const auto result=texture(w,h,rgba);
     WebPFree(rgba);

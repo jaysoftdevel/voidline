@@ -1,5 +1,6 @@
 #pragma once
 #include "ui/app.hpp"
+#include "engine/graphics.hpp"
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -8,7 +9,10 @@ namespace vl {
 struct Options {
     bool windowed=false,smoke=false;
     int frames=0,width=1200;
-    bool follow=false;
+    bool follow=false,report=false;
+    GraphicsMode graphics=GraphicsMode::automatic;
+    std::filesystem::path mesa;
+    std::string adapter;
     std::string scene="1";
     std::filesystem::path screenshot,save;
 };

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(voidline VERSION 2.4.0 LANGUAGES CXX)
+project(voidline VERSION 2.5.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -17,13 +17,39 @@ include(CheckIPOSupported)
 check_ipo_supported(RESULT VOIDLINE_IPO OUTPUT VOIDLINE_IPO_MESSAGE LANGUAGES CXX)
 option(VOIDLINE_LTO "Enable link-time optimization when the toolchain supports it" ON)
 
-# The platform ABI is declared in src/platform.hpp, so only the runtime shared objects are required.
-# Development packages are not needed. Install the runtime libraries with your package manager:
-# SDL2, libwebp, libpng16, libsndfile and json-c.
-set(VOIDLINE_RUNTIME_LIBS
-  -l:libSDL2-2.0.so.0 -l:libwebp.so.7 -l:libpng16.so.16 -l:libsndfile.so.1 -l:libjson-c.so.5)
-
-set(VOIDLINE_WARNINGS -Wall -Wextra -Wpedantic -Wshadow -Wnon-virtual-dtor -Woverloaded-virtual)
+if(WIN32)
+  if(NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+    message(FATAL_ERROR "The Windows compatibility build requires a 64-bit toolchain.")
+  endif()
+  add_compile_definitions(WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0A00)
+  find_package(SDL2 CONFIG REQUIRED)
+  find_package(WebP CONFIG REQUIRED)
+  find_package(PNG REQUIRED)
+  find_package(SndFile CONFIG REQUIRED)
+  find_package(json-c CONFIG REQUIRED)
+  if(TARGET SDL2::SDL2)
+    set(VOIDLINE_SDL SDL2::SDL2)
+  else()
+    set(VOIDLINE_SDL SDL2::SDL2-static)
+  endif()
+  if(TARGET json-c::json-c)
+    set(VOIDLINE_JSON json-c::json-c)
+  else()
+    set(VOIDLINE_JSON json-c::json-c-static)
+  endif()
+  set(VOIDLINE_RUNTIME_LIBS ${VOIDLINE_SDL} WebP::webp PNG::PNG SndFile::sndfile ${VOIDLINE_JSON}
+    ws2_32 iphlpapi bcrypt shell32 ole32 uuid)
+  if(MSVC)
+    set(VOIDLINE_WARNINGS /W3 /utf-8 /EHsc)
+  endif()
+else()
+  # Linux uses the installed runtime libraries, without development packages.
+  set(VOIDLINE_RUNTIME_LIBS
+    -l:libSDL2-2.0.so.0 -l:libwebp.so.7 -l:libpng16.so.16 -l:libsndfile.so.1 -l:libjson-c.so.5)
+endif()
+if(NOT MSVC)
+  set(VOIDLINE_WARNINGS -Wall -Wextra -Wpedantic -Wshadow -Wnon-virtual-dtor -Woverloaded-virtual)
+endif()
 
 # The sources are split into modules with a one-way dependency order:
 #   game, input  ->  services  ->  render  ->  ui  ->  engine (executable)
@@ -39,8 +65,8 @@ function(voidline_module name)
 endfunction()
 
 voidline_module(voidline_game ${CMAKE_SOURCE_DIR}/src/content/*.cpp ${CMAKE_SOURCE_DIR}/src/game/*.cpp ${CMAKE_SOURCE_DIR}/src/input/*.cpp)
-voidline_module(voidline_services ${CMAKE_SOURCE_DIR}/src/net/*.cpp ${CMAKE_SOURCE_DIR}/src/services/*.cpp)
-voidline_module(voidline_render ${CMAKE_SOURCE_DIR}/src/render/*.cpp ${CMAKE_SOURCE_DIR}/src/platform/*.cpp)
+voidline_module(voidline_services ${CMAKE_SOURCE_DIR}/src/platform/paths.cpp ${CMAKE_SOURCE_DIR}/src/net/*.cpp ${CMAKE_SOURCE_DIR}/src/services/*.cpp)
+voidline_module(voidline_render ${CMAKE_SOURCE_DIR}/src/render/*.cpp ${CMAKE_SOURCE_DIR}/src/platform/gl_loader.cpp)
 voidline_module(voidline_ui ${CMAKE_SOURCE_DIR}/src/ui/*.cpp)
 target_link_libraries(voidline_services PUBLIC voidline_game)
 target_link_libraries(voidline_render PUBLIC voidline_game)
@@ -51,8 +77,19 @@ add_executable(voidline src/main.cpp ${VOIDLINE_ENGINE_SOURCES})
 target_include_directories(voidline PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_compile_options(voidline PRIVATE ${VOIDLINE_WARNINGS})
 target_link_libraries(voidline PRIVATE voidline_ui)
-add_custom_command(TARGET voidline POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E create_symlink ${CMAKE_SOURCE_DIR}/assets $<TARGET_FILE_DIR:voidline>/assets)
+if(WIN32)
+  target_link_libraries(voidline PRIVATE d3d12 dxgi dxguid)
+  if(MINGW)
+    target_link_options(voidline PRIVATE -municode)
+  endif()
+  add_custom_command(TARGET voidline POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets $<TARGET_FILE_DIR:voidline>/assets
+    VERBATIM)
+else()
+  add_custom_command(TARGET voidline POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E create_symlink ${CMAKE_SOURCE_DIR}/assets $<TARGET_FILE_DIR:voidline>/assets
+    VERBATIM)
+endif()
 
 if(VOIDLINE_LTO AND VOIDLINE_IPO)
   set_property(TARGET voidline ${VOIDLINE_MODULES} PROPERTY INTERPROCEDURAL_OPTIMIZATION ON)
@@ -89,7 +126,7 @@ message(STATUS "  Link-time opt.  : ${VOIDLINE_LTO_STATE}")
 message(STATUS "  Generator       : ${CMAKE_GENERATOR}")
 message(STATUS "  Source files    : ${VOIDLINE_SOURCE_COUNT} in src/ (modules: game, services, render, ui, engine)")
 message(STATUS "  Asset files     : ${VOIDLINE_ASSET_COUNT} in assets/")
-message(STATUS "  Runtime libs    : SDL2, libwebp, libpng16, libsndfile, json-c (loaded by soname, no dev packages)")
+message(STATUS "  Runtime libs    : ${VOIDLINE_RUNTIME_LIBS}")
 message(STATUS "  Tests           : ${BUILD_TESTING}")
 message(STATUS "  Output          : ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 message(STATUS "")

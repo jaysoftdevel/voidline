@@ -7,7 +7,11 @@
 extern "C" {
 struct SndFile;
 struct SoundInfo { int64_t frames; int samplerate,channels,format,sections,seekable; };
+#ifdef _WIN32
+SndFile* sf_wchar_open(const wchar_t*,int,SoundInfo*);
+#else
 SndFile* sf_open(const char*,int,SoundInfo*);
+#endif
 int sf_close(SndFile*);
 int64_t sf_readf_float(SndFile*,float*,int64_t);
 }
@@ -42,7 +46,11 @@ Audio::Sample* Audio::load(std::string_view name) {
     if (auto it=samples.find(key);it!=samples.end()) return &it->second;
     const auto file=assets/(key+".ogg");
     SoundInfo info{};
+#ifdef _WIN32
+    const std::unique_ptr<SndFile,decltype(&sf_close)> in(sf_wchar_open(file.c_str(),0x10,&info),sf_close);
+#else
     const std::unique_ptr<SndFile,decltype(&sf_close)> in(sf_open(file.c_str(),0x10,&info),sf_close);
+#endif
     if (!in || info.frames<=0 || info.frames>16000000 || info.channels<1 || info.channels>2 || info.samplerate<=0) {
         std::cerr<<"Could not decode "<<file<<'\n'; return nullptr;
     }

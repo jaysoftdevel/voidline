@@ -37,12 +37,29 @@ Renderer::Texture Renderer::texture(int w,int h,const void* pixels,GLenum format
 }
 
 Renderer::Target Renderer::target(int w,int h,GLenum format) {
-    Target t{texture(w,h,nullptr,format),0};
+    Target t{texture(w,h,nullptr,format?format:hdrFormat),0};
     gl.GenFramebuffers(1,&t.framebuffer); gl.BindFramebuffer(GL_FRAMEBUFFER,t.framebuffer);
     gl.FramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,GL_TEXTURE_2D,t.texture.id,0);
-    if (gl.CheckFramebufferStatus(GL_FRAMEBUFFER)!=GL_FRAMEBUFFER_COMPLETE)
-        throw std::runtime_error("OpenGL HDR framebuffer is incomplete");
+    if (gl.CheckFramebufferStatus(GL_FRAMEBUFFER)!=GL_FRAMEBUFFER_COMPLETE) {
+        destroy(t);
+        throw std::runtime_error("Graphics framebuffer is incomplete");
+    }
     return t;
+}
+
+GLenum Renderer::chooseHdrFormat() {
+    for (const auto format:{GL_R11F_G11F_B10F,GL_RGBA16F}) {
+        try {
+            auto trial=target(16,16,format);
+            const bool valid=gl.GetError()==GL_NO_ERROR;
+            destroy(trial);
+            if (valid) return format;
+        } catch (const std::runtime_error&) {
+            // Unsupported packed formats may be reported as an incomplete target.
+        }
+        for (int i=0;i<8 && gl.GetError()!=GL_NO_ERROR;++i) {}
+    }
+    throw std::runtime_error("The graphics driver cannot create a floating-point color target.");
 }
 
 void Renderer::destroy(Target& t) {

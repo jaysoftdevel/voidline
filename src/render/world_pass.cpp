@@ -26,7 +26,8 @@ void Renderer::drawWorld(const Game& g,bool high,bool motion,float alpha,const P
     offset={-mix(previousCamera,g.camera,alpha)+std::cos(g.time*119)*shake*.55f,std::sin(g.time*97)*shake*.38f};
     operativePose(g.player,previous,alpha);
     priorPartner=previousPartner; partnerBlend=alpha;
-    const int targetW=high?std::clamp(int(viewW*resolution),960,1920)/16*16:1200;
+    const int targetW=software?std::clamp(int(viewW*resolution),640,960)/16*16:
+        high?std::clamp(int(viewW*resolution),960,1920)/16*16:1200;
     const int targetH=targetW/2;
     if (raw.texture.w!=targetW) {
         destroy(raw); destroy(lit); destroy(mirror); destroy(ldr);

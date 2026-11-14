@@ -1,4 +1,5 @@
 #include "services/storage.hpp"
+#include "platform/paths.hpp"
 #include <cerrno>
 #include <chrono>
 #include <cstdlib>
@@ -7,9 +8,13 @@
 #include <memory>
 #include <stdexcept>
 #include <system_error>
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <fcntl.h>
 #include <sys/file.h>
 #include <unistd.h>
+#endif
 
 extern "C" {
 struct json_object;
@@ -32,9 +37,6 @@ json_object* json_object_new_boolean(int);
 int json_object_object_add(json_object*,const char*,json_object*);
 int json_object_array_add(json_object*,json_object*);
 const char* json_object_to_json_string_ext(json_object*,int);
-struct SndFile;
-struct SoundInfo { int64_t frames; int samplerate,channels,format,sections,seekable; };
-SndFile* sf_open(const char*,int,SoundInfo*);
 }
 
 namespace vl {
@@ -71,12 +73,26 @@ bool flag(json_object* j,const char* name,bool fallback) {
     j=json_object_object_get(j,name);
     return json_object_get_type(j)==jsonBool?json_object_get_boolean(j)!=0:fallback;
 }
+#ifdef _WIN32
+struct File {
+    HANDLE handle;
+    explicit File(HANDLE value):handle(value) {}
+    ~File() { close(); }
+    File(const File&)=delete;
+    bool valid() const { return handle!=INVALID_HANDLE_VALUE; }
+    void close() {
+        if (valid()) CloseHandle(handle);
+        handle=INVALID_HANDLE_VALUE;
+    }
+};
+#else
 struct File {
     int fd;
     explicit File(int value):fd(value) {}
     ~File() { if (fd>=0) close(fd); }
     File(const File&)=delete;
 };
+#endif
 void add(json_object* parent,const char* key,int64_t value) {
     json_object_object_add(parent,key,json_object_new_int64(value));
 }
@@ -87,11 +103,7 @@ void addFlag(json_object* parent,const char* key,bool value) {
     json_object_object_add(parent,key,json_object_new_boolean(value));
 }
 }
-std::filesystem::path storagePath() {
-    if (const auto* p=std::getenv("XDG_DATA_HOME"); p && p[0]=='/') return std::filesystem::path(p)/"voidline/campaign.json";
-    if (const auto* p=std::getenv("HOME"); p && *p) return std::filesystem::path(p)/".local/share/voidline/campaign.json";
-    throw std::runtime_error("Set XDG_DATA_HOME or HOME to select a save location.");
-}
+std::filesystem::path storagePath() { return userDataDirectory()/"campaign.json"; }
 
 std::optional<Save> Storage::get(int slot) const {
     auto j=record(file,slotKey(slot));
@@ -163,20 +175,52 @@ Settings Storage::settings() const {
 }
 
 void Storage::replace(const std::string& key,const std::string& value) {
-    std::filesystem::create_directories(file.parent_path());
-    const File lock(open((file.string()+".lock").c_str(),O_CREAT|O_CLOEXEC|O_RDWR,0600));
+    const auto directory=file.has_parent_path()?file.parent_path():std::filesystem::current_path();
+    std::filesystem::create_directories(directory);
+    auto lockPath=file;
+    lockPath+=".lock";
+#ifdef _WIN32
+    const File lock(CreateFileW(lockPath.c_str(),GENERIC_READ|GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE,
+                               nullptr,OPEN_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr));
+    OVERLAPPED range{};
+    if (!lock.valid() || !LockFileEx(lock.handle,LOCKFILE_EXCLUSIVE_LOCK,0,1,0,&range))
+        throw std::runtime_error("Could not lock campaign storage.");
+#else
+    const File lock(open(lockPath.c_str(),O_CREAT|O_CLOEXEC|O_RDWR,0600));
     if (lock.fd<0 || flock(lock.fd,LOCK_EX)!=0) throw std::runtime_error("Could not lock campaign storage.");
+#endif
     auto outer=read(file);
     if (json_object_get_type(outer.get())!=jsonObject) {
         if (std::filesystem::exists(file)) throw std::runtime_error("Existing campaign.json could not be read.");
         outer.reset(json_object_new_object());
     }
     json_object_object_add(outer.get(),key.c_str(),json_object_new_string(value.c_str()));
-    const auto temporary=file.string()+".tmp."+std::to_string(getpid());
-    const File output(open(temporary.c_str(),O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC,0600));
-    if (output.fd<0) throw std::runtime_error("Could not create campaign storage.");
+    const std::string data=json_object_to_json_string_ext(outer.get(),0);
+    auto temporary=file;
+#ifdef _WIN32
+    temporary+=".tmp."+std::to_string(GetCurrentProcessId());
+#else
+    temporary+=".tmp."+std::to_string(getpid());
+#endif
     try {
-        const std::string data=json_object_to_json_string_ext(outer.get(),0);
+#ifdef _WIN32
+        File output(CreateFileW(temporary.c_str(),GENERIC_WRITE,0,nullptr,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr));
+        if (!output.valid()) throw std::runtime_error("Could not create campaign storage.");
+        size_t done=0;
+        while (done<data.size()) {
+            DWORD written=0;
+            const auto chunk=static_cast<DWORD>(std::min<size_t>(data.size()-done,1u<<20));
+            if (!WriteFile(output.handle,data.data()+done,chunk,&written,nullptr) || !written)
+                throw std::runtime_error("Could not write campaign storage.");
+            done+=written;
+        }
+        if (!FlushFileBuffers(output.handle)) throw std::runtime_error("Could not flush campaign storage.");
+        output.close();
+        if (!MoveFileExW(temporary.c_str(),file.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))
+            throw std::runtime_error("Could not replace campaign storage.");
+#else
+        const File output(open(temporary.c_str(),O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC,0600));
+        if (output.fd<0) throw std::runtime_error("Could not create campaign storage.");
         size_t done=0;
         while (done<data.size()) {
             const ssize_t bytes=write(output.fd,data.data()+done,data.size()-done);
@@ -186,8 +230,9 @@ void Storage::replace(const std::string& key,const std::string& value) {
         }
         if (fsync(output.fd)!=0) throw std::runtime_error("Could not flush campaign storage.");
         std::filesystem::rename(temporary,file);
-        const File parent(open(file.parent_path().c_str(),O_RDONLY|O_DIRECTORY|O_CLOEXEC));
+        const File parent(open(directory.c_str(),O_RDONLY|O_DIRECTORY|O_CLOEXEC));
         if (parent.fd>=0) (void)fsync(parent.fd);
+#endif
     } catch (...) {
         std::error_code error;
         std::filesystem::remove(temporary,error);

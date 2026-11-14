@@ -1,7 +1,6 @@
 #include "ui/app.hpp"
 #include "ui/common.hpp"
 #include <cctype>
-#include <cstring>
 
 using namespace vl::ui;
 
@@ -22,7 +21,8 @@ bool App::lobbyInput(const SDL_Event& e) {
     const bool address=lobby==Lobby::host;
     auto& field=address?advertisedAddress:joinKey;
     if (e.type==sdl::textInput) {
-        appendField(field,std::string_view(e.text.text,strnlen(e.text.text,sizeof(e.text.text))),address);
+        const auto end=std::find(std::begin(e.text.text),std::end(e.text.text),'\0');
+        appendField(field,std::string_view(e.text.text,end),address);
         return true;
     }
     if (e.type!=sdl::keyDown) return false;
