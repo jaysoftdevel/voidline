@@ -13,18 +13,20 @@ void Renderer::terrain(const Game& g) {
         const float left=b.x+offset.x, y=b.y+offset.y;
         const float cycle=std::max(1.f,b.w-135);
         const int seed=int(b.x)+g.index*719;
-        const float x=left+43+hash(seed+73)*cycle;
-        const float span=60+hash(seed+85)*47;
+        const Vec rear=platformRear({left+43+hash(seed+73)*cycle,y},.108f);
+        const float x=rear.x;
+        const float railBase=rear.y;
+        const float span=(60+hash(seed+85)*47)*(1-.108f);
         // Back edge rail, hand-formed pipe and a small warning strip.
         const Color rail=tone.energy(.67f).alpha(.92f);
         for (int j=0;j<3;++j) {
             const float post=x+j*span*.5f;
-            rect({post-2,y-21,3.1f,21},hex(0x15222c));
-            rect({post-1,y-19,1.1f,17},rail);
+            rect({post-2,railBase-21,3.1f,21},hex(0x15222c));
+            rect({post-1,railBase-19,1.1f,17},rail);
         }
-        line({x-4,y-22},{x+span+3,y-22},3.3f,hex(0x19262f));
-        line({x-4,y-23},{x+span+3,y-23},1.2f,rail);
-        line({x-2,y-12},{x+span+2,y-12},1.2f,rail.energy(.72f));
+        line({x-4,railBase-22},{x+span+3,railBase-22},3.3f,hex(0x19262f));
+        line({x-4,railBase-23},{x+span+3,railBase-23},1.2f,rail);
+        line({x-2,railBase-12},{x+span+2,railBase-12},1.2f,rail.energy(.72f));
         const float cy=y+55;
         line({left+4,cy+4},{left+16,cy},3.7f,hex(0x0d161f));
         line({left+16,cy},{left+b.w-14,cy},3.7f,hex(0x0d161f));

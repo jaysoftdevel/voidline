@@ -34,18 +34,32 @@ Renderer::Face Renderer::drawHead(const Humanoid& h,const Rig& g) {
     if (h.look!=Look::soldier) {
         // A collapsed figure has closed eyes.
         auto eye=[&](Vec p) {
-            if (h.fall>.55f) { line(p+Vec{-1.6f,0},p+Vec{1.6f,.4f},1.1f,ink); return; }
-            ellipse(p,{1.7f,1.25f},hex(0xf1f1ee));
-            ellipse(p+Vec{ft*.55f*fa,0},{.85f,.95f},hex(0x1a1511));
+            if (h.fall>.55f || h.blink>.72f) { line(p+Vec{-1.6f,0},p+Vec{1.6f,.4f},1.1f,ink); return; }
+            ellipse(p,{1.7f,1.25f*(1-h.blink)},hex(0xf1f1ee));
+            ellipse(p+Vec{ft*.55f*fa,0},{.85f,.95f*(1-h.blink)},hex(0x1a1511));
             line(p+Vec{-2.1f,-2.1f},p+Vec{2.1f,-1.8f},.9f,h.hair.energy(.9f));
         };
         eye(face.eyeA);
+        if (h.cinematic && h.blink<.35f) {
+            // A small eyelight catches the foreground rim on close-ups.
+            const Vec spark=face.eyeA+Vec{ft*.25f*fa,-.45f};
+            ellipse(spark,{.42f,.35f},hex(0xeef8ff).alpha(.85f));
+        }
         if (fa<.72f) eye(face.eyeB);
         if (fa>.35f) polygon(Vec{head.x+ft*5.4f*fa,head.y-.4f},Vec{head.x+ft*7.7f*fa,head.y+1.8f},Vec{head.x+ft*5.2f*fa,head.y+2.3f},Vec{head.x+ft*4.6f*fa,head.y+.4f},h.skin.energy(.72f));
         else line(Vec{head.x,head.y+.4f},Vec{head.x,head.y+2.2f},1.f,h.skin.energy(.65f));
-        // The mouth opens in a grimace when the figure is hit.
-        const float open=std::max(h.flinch,h.fall)*1.8f;
+        if (h.cinematic) {
+            // Subtle facial relief: cheekbone, nasal shadow and lower eyelid.
+            const Vec cheek=head+Vec{ft*3.4f*fa,2.4f};
+            line(cheek-Vec{1.4f,0},cheek+Vec{.6f,.22f},.65f,h.skin.energy(.59f).alpha(.64f));
+            line(face.eyeA+Vec{-1.4f,1.65f},face.eyeA+Vec{1.6f,1.48f},.52f,h.skin.energy(.62f));
+            ellipse(head+Vec{ft*4.9f*fa,.8f},{.6f,.5f},h.skin.energy(.73f));
+        }
+        const float open=std::max({h.flinch,h.fall,h.speech})*1.8f;
         line(Vec{head.x+ft*2.2f*fa-(1-fa)*1.4f,head.y+3.9f},Vec{head.x+ft*4.6f*fa+(1-fa)*1.4f,head.y+3.9f+open*.4f},.9f+open*.35f,ink.alpha(.7f));
+        if (h.cinematic && h.speech>.05f)
+            line(head+Vec{ft*2.0f*fa,4.10f+open*.48f},head+Vec{ft*4.8f*fa,4.13f+open*.50f},
+                .56f,h.skin.energy(.78f).alpha(h.speech));
     }
     switch (h.look) {
     case Look::voss: drawVossHead(h,face); break;

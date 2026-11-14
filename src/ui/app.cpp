@@ -19,9 +19,12 @@ void App::refresh() { for (int i=0;i<3;++i) slots[i]=store.get(i+1); }
 
 void App::show(View v) {
     view=v; focus=-1; buttons.clear();
+    worldFrame=mouseAiming=mouseMoved=false;
+    // A new mission or a resumed view starts from a centered camera.
+    if (v==View::play) cameraTilt={};
     if (v!=View::multiplayer) SDL_StopTextInput();
     SDL_ShowCursor(v==View::play?0:1);
-    if (v!=View::play && v!=View::pause && v!=View::intro && v!=View::failed) audio.track("menu");
+    if (v!=View::play && v!=View::pause && v!=View::intro && v!=View::failed && v!=View::epilogue) audio.track("menu");
 }
 
 void App::inform(std::string message) { notification=std::move(message); notice=4; }
@@ -52,9 +55,10 @@ void App::ask(View previous,std::string title,std::string text,std::function<voi
 }
 
 void App::closeAction() {
+    if (view==View::epilogue) { skipEpilogue(); return; }
     if (coopStarted) {
         if (view==View::play) {
-            coopPaused=!coopPaused; input.reset(); coopMouse=false;
+            coopPaused=!coopPaused; input.reset(); mouseAiming=mouseMoved=false;
             SDL_ShowCursor(coopPaused?1:0);
         }
         else if (view==View::failed || view==View::cleared || view==View::coopLoading) leaveCoop();
@@ -92,24 +96,40 @@ void App::activate() {
     auto action=buttons[std::clamp(focus,0,count-1)].action; action();
 }
 
+void App::movePointer(Vec position) {
+    if (view==View::play && !coopPaused) {
+        mouseMoved |= !mouseAiming || length(position-mouse)>2.5f;
+        mouseAiming=true;
+    }
+    mouse=position;
+}
+
+Vec App::aimPoint() const {
+    // Pick through the transform the player saw, including camera interpolation and shake.
+    return worldFrame?r.worldAt(mouse):mouse+Vec{game.camera,0};
+}
+
 void App::event(const SDL_Event& e) {
     input.event(e);
     if (e.type==sdl::quit) { running=false; return; }
     if (e.type==sdl::window && e.window.event==sdl::focusLost) {
         if (view==View::play && !coopStarted) closeAction();
-        if (coopStarted) { coopMouse=false; pendingControls={}; }
+        if (coopStarted) { mouseAiming=mouseMoved=false; pendingControls={}; }
+        return;
+    }
+    if (e.type==sdl::window && e.window.event==sdl::mouseLeave) {
+        mouseAiming=mouseMoved=false;
+        mouse={-100,-100};
+        if (view==View::play && !coopStarted) game.pointerActive=false;
         return;
     }
     if (view==View::multiplayer && lobbyInput(e)) return;
     if (e.type==sdl::mouseMotion) {
-        mouse=r.mousePosition(e.motion.x,e.motion.y); focus=-1;
-        if (view==View::play && !coopStarted) game.pointer(mouse);
-        if (coopStarted && view==View::play && !coopPaused) coopMouse=true;
+        movePointer(r.mousePosition(e.motion.x,e.motion.y)); focus=-1;
     } else if (e.type==sdl::mouseDown && e.button.button==1) {
-        mouse=r.mousePosition(e.button.x,e.button.y);
-        if (view==View::play && !coopStarted) game.pointer(mouse);
-        else if (coopStarted && view==View::play && !coopPaused) coopMouse=true;
-        else for (const auto& b:buttons) if (b.box.contains(mouse)) { auto action=b.action; action(); break; }
+        movePointer(r.mousePosition(e.button.x,e.button.y));
+        if (view!=View::play || coopPaused)
+            for (const auto& b:buttons) if (b.box.contains(mouse)) { auto action=b.action; action(); break; }
     }
     if (e.type==sdl::controllerButton && e.cbutton.state && (view!=View::play || coopPaused)) {
         using namespace sdl::pad;
@@ -138,19 +158,25 @@ void App::update(float dt) {
     clock+=dt; notice=std::max(0.f,notice-dt);
     if (script) script(scriptFrame++);
     input.poll();
+    const bool followingMouse=settings.motion && view==View::play && !coopPaused && mouseAiming &&
+        !input.aimStickActive();
+    // Letterbox margins hold the nearest edge angle until the pointer leaves the window.
+    cameraTilt.advance(followingMouse?CameraTilt::target(mouse):Vec{},dt);
     if (view==View::multiplayer || coopStarted) {
         pollCoop(dt);
         if (coopStarted) {
             if (view==View::play && input.pressed(Act::pause)) closeAction();
-            advanceCoop(dt);
+            if (view==View::epilogue) updateEpilogue(dt);
+            else advanceCoop(dt);
             network.flush();
         } else audio.pace(1);
         return;
     }
     if (view==View::intro) {
         film+=dt;
-        if (film>=15.35f) launch(0);
+        if (film>=net::openingDuration/1000.f) launch(0);
     }
+    if (view==View::epilogue) { updateEpilogue(dt); return; }
     if ((view==View::play || view==View::pause) && input.pressed(Act::pause)) closeAction();
     if (view!=View::play) { audio.pace(1); return; }
     driveGame(dt);
@@ -180,6 +206,7 @@ void App::draw() {
     case View::credits: credits(); break;
     case View::intro: cinematic(); break;
     case View::coopLoading: coopCinematic(); break;
+    case View::epilogue: sectorCinematic(); break;
     case View::play:
     case View::pause:
     case View::failed:
@@ -188,7 +215,8 @@ void App::draw() {
             view==View::play?clamp(accumulator/step):1.f;
         r.drawWorld(game,settings.high,settings.motion,alpha,previousPlayer,previousCamera,
                     game.coop?&previousPartner:nullptr,
-                    coopStarted && !network.hosting()?&previousWorld:nullptr);
+                    coopStarted && !network.hosting()?&previousWorld:nullptr,cameraTilt.value());
+        worldFrame=true;
         hud();
         if (coopStarted && (coopPaused || view!=View::play)) coopOverlay();
         else if (view!=View::play) overlay();
@@ -204,7 +232,7 @@ void App::draw() {
         button({648,347,227,43},"CONFIRM",[this]{auto action=std::move(confirmAction); action();},true,true);
         break;
     }
-    if (settings.diagnostics && view!=View::coopLoading) diagnostics();
+    if (settings.diagnostics && view!=View::coopLoading && view!=View::epilogue) diagnostics();
     if (notice>0) {
         const float w=std::min(1150.f,r.measure(notification,15)+32);
         r.rect({(width-w)*.5f,5,w,29},hex(0x142630).alpha(.97f));

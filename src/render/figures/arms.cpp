@@ -84,10 +84,12 @@ void Renderer::drawArms(const Humanoid& h,const Rig& g) {
     const float relax=h.farFree||dropped?1.f:h.relax;
     ArmPose far=gripArm(h,g.farShoulder,farHand,false);
     if (relax>0) far=blendArms(far,freeArm(h,g,g.farShoulder,false),relax);
-    const ArmPose near=dropped?freeArm(h,g,g.shoulder,true):gripArm(h,g.shoulder,nearHand,true);
+    const float nearRelax=dropped?1.f:h.nearRelax;
+    ArmPose near=gripArm(h,g.shoulder,nearHand,true);
+    if (nearRelax>0) near=blendArms(near,freeArm(h,g,g.shoulder,true),nearRelax);
     drawArm(h,far,false,relax<.5f);
-    if (h.weapon && !dropped) h.weapon(nearHand,farHand);
-    drawArm(h,near,true,!dropped);
+    if (h.weapon && !dropped) h.weapon(h.cinematic?near.hand:nearHand,h.cinematic?far.hand:farHand);
+    drawArm(h,near,true,nearRelax<.5f);
 }
 
 // One arm: upper arm with a biceps, forearm with a bracer, an elbow pad on the outside of the bend, creases on
@@ -123,6 +125,16 @@ void Renderer::drawArm(const Humanoid& h,const ArmPose& a,bool near,bool grippin
         ellipse(light,{1.3f,.9f},h.trim.energy(2.4f));
         const Vec band=mix(e,w,.42f);
         line(band-across*1.9f,band+across*1.9f,.8f,ink.alpha(.6f));
+    }
+    if (h.cinematic && near) {
+        // Flex-fabric elbow pleats, layered bracer and three tiny status studs.
+        for (int i=0;i<3;++i) {
+            const Vec spot=mix(e,w,.45f+i*.135f);
+            line(spot-across*1.85f,spot+across*1.85f,.63f,h.edge.energy(i==0?1.4f:.85f));
+        }
+        const Vec badge=mix(e,w,.69f)-across*1.6f;
+        ellipse(badge,{.73f,.73f},h.trim.energy(1.7f));
+        line(mix(s,e,.16f),mix(s,e,.69f),.68f,h.edge.alpha(.7f));
     }
     // Pauldron over the joint.
     const Color cap=near?(h.look==Look::voss?h.trim.energy(.95f):h.shell.energy(1.12f)):h.shadow.energy(1.5f);

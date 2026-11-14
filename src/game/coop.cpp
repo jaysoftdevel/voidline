@@ -36,7 +36,7 @@ void Game::spawnPartner(Vec safe) {
     swapOperatives();
 }
 
-void Game::applyControls(const Controls& controls,bool second) {
+void Game::applyControls(const Controls& controls,bool second,bool pointerMoved) {
     if (second && !coop) return;
     if (second) swapOperatives();
     for (int i=0;i<static_cast<int>(Key::count);++i) {
@@ -52,7 +52,7 @@ void Game::applyControls(const Controls& controls,bool second) {
             if (guns[next].available) { select(next); break; }
         }
     }
-    if (controls.aimMode==AimMode::pointer) pointer(controls.aim-Vec{camera,0});
+    if (controls.aimMode==AimMode::pointer) pointAt(controls.aim,pointerMoved && length(controls.aim-mouse)>2.5f);
     else pointerActive=false;
     stick(controls.aim,controls.aimMode==AimMode::stick);
     if (second) swapOperatives();

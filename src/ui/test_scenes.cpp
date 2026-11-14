@@ -1,5 +1,6 @@
 #include "ui/app.hpp"
 #include "ui/common.hpp"
+#include "ui/sector_story.hpp"
 
 using namespace vl::ui;
 
@@ -23,6 +24,21 @@ void App::sceneForTest(std::string_view scene) {
         return;
     }
     if (scene=="intro") { film=5; show(View::intro); return; }
+    // Deterministic render checks for all three cinematic layers and prop depth.
+    // cinematic-close / cinematic-detail inspect arm/prop overlap; cinematic-recover
+    // inspects the capsule, and cinematic-arrival the planted-foot walking cycle.
+    if (scene.rfind("cinematic-",0)==0) {
+        const bool recover=scene=="cinematic-recover";
+        save.character=recover?1:0;
+        launch(recover?7:1);
+        const float at=scene=="cinematic-arrival"?1.0f:
+            scene=="cinematic-close"?6.6f:
+            scene=="cinematic-detail"?10.8f:
+            scene=="cinematic-recover"?6.6f:14.4f;
+        film=at;
+        show(View::epilogue);
+        return;
+    }
     // Scripted gameplay scenes exercise the input path with simulated key chords.
     auto prepare=[&](int index,int gun) {
         save.cleared=3; save.equipped=gun;
@@ -149,11 +165,12 @@ void App::sceneForTest(std::string_view scene) {
 namespace vl {
 Rect App::followCrop(bool enabled) const {
     if (!enabled || view!=View::play) return {};
-    Vec at=game.player.box.center()-Vec{game.camera,0};
-    if (followEnemy && !game.enemies.empty()) at=game.enemies[0].box.center()-Vec{game.camera,0};
+    Vec at=game.player.box.center();
+    if (followEnemy && !game.enemies.empty()) at=game.enemies[0].box.center();
     // A dying enemy is a corpse by now. Follow it there.
     if (followEnemy && !game.enemies.empty() && !game.enemies[0].alive && !game.corpses.empty())
-        at=game.corpses.back().body.box.center()-Vec{game.camera,0};
+        at=game.corpses.back().body.box.center();
+    at=r.screenAt(at);
     return {at.x-90,at.y-88,180,125};
 }
 }

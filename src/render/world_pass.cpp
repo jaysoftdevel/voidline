@@ -22,10 +22,15 @@ void Renderer::operativePose(const Player& player,const Player& previous,float a
 }
 
 void Renderer::drawWorld(const Game& g,bool high,bool motion,float alpha,const Player& previous,float previousCamera,const Player* previousPartner,
-                         const WorldMotion* previousWorld) {
+                         const WorldMotion* previousWorld,Vec tilt) {
     const float shake=motion?g.shake:0.f;
     offset={-mix(previousCamera,g.camera,alpha)+std::cos(g.time*119)*shake*.55f,std::sin(g.time*97)*shake*.38f};
     operativePose(g.player,previous,alpha);
+    const Vec center=g.player.box.center()+offset+playerShift;
+    cameraView.tiltEnabled=motion;
+    cameraView.tilt=motion?tilt:Vec{};
+    cameraView.focus={clamp(center.x,width*.2f,width*.8f),clamp(center.y,height*.2f,height*.8f)};
+    cameraView.zoom=1.f-(motion?g.punch:0.f)*.030f-clamp((1-g.timeScale)/.72f)*.055f;
     priorPartner=previousPartner; partnerBlend=alpha;
     priorWorld=previousWorld; worldBlend=alpha;
     const int targetW=software?std::clamp(int(viewW*resolution),640,960)/16*16:
@@ -49,7 +54,7 @@ void Renderer::drawWorld(const Game& g,bool high,bool motion,float alpha,const P
     post(g,high,motion);
     gl.Enable(GL_BLEND); gl.BlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
     for (const auto& m:g.messages) {
-        const Vec p=m.p+offset;
+        const Vec p=screenAt(m.p);
         const float age=m.maxLife-m.life;
         const float size=(m.text.size()>11?15.f:20.f)*m.scale*(1+.55f*std::exp(-age*14));
         outlinedText({p.x-measure(m.text,size,true)*.5f,p.y},m.text,size,m.color.alpha(clamp(m.life*4)));

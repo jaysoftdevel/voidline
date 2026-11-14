@@ -1,6 +1,7 @@
 #include "ui/app.hpp"
 #include "ui/common.hpp"
 #include "ui/coop_story.hpp"
+#include "ui/sector_story.hpp"
 #include <exception>
 
 using namespace vl::ui;
@@ -27,8 +28,8 @@ void App::openMultiplayer() {
 
 void App::leaveCoop(const std::string& message) {
     network.close();
-    coopStarted=coopPaused=coopMouse=snapshot=false;
-    mission=0; pendingControls={}; netSounds.clear();
+    coopStarted=coopPaused=snapshot=false;
+    mission=0; epilogueAt=0; pendingControls={}; netSounds.clear();
     game.release();
     input.reset();
     lobby=Lobby::menu;
@@ -39,7 +40,7 @@ void App::leaveCoop(const std::string& message) {
 }
 
 void App::prepareCoop() {
-    coopStarted=true; coopPaused=coopMouse=snapshot=false;
+    coopStarted=true; coopPaused=snapshot=false;
     pendingControls={}; netSounds.clear();
     previousPlayer=game.player; previousPartner=game.teammate().player;
     previousCamera=game.camera; previousWorld.capture(game);
@@ -48,7 +49,7 @@ void App::prepareCoop() {
     preloadStep=0; probes=0;
     guestLoaded=scheduleConfirmed=loadingMusic=false;
     hostClock={};
-    preparedAt=net::now(); filmAt=deployAt=probeAt=lastRemoteInput=guestLead=0;
+    preparedAt=net::now(); filmAt=deployAt=probeAt=lastRemoteInput=guestLead=epilogueAt=0;
     input.reset();
     audio.pace(1);
     audio.track("");
@@ -119,6 +120,14 @@ void App::receiveCoop(std::span<const uint8_t> data) {
             if (valid) scheduleConfirmed=true;
         }
     } else {
+        if (kind==Packet::epilogue && coopStarted && view==View::epilogue && !epilogueAt) {
+            valid=net::decodeTiming(body,timing) && timing.mission==mission && timing.first>0 && timing.second==0;
+            if (valid) epilogueAt=timing.first;
+        }
+        if (kind==Packet::epilogueDone && coopStarted && (view==View::epilogue || view==View::cleared)) {
+            valid=net::decodeTiming(body,timing) && timing.mission==mission && timing.first==0 && timing.second==0;
+            if (valid) show(View::cleared);
+        }
         if (kind==Packet::prepare) {
             int index=0,level=0;
             uint32_t generation=0;
@@ -200,7 +209,7 @@ void App::loadCoop() {
     }
 
     const size_t artwork=(mission==1?story::opening.size():0);
-    const size_t total=artwork+4;
+    const size_t total=artwork+story::missionPreloads;
     if (preloadStep<total) {
         try {
             if (preloadStep<artwork) r.preload(story::opening[preloadStep].art);
@@ -209,6 +218,11 @@ void App::loadCoop() {
             case 1: r.preload("carbine"); break;
             case 2: if (mission==1) audio.preload("coop-intro"); break;
             case 3: audio.preload(sectorTrack(game.index)); break;
+            case 4: r.preload(story::scenery(story::chapters[game.index].set)); break;
+            case 5: audio.preload(story::track(game.index)); break;
+            case 6: r.preload("cinematic/deck"); break;
+            case 7: r.preload("cinematic/aster"); break;
+            case 8: r.preload("cinematic/recorder"); break;
             }
             ++preloadStep;
         } catch (const std::exception& e) {
@@ -265,10 +279,9 @@ Controls App::readCoopControls() const {
     result.cycle=int(input.pressed(Act::next))-int(input.pressed(Act::previous));
     if (input.aimStickActive()) {
         result.aimMode=AimMode::stick; result.aim=input.aimStick();
-    } else if (coopMouse) {
+    } else if (mouseAiming) {
         result.aimMode=AimMode::pointer;
-        result.aim=mouse+Vec{network.hosting()?mix(previousCamera,game.camera,clamp(accumulator/step)):
-                                             mix(previousCamera,game.camera,netInterpolation),0};
+        result.aim=aimPoint();
     }
     return result;
 }
@@ -300,7 +313,8 @@ void App::advanceCoop(float dt) {
         }
         return;
     }
-    game.applyControls(commands);
+    game.applyControls(commands,false,mouseMoved);
+    mouseMoved=false;
     if (net::now()-lastRemoteInput>=250) game.applyControls({},true);
     accumulator+=dt*game.advance(dt);
     while (accumulator>=step && game.mode==Mode::active) {
@@ -326,6 +340,7 @@ void App::showCoopOutcome() {
     if (view!=View::play || (game.mode!=Mode::complete && game.mode!=Mode::failed)) return;
     coopPaused=false;
     audio.event(game.mode==Mode::complete?"complete":"failure");
-    show(game.mode==Mode::complete?View::cleared:View::failed);
+    if (game.mode==Mode::complete) beginEpilogue();
+    else show(View::failed);
 }
 }

@@ -6,11 +6,11 @@ using namespace vl::scene;
 namespace vl {
 void Renderer::depthScenery(const Game& g) {
     const Color cold=hex(g.stage->cold), accent=hex(g.stage->accent);
-    const float travel=offset.x*.48f;
+    const float travel=offset.x*.48f+cameraView.tilt.x*12;
     for (int i=0;140+i*154<g.stage->worldWidth*.48f+width;++i) {
         const float x=140+i*154+hash(i+111)*57+travel;
         if (x<-128 || x>width+128) continue;
-        const float y=356+hash(i+231)*79+offset.y*.65f;
+        const float y=356+hash(i+231)*79+offset.y*.65f+cameraView.tilt.y*4;
         const float h=46+hash(i*9+501)*116;
         const Color steel=hex(0x111e2b).alpha(.38f+hash(i+718)*.19f);
         gradient({x-9,y,18,h},steel.energy(1.14f),steel.energy(.64f));
@@ -35,12 +35,12 @@ void Renderer::depthScenery(const Game& g) {
 void Renderer::foreground(const Game& g) {
     // Sparse foreground steel at the upper edge reads as a nearer plane.
     const Color tone=metal(g.stage->biome), cold=hex(g.stage->cold);
-    const float travel=offset.x*1.29f;
+    const float travel=offset.x*1.29f-cameraView.tilt.x*16;
     for (int i=0;85+i*492<g.stage->worldWidth*1.29f+width;++i) {
         const float x=85+i*492+hash(i+941)*160+travel;
         if (x<-230 || x>width+180) continue;
-        const float length=100+hash(i+604)*83, y=14+hash(i+619)*26;
-        gradient({x-5,-6,13,y+9},hex(0x101821),hex(0x1a2530));
+        const float length=100+hash(i+604)*83, y=14+hash(i+619)*26-cameraView.tilt.y*5;
+        gradient({x-5,-20,13,y+23},hex(0x101821),hex(0x1a2530));
         line({x,y},{x+length,y-6},7.0f,hex(0x0c161e).alpha(.85f));
         line({x,y-3},{x+length,y-9},1.1f,tone.energy(.75f).alpha(.85f));
         for (int j=0;j<12;++j) {

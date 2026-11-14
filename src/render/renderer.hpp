@@ -2,6 +2,7 @@
 #include "game/game.hpp"
 #include "platform/gl.hpp"
 #include "platform/sdl.hpp"
+#include "render/camera_view.hpp"
 #include <filesystem>
 #include <string_view>
 #include <unordered_map>
@@ -11,6 +12,14 @@ struct WorldMotion {
     std::vector<Rect> enemies,platforms;
     std::vector<std::pair<uint32_t,Vec>> shots,hostile;
     void capture(const Game& game);
+};
+struct CinematicPose {
+    Vec feet;
+    float scale=1,time=0,walk=0,distance=0,reach=0,crouch=0,look=0,speech=0,turn=.74f;
+    int facing=1;
+    Vec handOffset{18,4};
+    Color light,rim{.39f,.54f,.68f,1};
+    std::string_view carried;
 };
 class Renderer {
 public:
@@ -24,7 +33,15 @@ public:
     void begin();
     void end();
     void drawWorld(const Game& game,bool high,bool motion,float interpolation,const Player& previous,float previousCamera,const Player* previousPartner=nullptr,
-                   const WorldMotion* previousWorld=nullptr);
+                   const WorldMotion* previousWorld=nullptr,Vec tilt={});
+    Vec worldAt(Vec screen) const { return cameraView.sample(screen)-offset; }
+    Vec screenAt(Vec world) const { return cameraView.display(world+offset); }
+    void beginCinematic(int layer=0);
+    void finishCinematic(float time,float fade,Color tint,float dissolve=1,Vec focus={.5f,.5f},float depth=0);
+    void cinematicOperative(const Character& character,const CinematicPose& pose);
+    void imageCrop(std::string_view name,Rect box,Rect crop,Color tint={});
+    void imagePlane(std::string_view name,Vec nearLeft,Vec nearRight,Vec farRight,Vec farLeft,Color tint={});
+    void softShaft(Vec from,Vec to,float breadth,Color tint);
     void preload(std::string_view name) { (void)asset(name); }
     void cover(std::string_view name,Rect box,float zoom=1,Vec bias={.5f,.5f},Color tint={});
     void image(std::string_view name,Rect box,Color tint={});
@@ -74,13 +91,19 @@ private:
     bool software=false;
     GLenum hdrFormat=GL_R11F_G11F_B10F;
     GLuint vao=0,buffer=0,drawProgram=0,lightProgram=0,waterProgram=0,
-        atmosphereProgram=0,downProgram=0,upProgram=0,presentProgram=0,materialProgram=0,fxaaProgram=0;
-    Texture white,radial,cloud;
+        atmosphereProgram=0,downProgram=0,upProgram=0,presentProgram=0,materialProgram=0,fxaaProgram=0,cinematicProgram=0;
+    Texture white,radial,cloud,shaftTexture;
     std::array<Font,2> fonts{};
     struct NameHash { using is_transparent=void; size_t operator()(std::string_view v) const { return std::hash<std::string_view>{}(v); } };
     std::unordered_map<std::string,Texture,NameHash,std::equal_to<>> images;
     std::vector<Vertex> vertices;
     GLuint batchTexture=0;
+    float figureScale=1;
+    Vec figureOrigin;
+    Color figureRim;
+    int figureLightSide=1;
+    Target filmFrames[2];
+    int filmWidth=0;
     int pixelW=0,pixelH=0,viewX=0,viewY=0,viewW=0,viewH=0;
     GLint materialCamera=-1,materialSector=-1;
     Target raw,mirror,lightMap,lit,ldr;
@@ -91,6 +114,8 @@ private:
     Color litBy(Vec p,const Game& game) const;
     std::array<Target,4> bloom{};
     Vec offset,playerShift;
+    CameraView cameraView;
+    Vec platformRear(Vec edge,float depth) const;
     const WorldMotion* priorWorld=nullptr;
     float worldBlend=1;
     Rect platformBox(const Game& game,size_t index) const;
@@ -156,6 +181,7 @@ private:
     void drawCorpses(const Game& game);
     // Human figures (render/figures). The rig is built once per figure and handed to each part.
     struct Humanoid; struct Rig; struct ArmPose; struct Face;
+    Humanoid operativeFigure(const Character& character) const;
     void humanoid(const Humanoid& figure);
     Rig buildRig(const Humanoid& figure) const;
     Vec spun(const Humanoid& figure,Vec point) const;

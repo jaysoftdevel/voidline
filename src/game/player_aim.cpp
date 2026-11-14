@@ -21,7 +21,7 @@ void Game::aimPlayer(int direction) {
         p.aim=std::atan2(stickAim.y,stickAim.x); return;
     }
     if (pointerActive && !held(Key::automatic)) {
-        const Vec d=mouse+Vec{camera,0}-origin;
+        const Vec d=mouse-origin;
         if (std::abs(d.x)>4) p.facing=sign(d.x);
         p.aim=std::atan2(d.y,d.x); return;
     }

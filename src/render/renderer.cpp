@@ -1,5 +1,6 @@
 #include "render/renderer.hpp"
 #include "render/shaders.hpp"
+#include "render/shaders/cinematic.hpp"
 #include <chrono>
 #include <fstream>
 #include <stdexcept>
@@ -20,6 +21,7 @@ Renderer::Renderer(SDL_Window* win,std::filesystem::path art,bool softwareMode)
     upProgram=program(shader::fullscreen,shader::up);
     presentProgram=program(shader::fullscreen,shader::present);
     fxaaProgram=program(shader::fullscreen,shader::fxaa);
+    cinematicProgram=program(shader::fullscreen,shader::cinematic);
     gl.GenVertexArrays(1,&vao); gl.BindVertexArray(vao);
     gl.GenBuffers(1,&buffer); gl.BindBuffer(GL_ARRAY_BUFFER,buffer);
     gl.EnableVertexAttribArray(0); gl.VertexAttribPointer(0,2,GL_FLOAT,0,sizeof(Vertex),nullptr);
@@ -33,6 +35,16 @@ Renderer::Renderer(SDL_Window* win,std::filesystem::path art,bool softwareMode)
         haloPixels[(y*64+x)*4+3]=std::lround((1-d*d)*std::exp(-d*d*4.4f)*255);
     }
     radial=texture(64,64,haloPixels.data());
+    {
+        constexpr int size=96;
+        std::vector<uint8_t> pixels(size*size*4,255);
+        for (int y=0;y<size;++y) for (int x=0;x<size;++x) {
+            const float across=2.f*x/(size-1)-1.f, along=float(y)/(size-1);
+            const float taper=smooth(1.f-std::abs(across));
+            pixels[(y*size+x)*4+3]=uint8_t(std::lround(255*taper*(1-along)*(1-along)));
+        }
+        shaftTexture=texture(size,size,pixels.data());
+    }
     // A tileless cloud: five octaves of value noise under a soft radial mask.
     {
         constexpr int size=128;
@@ -75,10 +87,13 @@ Renderer::Renderer(SDL_Window* win,std::filesystem::path art,bool softwareMode)
 Renderer::~Renderer() {
     for (auto& t:bloom) destroy(t);
     destroy(raw); destroy(mirror); destroy(lightMap); destroy(lit); destroy(ldr);
+    for (auto& frame:filmFrames) if (frame.framebuffer) destroy(frame);
     gl.DeleteTextures(1,&white.id); gl.DeleteTextures(1,&radial.id); gl.DeleteTextures(1,&cloud.id);
+    gl.DeleteTextures(1,&shaftTexture.id);
     for (auto& font:fonts) gl.DeleteTextures(1,&font.texture.id);
     for (auto& [name,t]:images) gl.DeleteTextures(1,&t.id);
     for (GLuint id:{drawProgram,lightProgram,waterProgram,atmosphereProgram,downProgram,upProgram,presentProgram,materialProgram,fxaaProgram}) gl.DeleteProgram(id);
+    gl.DeleteProgram(cinematicProgram);
     gl.DeleteBuffers(1,&buffer); gl.DeleteVertexArrays(1,&vao);
 }
 

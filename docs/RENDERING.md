@@ -11,6 +11,18 @@ VOIDLINE creates an OpenGL 3.3 core context through SDL2. The C++ renderer owns 
 
 Platform faces use world-space material noise for fine grain, paint wear, brushed highlights and sector-specific corrosion. Backdrops, intermediate structures and foreground steel move at different rates. High quality scales the HDR world buffer up to 1920 × 960 as the display allows. Performance uses a 1200 × 600 target and a smaller bloom pyramid.
 
+## Mouse-driven perspective
+
+The view eases toward the cursor using a small projective tilt and roll. Platform tops, end caps and rear rails converge toward a movable vanishing point. Backdrops and foreground steel respond at different rates. The world and its effects pass through the same projection, while the HUD and reticle draw in screen space. Aiming reverses the displayed transform and sends a world-space target in co-op. Each client computes its own view. Disable the effect with **Screen shake and camera motion** in Settings.
+
+The camera reserves a fixed edge crop while camera motion is enabled. Vertical sweeps ease through center at a consistent base zoom. The letterbox margins hold the nearest edge angle until the pointer leaves the window.
+
+## Chapter cutscenes
+
+Five timed shots per chapter combine camera movement, perspective-textured floors, fog and animated props. Walking poses track distance and hold the supporting foot against the deck through each stride. The operative rig renders gestures, the hand carrying a recorder and reactions between the two characters. Chapter-specific animations show airlocks, floodwaters, terminal signals, civilian boarding and the cutter's arrival or departure.
+
+The opening and chapter scenes share an HDR compositing pass with soft light shafts, mild peripheral defocus, glow and smoothly blended grain. Adjacent shots dissolve across two scene buffers. Captions and controls render afterward at display resolution.
+
 The uploaded gait reference informed heel contact, toe-off and swing. The simulation advances the gait by horizontal travel. Each stance foot locks to platform coordinates, including moving lifts. The renderer blends pose snapshots and solves two-segment legs. Sprint increases stride and body lean, and crouch reduces the collision height as well as the rendered stance. Jumps use a short push-off, a tucked airborne pose, variable lift and a damped landing response.
 
 ## Version 2.1 pipeline

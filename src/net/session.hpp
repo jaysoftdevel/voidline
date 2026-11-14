@@ -9,7 +9,7 @@
 
 namespace vl::net {
 using Bytes=std::vector<uint8_t>;
-enum class Packet : uint8_t {hello=1,welcome,ready,prepare,controls,world,clockProbe,clockReply,loaded,schedule,scheduled};
+enum class Packet : uint8_t {hello=1,welcome,ready,prepare,controls,world,clockProbe,clockReply,loaded,schedule,scheduled,epilogue,epilogueDone};
 
 class Session {
 public:

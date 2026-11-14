@@ -9,6 +9,8 @@ int main() {
     runProgressionTests();
     runWorldTests();
     runCoopTests();
+    runCinematicTests();
+    runWeaponArtTests();
     if (test::failures) { std::cerr << test::failures << " check(s) failed\n"; return EXIT_FAILURE; }
     std::cout << "All checks passed\n";
     return EXIT_SUCCESS;

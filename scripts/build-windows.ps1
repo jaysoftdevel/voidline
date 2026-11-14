@@ -36,6 +36,7 @@ Invoke-Checked cmake @('--build', $build, '--config', $Configuration, '--paralle
 if (-not $NoTests) {
     Invoke-Checked ctest @('--test-dir', $build, '-C', $Configuration, '--output-on-failure')
 }
-$exe = Join-Path $build "voidline\$Configuration\voidline.exe"
-Invoke-Checked $exe @('--version')
-Write-Host "Executable: $exe"
+$binaryDirectory = Join-Path $build "voidline\$Configuration"
+$destination = if ($Configuration -eq 'Release') { 'dist\VOIDLINE' } else { 'dist\VOIDLINE-Debug' }
+& (Join-Path $PSScriptRoot 'stage-runtime.ps1') -BinaryDirectory $binaryDirectory `
+    -Destination (Join-Path $build $destination) -VcpkgInstalled (Join-Path $build 'vcpkg_installed\x64-windows\share')

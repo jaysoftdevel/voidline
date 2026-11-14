@@ -30,6 +30,17 @@ void Renderer::drawPack(const Humanoid& h,const Rig& g) {
     armor(top,bottom,4.9f,4.4f,h.shadow.energy(1.15f),h.edge.energy(.68f),true);
     line(g.at(spine*.72f,-8.4f)+Vec{-3.f,0},g.at(spine*.72f,-8.4f)+Vec{3.f,0},1.1f,ink.alpha(.8f));
     const Vec antenna=g.at(spine*.98f,-9.5f);
+    if (h.cinematic) {
+        // Stitched pack shell and separate rear vents, visible in three-quarter shots.
+        for (int i=0;i<5;++i) {
+            const float u=spine*(.24f+i*.11f);
+            const Vec a=g.at(u,-10.4f),b=g.at(u,-8.7f);
+            line(a,b,.72f,h.edge.energy(.91f).alpha(.85f));
+        }
+        const Vec latch=g.at(spine*.61f,-11.8f);
+        ellipse(latch,{1.1f,1.5f},h.ink);
+        ellipse(latch,{.65f,1.f},h.trim.energy(1.5f));
+    }
     switch (h.look) {
     case Look::voss:
         armor(g.at(spine*.5f,-11.4f),g.at(spine*.3f,-11.4f),1.9f,1.9f,h.trim.energy(.7f),h.edge,true);
@@ -84,6 +95,25 @@ void Renderer::drawTorso(const Humanoid& h,const Rig& g) {
         polygon(g.at(1.f,v),g.at(1.f,v+3.4f),g.at(-3.2f,v+3.4f),g.at(-3.2f,v),h.leather.energy(1.15f));
         line(g.at(.2f,v),g.at(.2f,v+3.4f),.7f,ink);
         line(g.at(-3.2f,v),g.at(-3.2f,v+3.4f),.8f,ink);
+    }
+    if (h.cinematic) {
+        // Articulated ceramic breastplate: raised ribs, embossed seams, small
+        // fasteners and independent illuminated pressure indicators.
+        for (int i=0;i<3;++i) {
+            const float u=spine*(.81f-i*.115f);
+            const Vec a=g.at(u,.7f), b=g.at(u-.95f,5.0f);
+            line(a,b,.68f,h.edge.energy(1.24f).alpha(.83f));
+            ellipse(b,{.52f,.52f},h.leather.energy(1.55f));
+        }
+        line(g.at(spine*.92f,-1.3f),g.at(spine*.46f,-1.2f),.72f,ink.alpha(.72f));
+        for (int i=0;i<4;++i) {
+            const Vec port=g.at(spine*(.59f-i*.053f),5.6f);
+            line(port,port+g.fwd*.9f,.72f,(i==0?h.trim:h.edge).energy(i==0?2.0f:1.f));
+        }
+        for (int i=0;i<3;++i) {
+            const float u=spine*(.26f+i*.075f);
+            line(g.at(u,-5.f),g.at(u,-3.2f),.65f,h.edge.alpha(.72f));
+        }
     }
     // Cross strap.
     line(g.at(spine*.97f,-1.4f),g.at(spine*.32f,5.8f),2.1f,ink);

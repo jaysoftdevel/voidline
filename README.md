@@ -1,6 +1,6 @@
-# VOIDLINE 2.6.0
+# VOIDLINE 2.9.1
 
-VOIDLINE is a native C++ 2D shooter for Linux and Windows 11 with 20 sectors, three operatives, difficulty levels, an armory and a skippable opening cinematic. Destroy the guardian in each sector and reach extraction to turn mission score into upgrade points.
+VOIDLINE is a native C++ 2D shooter for Linux and Windows 11 with 20 sectors, three operatives, difficulty levels and an armory. Destroy the guardian in each sector and reach extraction to turn mission score into upgrade points and see the next part of the Vega-9 rescue story.
 
 ## Build and run
 
@@ -19,11 +19,13 @@ Building from source requires a C++20 compiler, CMake, and the SDL2, libwebp, li
 
 The executable is `build/voidline/voidline`. The build links `assets/` next to it. The game starts in fullscreen. Use `./run.sh --windowed` or F11 to switch window modes. Settings includes High and Performance rendering modes.
 
+A successful build also stages a copyable runtime folder. On Linux it is `build/dist/VOIDLINE`. On Windows it is `build-windows/dist/VOIDLINE` after a Release build. Ship that folder as a unit. Its build-size report lists the executable, assets, libraries and total payload. Testers can launch from that folder with `run.sh` or `run.bat`.
+
 Progress lives in `${XDG_DATA_HOME:-$HOME/.local/share}/voidline/campaign.json`. Use `--save-file /path/to/campaign.json` for a custom location. Campaigns, settings, best sector records and armory purchases persist. Field checkpoints are available for retries during the current mission.
 
 ## Two-player co-op
 
-1. Both players launch VOIDLINE 2.6.0 and open **Multiplayer**.
+1. Both players launch VOIDLINE 2.9.0 or later and open **Multiplayer**.
 2. On the host, choose **Host Game**, select a difficulty, and select **Generate Session Key**. The lobby waits for player 2. Copy the key and share it with your partner.
 3. On the other computer, choose **Join Game**, paste the key, and select **Connect**. Once both computers load the mission, they play the shared opening cinematic and deploy together in **Chapter 1, The Descent**.
 
@@ -32,6 +34,14 @@ Use a local network or an IPv4 VPN. The host menu fills in a local IPv4 address.
 Each player controls a separate operative and camera. The host simulates enemies, projectiles, pickups, checkpoints and explosive crates for both players at 120 fixed steps per simulation second. It sends up to 60 world snapshots per real second. The guest interpolates motion for operatives, enemies, lifts and projectiles. When the connection falls behind, the host sends its latest available state once the send queue clears. Mission transitions and retries use the same loading and deployment handshake. Bullet time slows the shared mission. Clear the guardian and bring both operatives to the extraction gate. Either operative going down ends the attempt, and the host can retry from the team's latest checkpoint. The host can advance the same session through the remaining sectors.
 
 The co-op menu leaves the mission running for your partner. Closing the session or disconnecting returns the other player to Multiplayer. Co-op progress lasts for the session and unlocks equipment as the team clears sectors. Solo save slots remain independent.
+
+## Chapter cutscenes
+
+Version 2.9.1 refines character animation with acceleration/braking curves that preserve foot-to-ground movement, subtler breathing and weight transfer, and additional close-up suit plating, facial shading and equipment detail. Scene objects now draw behind the operatives, and subtitle mattes occupy the lower safe area instead of darkening the characters. Shot dissolves hold the outgoing frame's final pose.
+
+Every successful extraction plays a five-shot scene before the sector results. The selected operative appears in solo, and both operatives appear together in co-op. The story runs from the first distress call to Vega-9's evacuation. Scenes show flooded passages clearing, survivors boarding, records being recovered and the cutter lifting away. The cinematics use captioned dialogue, in-engine character animation and a four-part score.
+
+Select **Skip Scene** or press **Esc** to continue. In co-op the host controls skipping for both players. Players on Linux and Windows can join the same session using VL4 keys. Solo progress is saved when the sector clears, before playback starts.
 
 ## Controls
 
@@ -69,6 +79,8 @@ Esc, F3, F11, Tab and Enter are reserved and cannot be assigned. Jumping from a 
 | Arc Rifle | Fast bolts that pierce a second target | Sector 2 |
 | Ember Launcher | Lobbed explosive shells with area damage | Sector 3 |
 | Longshot Railgun | Hypersonic slug that pierces four targets | Sector 4 |
+
+**Weapon visuals (v2.9.2):** all seven weapons share side-view WebP artwork, muzzle anchoring, hand contact points and armory presentation. Pistol, SMG, launcher and railgun use new detailed sprites in `assets/`, built reproducibly with `scripts/generate-weapon-art.py` (optional developer tool). Runtime does not require Python.
 
 Every weapon has eight upgrades with three ranks each: damage, magazine, reload speed, ammo reserve, range, fire rate, accuracy and critical hits. The Operative tab of the armory adds six upgrades that apply to every weapon: suit integrity, a lighter frame (speed and jump), a larger bullet-time reserve, a scavenger bonus for pickups, field medic healing and ballistic plating. The carbine, pistol, shotgun and arc rifle all reach farther than in 2.0. Saves from earlier versions load unchanged.
 
@@ -123,7 +135,7 @@ Each folder under `src/` that has sources becomes one static library (game, serv
 
 ## Diagnostics
 
-Render a short, deterministic scene through the renderer with an offscreen SDL driver. Scenes are `1` to `20`, `map`, `menu`, `create`, `armory`, `intro`, `stand0` to `stand6`, `flip` and `slow`, `walk`, `arms`, `armsrun`, `boss`, `controls`, `hit0` to `hit4` (one enemy type shot to death) and `gallery0` to `gallery2`. Add `--follow` to crop the screenshot around the action.
+Render a short, deterministic scene through the renderer with an offscreen SDL driver. Scenes are `cinematic-arrival`, `cinematic-close`, `cinematic-detail`, `cinematic-recover`, `1` to `20`, `map`, `menu`, `create`, `armory`, `intro`, `stand0` to `stand6`, `flip` and `slow`, `walk`, `arms`, `armsrun`, `boss`, `controls`, `hit0` to `hit4` (one enemy type shot to death) and `gallery0` to `gallery2`. Add `--follow` to crop the screenshot around the action.
 
 ```bash
 SDL_VIDEODRIVER=offscreen SDL_AUDIODRIVER=dummy \

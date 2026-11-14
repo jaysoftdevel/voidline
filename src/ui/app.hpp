@@ -19,7 +19,7 @@ public:
     Rect followCrop(bool enabled) const;
     bool active() const { return running; }
 private:
-    enum class View { menu,multiplayer,create,load,campaign,armory,settings,controls,credits,intro,coopLoading,play,pause,failed,cleared,confirm };
+    enum class View { menu,multiplayer,create,load,campaign,armory,settings,controls,credits,intro,coopLoading,play,pause,failed,epilogue,cleared,confirm };
     struct Button { Rect box; std::function<void()> action; };
     SDL_Window* window;
     Renderer& r;
@@ -42,12 +42,13 @@ private:
     uint32_t mission=0,simulationTick=0,lastSnapshotTick=0;
     net::HostClock hostClock;
     net::Millis preparedAt=0,filmAt=0,deployAt=0,probeAt=0,lastRemoteInput=0,guestLead=0;
+    net::Millis epilogueAt=0;
     int probes=0;
     size_t preloadStep=0;
     bool guestLoaded=false,scheduleConfirmed=false,loadingMusic=false;
     WorldMotion previousWorld;
     float netFrame=0,netInterpolation=1;
-    bool coopStarted=false,coopPaused=false,coopMouse=false,snapshot=false;
+    bool coopStarted=false,coopPaused=false,snapshot=false;
     Controls pendingControls{};
     std::vector<net::Sound> netSounds;
     void event(std::string_view name,float gain,float pan,float rate) override;
@@ -64,11 +65,21 @@ private:
     void probeHost();
     void deployCoop();
     void coopCinematic();
+    void drawOpening(bool team);
+    void beginEpilogue();
+    void updateEpilogue(float dt);
+    void skipEpilogue();
+    void endEpilogue();
+    void sectorCinematic();
     void receiveCoop(std::span<const uint8_t> data);
     void sendWorld();
     Controls readCoopControls() const;
     void coopOverlay();
     Vec mouse{-100,-100};
+    CameraTilt cameraTilt;
+    bool mouseAiming=false,mouseMoved=false,worldFrame=false;
+    void movePointer(Vec position);
+    Vec aimPoint() const;
     std::array<std::optional<Save>,3> slots;
     std::vector<Button> buttons;
     std::string notification,confirmTitle,confirmCopy;

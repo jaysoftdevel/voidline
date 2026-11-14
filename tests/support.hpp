@@ -53,3 +53,6 @@ void runProgressionTests();
 void runWorldTests();
 
 void runCoopTests();
+
+void runCinematicTests();
+void runWeaponArtTests();

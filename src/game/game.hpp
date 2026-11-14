@@ -13,7 +13,7 @@ public:
     void start(int sector,const Save& save);
     void startCoop(int sector,const Save& loadout);
     void retry();
-    void applyControls(const Controls& controls,bool second=false);
+    void applyControls(const Controls& controls,bool second=false,bool pointerMoved=true);
     const Operative& teammate() const { return partner; }
     bool coop=false;
     bool atExtraction(const Player& body) const;
@@ -26,8 +26,12 @@ public:
     void hold(Key key,bool down) { keys[static_cast<size_t>(key)]=down; }
     void select(int weapon);
     void pointer(Vec position) {
-        if (length(position-mouse)>2.5f) player.readyTimer=readyHold;
-        mouse=position; pointerActive=true;
+        const Vec target=position+Vec{camera,0};
+        pointAt(target,length(target-mouse)>2.5f);
+    }
+    void pointAt(Vec world,bool moved) {
+        if (moved) player.readyTimer=readyHold;
+        mouse=world; pointerActive=true;
     }
     void stick(Vec direction,bool active) { stickAim=direction; stickActive=active; }
     // Advances real-time effects. Returns the simulation speed to use for this frame.

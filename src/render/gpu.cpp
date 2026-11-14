@@ -80,6 +80,18 @@ void Renderer::output() {
 
 void Renderer::flush() {
     if (vertices.empty()) return;
+    if (figureScale!=1.f) {
+        for (auto& vertex:vertices) {
+            const Vec local=vertex.p-figureOrigin;
+            const float rim=smooth((local.x*figureLightSide+14.f)/32.f)*smooth((-local.y-4.f)/45.f)*.24f;
+            // A side light picks up the suit contours and fades toward the floor.
+            const float bounce=.16f*smooth((local.y+40.f)/38.f);
+            vertex.tint.r+=vertex.tint.r*(figureRim.r*rim+bounce*.56f);
+            vertex.tint.g+=vertex.tint.g*(figureRim.g*rim+bounce*.76f);
+            vertex.tint.b+=vertex.tint.b*(figureRim.b*rim+bounce);
+            vertex.p=figureOrigin+local*figureScale;
+        }
+    }
     gl.UseProgram(drawProgram);
     useTexture(drawProgram,"image",0,batchTexture);
     gl.BindVertexArray(vao); gl.BindBuffer(GL_ARRAY_BUFFER,buffer);

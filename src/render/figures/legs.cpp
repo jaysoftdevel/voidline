@@ -50,6 +50,18 @@ void Renderer::drawLegs(const Humanoid& h,const Rig& g) {
                 line(p-Vec{1.1f,0},p+Vec{1.1f,0},.8f,h.trim.alpha(.9f));
             }
         }
+        if (h.cinematic && !far) {
+            // Segmented shin guard and flexible inner joint, separate from boot.
+            const Vec brace0=mix(knee,ankle,.28f),brace1=mix(knee,ankle,.72f);
+            const Vec axis=normal(brace1-brace0),normalAxis{axis.y,-axis.x};
+            line(brace0+normalAxis*1.05f,brace1+normalAxis*.75f,.84f,h.edge.energy(1.13f));
+            for (int k=0;k<3;++k) {
+                const Vec seam=mix(brace0,brace1,.19f+.30f*k);
+                line(seam-normalAxis*1.4f,seam+normalAxis*1.8f,.62f,ink.alpha(.82f));
+            }
+            line(mix(socket,knee,.22f),mix(socket,knee,.77f),.75f,h.edge.alpha(.77f));
+            ellipse(mix(socket,knee,.37f),{.72f,.72f},h.trim.energy(1.15f));
+        }
         // Knee pad.
         ellipse(knee,{far?2.7f:3.5f,far?2.9f:3.8f},ink);
         ellipse(knee,{far?2.0f:2.7f,far?2.2f:3.0f},plate.energy(far?.9f:1.1f));
@@ -58,7 +70,8 @@ void Renderer::drawLegs(const Humanoid& h,const Rig& g) {
             line(knee+Vec{-1.9f,.9f},knee+Vec{2.1f,1.1f},1.2f,h.trim.energy(1.15f));
         }
     };
-    const int rear=h.heels[0].x*dir<h.heels[1].x*dir?0:1;
+    // In a close shot the far leg keeps its depth and shading as the feet cross.
+    const int rear=h.cinematic?0:(h.heels[0].x*dir<h.heels[1].x*dir?0:1);
     leg(rear,true); leg(1-rear,false);
 }
 } // namespace vl

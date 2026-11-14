@@ -77,7 +77,7 @@ constexpr U32 video=0x20,audio=0x10,gameController=0x2000, openGL=2,hidden=8,res
 constexpr int centered=0x2fff0000;
 constexpr U32 quit=0x100,window=0x200,keyDown=0x300,keyUp=0x301,textInput=0x303,mouseMotion=0x400,mouseDown=0x401,mouseUp=0x402,
     mouseWheel=0x403,controllerButton=0x650,controllerAdded=0x653,controllerRemoved=0x654;
-constexpr U8 focusLost=13;
+constexpr U8 mouseLeave=11,focusLost=13;
 constexpr U32 inputFocus=0x00000200;
 // USB HID scancodes as defined by SDL_scancode.h.
 namespace key {

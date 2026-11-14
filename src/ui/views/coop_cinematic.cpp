@@ -1,6 +1,7 @@
 #include "ui/app.hpp"
 #include "ui/common.hpp"
 #include "ui/coop_story.hpp"
+#include "render/cinematic_gait.hpp"
 
 using namespace vl::ui;
 
@@ -47,13 +48,15 @@ void radar(Renderer& r,float time,Color tint) {
 }
 
 void cutter(Renderer& r,float time,Color tint) {
-    const Vec p=mix(Vec{1150,93},Vec{700,284},smooth(time/4.8f));
-    const float shimmer=.72f+.16f*std::sin(time*38.f);
-    r.beam(p+Vec{22,-3},9,p+Vec{196,-61},57,tint.alpha(.56f*shimmer),tint.alpha(0));
-    r.halo(p+Vec{24,-4},29,tint.alpha(.68f));
-    r.polygon(p+Vec{-45,13},p+Vec{7,-13},p+Vec{34,-5},p+Vec{10,10},hex(0x111b25));
-    r.line(p+Vec{-30,7},p+Vec{14,-10},2,hex(0x95aebc).alpha(.7f));
-    r.rect({p.x-14,p.y-2,10,3},hex(0xffdec0).alpha(shimmer));
+    const float arrival=smooth(time/5.f);
+    const Vec nose=mix(Vec{1150,139},Vec{865,302},arrival);
+    const float span=mix(157.f,318.f,arrival);
+    const Vec engine=nose-Vec{span*.87f,-span*.040f};
+    r.softShaft(engine,engine+Vec{-128,42},93,tint.alpha(.70f));
+    r.halo(engine,45,tint.alpha(.66f));
+    r.sprite("cinematic/aster",nose,{span,-span*.055f},{span*.022f,span/3},{.92f,.55f},
+             mix(hex(0xbcc9d9),tint,.19f));
+    r.softShaft(nose+Vec{-19,13},nose+Vec{-69,151},162,tint.alpha(.54f));
 }
 
 void signal(Renderer& r,float time,Color tint,bool broken) {
@@ -90,57 +93,83 @@ void App::coopCinematic() {
         r.gradient(screen,hex(0x061018).alpha(.17f),hex(0x060b12).alpha(.94f));
         label({70,427},"CHAPTER "+digits(game.index+1)+"  /  CO-OP",teal);
         r.text({68,482},stage.name,53,white,true);
-        const auto status=preloadStep<(mission==1?story::opening.size()+4:4)
+        const size_t assets=story::missionPreloads+(mission==1?story::opening.size():0);
+        const auto status=preloadStep<assets
             ?"Loading the mission":scheduleConfirmed?"Deployment confirmed":deployAt?"Confirming deployment":"Waiting for both operatives";
         r.text({72,519},status,18,pale);
         button({1008,516,136,42},"LEAVE",[this]{leaveCoop();});
         return;
     }
 
-    size_t index=0;
-    while (index+1<story::opening.size() && film>=story::opening[index+1].at) ++index;
-    const auto& shot=story::opening[index];
-    const float end=index+1<story::opening.size()?story::opening[index+1].at:net::openingDuration/1000.f;
-    const float elapsed=std::max(0.f,film-shot.at);
-    const float progress=smooth(elapsed/(end-shot.at));
-    const float motion=settings.motion?film:0.f;
-    const float reveal=smooth(elapsed/.66f);
-    const Color tint=hex(shot.tint);
+    drawOpening(true);
+}
 
-    if (index && reveal<1) {
-        const auto& previous=story::opening[index-1];
-        r.cover(previous.art,screen,settings.motion?1.15f:1.f,previous.end,
-                mix(hex(0xcbd6dc),hex(previous.tint),.26f));
-    } else r.rect(screen,hex(0x070c13));
-    r.cover(shot.art,screen,settings.motion?mix(1.04f,1.15f,progress):1.f,
-            settings.motion?mix(shot.start,shot.end,progress):Vec{.5f,.5f},
-            mix(hex(0xcbd6dc),tint,.26f).alpha(index?reveal:std::max(.25f,reveal)));
-    r.gradient(screen,hex(0x07111b).alpha(.23f),hex(0x080e17).alpha(.79f));
-    r.gradient({0,335,width,246},hex(0x071019).alpha(0),hex(0x070e16).alpha(.97f));
-    dust(r,motion,tint,index>=3);
-    switch (index) {
-    case 0: radar(r,motion,tint); break;
-    case 1: signal(r,motion,tint,true); break;
-    case 2: signal(r,motion,tint,false); break;
-    case 3: cutter(r,settings.motion?elapsed:3.f,tint); break;
-    case 4: radar(r,motion,tint); break;
-    case 5: landing(r,motion,tint); break;
-    }
-    if (index==1 && settings.motion) {
-        const float flicker=.06f+.06f*std::sin(motion*6.f);
-        r.rect({0,32,width,300},hex(0x6cb6cf).alpha(flicker));
-    }
-    r.rect({0,0,width,32},hex(0x05090e));
-    r.rect({0,570,width,30},hex(0x05090e));
-    const float textAlpha=smooth((elapsed+.04f)/.42f);
-    r.rect({63,363,45,3},tint.alpha(textAlpha));
-    label({64,390},shot.location,tint.alpha(textAlpha));
-    r.text({61,448},shot.title,index==5?50.f:48.f,white.alpha(textAlpha),true);
-    label({66,480},shot.speaker,tint.alpha(textAlpha));
-    copy({66,506},shot.line,890,20,pale.alpha(textAlpha));
+void App::drawOpening(bool team) {
+    int index=0;
+    while (index+1<static_cast<int>(story::opening.size()) && film>=story::opening[index+1].at) ++index;
     const float duration=net::openingDuration/1000.f;
-    r.rect({66,579,1068,2},hex(0x243440));
-    r.rect({66,579,1068*clamp(film/duration),2},tint);
-    if (film>=duration) label({916,546},"WAITING FOR DEPLOYMENT",teal);
+    const auto length=[&](int n) {
+        return (n+1==static_cast<int>(story::opening.size())?duration:story::opening[n+1].at)-story::opening[n].at;
+    };
+    const auto& shot=story::opening[index];
+    const float elapsed=std::max(0.f,film-shot.at);
+    const float reveal=smooth(elapsed/.55f);
+    const bool blend=index>0 && elapsed<.55f;
+    const auto render=[&](int n,float time,int layer) {
+        const auto& take=story::opening[n];
+        const float shotTime=settings.motion?time:length(n)*.55f;
+        const float p=cinematicEase(shotTime/length(n));
+        const Color tint=hex(take.tint);
+        r.beginCinematic(layer);
+        r.cover(take.art,screen,mix(1.05f,1.15f,p),mix(take.start,take.end,p),
+                mix(hex(0xdce5ee),tint,.18f));
+        r.gradient(screen,hex(0x07111b).alpha(.21f),hex(0x080e17).alpha(.78f));
+        dust(r,shotTime+take.at,tint,n>=3);
+        switch (n) {
+        case 0: radar(r,shotTime,tint); break;
+        case 1: signal(r,shotTime,tint,true); break;
+        case 2: signal(r,shotTime,tint,false); break;
+        case 3: cutter(r,shotTime,tint); break;
+        case 4: radar(r,shotTime,tint); break;
+        case 5: {
+            landing(r,shotTime,tint);
+            const bool swap=team && !network.hosting();
+            const auto& lead=team?(swap?*game.teammate().character:*game.character):characters[save.character];
+            const float distance=231*cinematicCruise(shotTime,0.f,4.32f,.74f);
+            const float gait=settings.motion?cinematicWalk(shotTime,0.f,4.32f,.74f):0.f;
+            r.imagePlane("cinematic/deck",{-130,height},{width+125,height},{width+59,395},{-61,407},hex(0x667988));
+            r.softShaft({901,192},{573,496},335,tint.alpha(.71f));
+            const Vec feet{403.f+distance-p*36,478};
+            if (team) {
+                const auto& mate=swap?*game.character:*game.teammate().character;
+                r.cinematicOperative(mate,{.feet=feet-Vec{151,19},.scale=3.12f,.time=shotTime+1.05f,
+                    .walk=gait,.distance=distance+29,.look=-.16f,.light=hex(0xb1c2d7).energy(1.19f),.rim=tint,.carried={}});
+            }
+            r.cinematicOperative(lead,{.feet=feet,.scale=3.88f,.time=shotTime,.walk=gait,.distance=distance,
+                 .look=mix(-.06f,-.36f,p),.light=mix(white,tint,.16f).energy(1.12f),.rim=tint,.carried={}});
+            break;
+        }
+        }
+    };
+    if (blend) render(index-1,length(index-1),0);
+    render(index,elapsed,blend?1:0);
+    const Color tint=hex(shot.tint);
+    r.finishCinematic(settings.motion?film:0.f,smooth(film/.57f),tint,blend?reveal:1.f,
+        {.66f,.46f},index==5?.22f:.05f);
+
+    // The original full-width gradient covered the operative from the waist down.
+    // Reserve the dark matte for the subtitle band below the actors' boots.
+    r.gradient({0,493,width,76},hex(0x071019).alpha(.08f),hex(0x070e16).alpha(.94f));
+    r.rect({0,0,width,27},hex(0x05090e));
+    r.rect({0,569,width,31},hex(0x05090e));
+    const auto& caption=blend && reveal<.5f?story::opening[index-1]:shot;
+    const float textAlpha=index==0?smooth(elapsed/.45f):blend?std::abs(reveal*2-1):1.f;
+    r.rect({63,392,37,2},tint.alpha(textAlpha));
+    label({64,413},caption.location,tint.alpha(textAlpha));
+    r.text({61,457},caption.title,41,white.alpha(textAlpha),true);
+    label({65,485},caption.speaker,tint.alpha(textAlpha));
+    copy({65,512},caption.line,817,20,pale.alpha(textAlpha));
+    r.rect({65,580,1070,2},hex(0x243440));
+    r.rect({65,580,1070*clamp(film/duration),2},tint);
 }
 }

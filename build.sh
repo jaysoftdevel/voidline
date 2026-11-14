@@ -32,7 +32,7 @@ fi
 now() { date +%s.%N; }
 elapsed() { awk -v a="$1" -v b="$2" 'BEGIN { printf "%.1f", b - a }'; }
 human() { numfmt --to=iec --suffix=B "$1" 2>/dev/null || echo "$1 B"; }
-step() { printf '\n%s[%s/6] %s%s\n' "$bold$cyan" "$1" "$2" "$plain"; }
+step() { printf '\n%s[%s/7] %s%s\n' "$bold$cyan" "$1" "$2" "$plain"; }
 fail() { printf '%s%s%s\n' "$red" "$1" "$plain" >&2; printf '%sFull log: %s%s\n' "$dim" "$log" "$plain" >&2; exit 1; }
 
 total_start=$(now)
@@ -131,11 +131,21 @@ else
 fi
 test_time=$(elapsed "$t" "$(now)")
 
-step 6 "Summary"
+step 6 "Staging the tester runtime"
+t=$(now)
+runtime="$build/dist/VOIDLINE"
+if ! bash "$root/scripts/stage-runtime.sh" "$binary" "$runtime" | tee -a "$log"; then
+  fail "Runtime staging failed."
+fi
+stage_time=$(elapsed "$t" "$(now)")
+
+step 7 "Summary"
 total=$(elapsed "$total_start" "$(now)")
 printf '  %-18s %ss\n' "Configure" "$configure_time"
 printf '  %-18s %ss\n' "Compile and link" "$compile_time"
 printf '  %-18s %ss\n' "Tests" "$test_time"
+printf '  %-18s %ss\n' "Runtime staging" "$stage_time"
+printf '  %-18s %s\n' "Tester folder" "$runtime"
 printf '  %-18s %ss\n' "Total" "$total"
 printf '  %-18s %s\n' "Warnings" "$warnings"
 printf '  %-18s %s\n' "Tests" "$tests_summary"

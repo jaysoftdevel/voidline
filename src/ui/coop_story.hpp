@@ -2,6 +2,7 @@
 #include "core/math.hpp"
 
 namespace vl::story {
+inline constexpr size_t missionPreloads=9;
 struct Shot {
     const char* art;
     const char* location;
@@ -22,11 +23,11 @@ inline constexpr std::array opening{
     Shot{"overgrowth","RESEARCH DOME  /  LAST CIVILIAN SIGNAL","A voice from below","DISTRESS RECORDING",
          "We got the children down to the old mine. The machines are guarding the stairs. If you hear this, get the relay back on.",
          0x9bd6a6,10.5f,{.34f,.54f},{.66f,.42f}},
-    Shot{"cover","RESCUE CUTTER  /  FINAL APPROACH","One way through","MARA VOSS  /  TEAM COMMS",
-         "Rook, take the high route. I'll draw the sentries off the lift. When it comes down, we go up together.",
+    Shot{"cinematic/sky","RESCUE CUTTER  /  FINAL APPROACH","One way through","RESCUE COMMS",
+         "Follow the high route until you see the mining lift. The sentries below are still active. Keep a channel open.",
          0xf1a170,15.9f,{.73f,.47f},{.42f,.54f}},
-    Shot{"terminus","ORBITAL RELAY  /  BLACKOUT","Bring the relay back","IONA ROOK  /  TEAM COMMS",
-         "The relay will give the evacuation ships a way in. We'll have to reach it from below. First we need to get past Mule-7.",
+    Shot{"terminus","ORBITAL RELAY  /  BLACKOUT","Bring the relay back","RESCUE COMMS",
+         "The relay will give the evacuation ships a way in. The only route is from below, past Mule-7.",
          0xadc2fb,21.1f,{.35f,.41f},{.68f,.51f}},
     Shot{"descent","LOWER MINE  /  INSERTION","Chapter 1. The Descent","TEAM COMMS",
          "Landing lights ahead. Check your suit and stay on comms.",

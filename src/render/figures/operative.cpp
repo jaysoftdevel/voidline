@@ -5,15 +5,10 @@
 using namespace vl::figures;
 
 namespace vl {
-void Renderer::drawPlayer(const Game& g,const Operative& op) {
+Renderer::Humanoid Renderer::operativeFigure(const Character& character) const {
     using Look=Humanoid::Look;
-    const auto& p=op.player;
-    const Vec shift=offset+playerShift;
-    const Vec ground{p.box.center().x+shift.x,p.box.bottom()+shift.y};
-    const int index=int(op.character-characters.data());
-    const Color trim=hex(op.character->color);
-    const bool hurtBlink=p.flash>0 && std::sin(p.flash*80)>0;
-
+    const int index=int(&character-characters.data());
+    const Color trim=hex(character.color);
     struct Palette { uint32_t suit,shell,skin,hair,leather,glove; };
     static constexpr Palette palettes[]{
         {0x323b48,0x566474,0xd5a07c,0x2e211b,0x4a382c,0x232832},
@@ -23,6 +18,18 @@ void Renderer::drawPlayer(const Game& g,const Operative& op) {
     const auto& pal=palettes[std::clamp(index,0,2)];
     Humanoid h;
     h.look=static_cast<Look>(std::clamp(index,0,2));
+    h.suit=hex(pal.suit); h.shell=hex(pal.shell);
+    h.trim=trim; h.edge=mix(trim,hex(0xffffff),.7f); h.shadow=hex(0x1d2430).energy(1.1f);
+    h.ink=hex(0x06080d); h.skin=hex(pal.skin); h.hair=hex(pal.hair);
+    h.leather=hex(pal.leather); h.glove=hex(pal.glove); h.visor=trim;
+    return h;
+}
+
+void Renderer::drawPlayer(const Game& g,const Operative& op) {
+    const auto& p=op.player;
+    const Vec shift=offset+playerShift;
+    const Vec ground{p.box.center().x+shift.x,p.box.bottom()+shift.y};
+    Humanoid h=operativeFigure(*op.character);
     h.ground=ground; h.facing=p.facing; h.turn=p.turn;
     const bool moving=std::abs(p.velocity.x)>25;
     h.stride=moving?pose.direction:p.facing;
@@ -33,12 +40,9 @@ void Renderer::drawPlayer(const Game& g,const Operative& op) {
     h.time=g.time; h.velocity=p.velocity; h.landed=p.landed;
     h.flinch=smooth((p.flash-.45f)/.24f);
     h.spin=p.flip>0?p.flipDirection*2*pi*smooth(1-p.flip/flipSeconds):0.f;
-    h.scarf=true;
-    h.suit=hurtBlink?hex(0xd9a79a):hex(pal.suit);
-    h.shell=hurtBlink?hex(0xffffff):hex(pal.shell);
-    h.trim=trim; h.edge=mix(trim,hex(0xffffff),.7f); h.shadow=hex(0x1d2430).energy(1.1f);
-    h.ink=hex(0x06080d); h.skin=hex(pal.skin); h.hair=hex(pal.hair);
-    h.leather=hex(pal.leather); h.glove=hex(pal.glove); h.visor=trim;
+    if (p.flash>0 && std::sin(p.flash*80)>0) {
+        h.suit=hex(0xd9a79a); h.shell=hex(0xffffff);
+    }
 
     drawTrails(g,op,ground);
 
@@ -59,18 +63,12 @@ void Renderer::drawPlayer(const Game& g,const Operative& op) {
     const Vec carried=mount+aim*muzzleReach[op.gun];
     const Vec raised=g.muzzle(op)+shift+Vec{0,pose.pelvis*.5f+sway};
     Vec muzzle=mix(raised,carried,lowered)-aim*(recoil*.45f);
-    const bool art=op.gun<3;
-    const GunArt& model=gunArt[art?op.gun:0];
-    const float gunLength=model.length,gunHeight=model.length*model.aspect;
-    const Vec axisU=aim*gunLength,axisV=up*(-gunHeight);
+    const GunArt& model=gunArt[op.gun];
+    const Vec axisU=aim*model.length,axisV=up*(-model.length*model.aspect);
     h.aim=aim; h.recoil=recoil/3.7f; h.relax=lowered;
-    // Hand positions for the drawn weapons, in the gun's own coordinates: forward along the barrel, then up.
-    struct Grip { float nearU,nearV,farU,farV; };
-    static constexpr Grip grips[]{{-9.5f,-3.f,-6.f,-2.6f},{-16.f,-5.5f,-9.f,-5.5f},{-17.f,-5.5f,-10.f,-6.f},{-22.5f,-6.f,-45.f,-1.f}};
-    const Grip* grip=art?nullptr:&grips[op.gun-3];
     auto layout=[&] {
-        h.nearHand=art?muzzle+axisU*(model.gripU-1)+axisV*(model.gripV-model.muzzleV):muzzle+aim*grip->nearU+up*grip->nearV;
-        h.farHand=art?muzzle+axisU*(model.foreU-1)+axisV*(model.foreV-model.muzzleV):muzzle+aim*grip->farU+up*grip->farV;
+        h.nearHand=muzzle+axisU*(model.gripU-1)+axisV*(model.gripV-model.muzzleV);
+        h.farHand=muzzle+axisU*(model.foreU-1)+axisV*(model.foreV-model.muzzleV);
     };
     layout();
     // The support hand must reach the foregrip with a bent elbow. If the weapon is held too far out, it slides
@@ -83,8 +81,7 @@ void Renderer::drawPlayer(const Game& g,const Operative& op) {
     }
     const Color gunColor=hex(weapons[op.gun].color);
     h.weapon=[&](Vec,Vec) {
-        if (art) sprite(model.name,muzzle,axisU,axisV,{1.f,model.muzzleV});
-        else gunModel(op.gun,muzzle,aim,up,1.f,gunColor);
+        sprite(model.name,muzzle,axisU,axisV,{1.f,model.muzzleV});
     };
     humanoid(h);
 

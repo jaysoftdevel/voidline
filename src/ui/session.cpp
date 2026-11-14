@@ -1,5 +1,6 @@
 #include "ui/app.hpp"
 #include "ui/common.hpp"
+#include "ui/sector_story.hpp"
 
 using namespace vl::ui;
 
@@ -16,7 +17,7 @@ void App::beginCampaign() {
     if (!persist(next,newSlot)) { show(View::create); return; }
     save=next; slot=newSlot; sector=0;
     if (settings.cinematic) {
-        film=0; audio.track("intro",false); show(View::intro);
+        film=0; audio.track("coop-intro",false); show(View::intro);
     } else launch(0);
 }
 
@@ -29,6 +30,11 @@ void App::loadCampaign(int target) {
 void App::launch(int index) {
     sector=index;
     game.start(sector,save);
+    r.preload(story::scenery(story::chapters[index].set));
+    r.preload("cinematic/deck");
+    r.preload("cinematic/aster");
+    r.preload("cinematic/recorder");
+    audio.preload(story::track(index));
     previousPlayer=game.player; previousCamera=game.camera;
     accumulator=0; finished=false;
     input.reset();
@@ -64,7 +70,7 @@ void App::finishMission() {
         if (persist(next,slot)) save=next;
     }
     sector=std::min(game.index+1,sectorCount-1);
-    audio.event("complete"); show(View::cleared);
+    audio.event("complete"); beginEpilogue();
 }
 
 void App::equip() {
@@ -119,6 +125,8 @@ void App::driveGame(float dt) {
     for (int i=0;i<static_cast<int>(weaponCount);++i) if (input.pressed(static_cast<Act>(static_cast<int>(Act::weapon1)+i))) game.select(i);
     if (input.pressed(Act::next)) cycleWeapon(1);
     if (input.pressed(Act::previous)) cycleWeapon(-1);
+    if (mouseAiming) game.pointAt(aimPoint(),mouseMoved);
+    mouseMoved=false;
     game.stick(input.aimStick(),input.aimStickActive());
     (void)dt;
 }

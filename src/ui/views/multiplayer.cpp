@@ -109,7 +109,7 @@ void App::coopOverlay() {
     r.gradient({300,151,600,291},hex(0x172b38),hex(0x0f1d27));
     r.outline({300,151,600,291},hex(0x5b7480));
     label({323,181},"CO-OP  /  SECTOR "+digits(game.index+1),amber);
-    r.text({321,240},playing?"Co-op menu":cleared?"Sector cleared":"Squad down",46,white,true);
+    r.text({321,240},playing?"Co-op menu":cleared?(game.index==sectorCount-1?"Campaign complete":"Sector cleared"):"Squad down",46,white,true);
     if (playing) {
         copy({325,283},"Your partner can keep playing while this menu is open.",532,17);
         button({325,344,249,45},"RESUME",[this]{closeAction();},true,true);

@@ -1,6 +1,6 @@
 # Windows 11 compatibility
 
-This update adds a Windows x64 build. For cross-platform LAN sessions, update both Windows and Linux clients to VOIDLINE 2.6.0. The synchronized deployment protocol uses VL2 session keys.
+For cross-platform LAN sessions, use matching clients with the VL4 session protocol introduced in VOIDLINE 2.9.0.
 
 ## Build
 
@@ -11,7 +11,7 @@ set "VCPKG_ROOT=C:\dev\vcpkg"
 build.bat
 ```
 
-The first build installs the manifest dependencies through vcpkg. It needs internet access for any packages missing from your vcpkg cache. The build runs the test suite and places `voidline.exe`, its dependencies, and the game assets in `build-windows\voidline\Release`. If using a newer Visual Studio version, pass its CMake generator to `build.bat -Generator`. For Debug, use `build.bat -Configuration Debug` and run the executable in the Debug folder.
+The first build installs the manifest dependencies through vcpkg. It needs internet access for any packages missing from your vcpkg cache. The build runs the test suite and stages the executable, app-local libraries and assets in `build-windows\dist\VOIDLINE`. Launch its `run.bat` and see `BUILD-SIZES.txt` for the breakdown. If using a newer Visual Studio version, pass its CMake generator to `build.bat -Generator`. Debug builds stage in `build-windows\dist\VOIDLINE-Debug`.
 
 ## Install the Direct3D 12 compatibility runtime
 
@@ -22,7 +22,7 @@ install-mesa.bat "C:\Downloads\mesa3d-25.3.4-release-msvc"
 run.bat --renderer dx12
 ```
 
-The installer copies the Mesa runtime into the game's build directory. The game loads it only for the Direct3D 12 modes.
+The installer copies the Mesa runtime into the game's build directory and refreshes the staged tester folder. The game loads it for the Direct3D 12 modes.
 
 | Launch option | Behavior |
 | --- | --- |
@@ -47,4 +47,4 @@ verify-windows.bat
 run.bat --renderer warp --windowed --smoke-test --scene 20 --frames 3
 ```
 
-The first command reports the Direct3D device capabilities and renders a short hardware smoke test. The second checks the WARP path separately. The graphics mode and driver appear in the startup output. Linux regression tests and the update installer were checked during preparation. The Windows executable and graphics runtime were not built or run in the Linux packaging environment.
+The first command reports the Direct3D device capabilities and renders a short hardware smoke test. The second checks the WARP path separately. The graphics mode and driver appear in the startup output. The 2.9.0 tester package was cross-compiled on Linux and checked for loader dependencies. Native Windows 11 rendering still needs a smoke test on the target hardware.

@@ -62,3 +62,7 @@ try {
     if (Test-Path -LiteralPath $staging) { Remove-Item -LiteralPath $staging -Recurse -Force }
 }
 Write-Host "Installed the game-local Mesa runtime in $destination"
+$build = Join-Path $root 'build-windows'
+$dist = if ($Configuration -eq 'Release') { 'dist\VOIDLINE' } else { 'dist\VOIDLINE-Debug' }
+& (Join-Path $PSScriptRoot 'stage-runtime.ps1') -BinaryDirectory $bin `
+    -Destination (Join-Path $build $dist) -VcpkgInstalled (Join-Path $build 'vcpkg_installed\x64-windows\share')

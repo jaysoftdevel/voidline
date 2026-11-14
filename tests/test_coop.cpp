@@ -26,10 +26,12 @@ void handshake() {
         return;
     }
     const auto key=host.key();
-    CHECK(key.starts_with("VL2-") && key.size()==40 && host.state()==State::waiting && host.receive().empty());
+    CHECK(key.starts_with("VL4-") && key.size()==40 && host.state()==State::waiting && host.receive().empty());
     CHECK(!wrong.join("not-a-session-key"));
     CHECK(!wrong.join("VL1-"+key.substr(4)));
-    CHECK(wrong.error().find("2.6")!=std::string::npos);
+    CHECK(wrong.error().find("2.9")!=std::string::npos);
+    CHECK(!wrong.join("VL2-"+key.substr(4)));
+    CHECK(!wrong.join("VL3-"+key.substr(4)));
     auto wrongKey=key; wrongKey.back()=wrongKey.back()=='0'?'1':'0';
     CHECK(wrong.join(wrongKey));
     CHECK(until(host,wrong,[&] { return host.state()==State::waiting && wrong.state()==State::idle; }));

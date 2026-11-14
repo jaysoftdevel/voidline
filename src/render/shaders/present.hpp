@@ -4,8 +4,9 @@ inline constexpr auto present=R"GLSL(#version 330 core
 in vec2 uv;
 out vec4 frag;
 uniform sampler2D world,bloom;
-uniform float strength,time,slow,hurt,punch,flash,combo,exposure;
-uniform vec2 focus;
+uniform float strength,time,slow,hurt,punch,flash,combo,exposure,zoom;
+uniform vec2 focus,perspective,roll;
+uniform float overscan;
 uniform vec3 shadowTint,highlightTint;
 uniform float saturation;
 float hash(vec2 p) { return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
@@ -35,8 +36,11 @@ vec3 agx(vec3 v) {
     return clamp(fromAgx*v,0.0,1.0);
 }
 void main() {
-    float zoom=1.0-punch*.030-slow*.055;
-    vec2 p=focus+(uv-focus)*zoom;
+    vec2 q=vec2(uv.x,1.0-uv.y)*2.0-1.0;
+    vec2 local=vec2(q.x*roll.x-q.y*roll.y*.5,q.x*roll.y*2.0+q.y*roll.x);
+    local/=overscan+dot(q,perspective);
+    vec2 sampleUV=vec2(local.x,-local.y)*.5+.5;
+    vec2 p=focus+(sampleUV-focus)*zoom;
     vec2 radial=(p-.5);
     float fringe=.0007+slow*.0016+punch*.0018+hurt*.0040+combo*.0008;
     vec3 c;
@@ -49,14 +53,14 @@ void main() {
     c=mix(c*shadowTint,c*highlightTint,smoothstep(.12,.72,luma));
     vec3 chill=vec3(.90,.97,1.10);
     c=mix(c,c*chill+vec3(.002,.008,.020),slow);
-    vec2 fromFocus=uv-focus;
+    vec2 fromFocus=sampleUV-focus;
     fromFocus.x*=2.0;
     float angle=atan(fromFocus.y,fromFocus.x);
     float lines=hash(vec2(floor(angle*170.0),floor(time*16.0)));
     float streak=smoothstep(.90,1.0,lines)*smoothstep(.42,1.0,length(fromFocus))*slow;
     c+=vec3(.55,.80,1.0)*streak*.20;
-    vec2 q=(uv-.5)*vec2(1.0,.77);
-    float vignette=dot(q,q);
+    vec2 edge=(uv-.5)*vec2(1.0,.77);
+    float vignette=dot(edge,edge);
     c*=1.0-(.50+slow*.24)*vignette;
     c+=vec3(1.0,.17,.10)*hurt*smoothstep(.04,.38,vignette)*.75;
     c+=vec3(1.0,.93,.78)*flash*.30;

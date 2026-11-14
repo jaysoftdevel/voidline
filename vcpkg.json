@@ -1,6 +1,6 @@
 {
   "name": "voidline",
-  "version-string": "2.6.0",
+  "version-string": "2.9.0",
   "dependencies": [
     "json-c",
     "libpng",

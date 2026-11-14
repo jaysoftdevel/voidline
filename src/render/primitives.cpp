@@ -96,6 +96,34 @@ void Renderer::image(std::string_view name,Rect r,Color color) {
     const auto& t=asset(name); quad(r,color,color,t.id);
 }
 
+void Renderer::imageCrop(std::string_view name,Rect r,Rect crop,Color color) {
+    const auto& t=asset(name); quad(r,color,color,t.id,crop);
+}
+
+void Renderer::imagePlane(std::string_view name,Vec nearLeft,Vec nearRight,Vec farRight,Vec farLeft,Color tint) {
+    const auto& t=asset(name);
+    if (batchTexture!=t.id) { flush(); batchTexture=t.id; }
+    // Subdivide the receding plane to keep the surface texture continuous across its diagonals.
+    constexpr int rows=14;
+    auto edge=[&](float v) { return 1.f/(1.f+1.7f*(1-v)); };
+    const float minimum=edge(0);
+    for (int row=0;row<rows;++row) {
+        const float v0=float(row)/rows,v1=float(row+1)/rows;
+        const float low=(edge(v0)-minimum)/(1-minimum),high=(edge(v1)-minimum)/(1-minimum);
+        const Vertex a{mix(farLeft,nearLeft,low),{0,v0},tint},b{mix(farRight,nearRight,low),{1,v0},tint};
+        const Vertex c{mix(farRight,nearRight,high),{1,v1},tint},d{mix(farLeft,nearLeft,high),{0,v1},tint};
+        vertices.insert(vertices.end(),{a,b,c,a,c,d});
+    }
+}
+
+void Renderer::softShaft(Vec from,Vec to,float breadth,Color tint) {
+    if (batchTexture!=shaftTexture.id) { flush(); batchTexture=shaftTexture.id; }
+    const Vec direction=normal(to-from),axis=Vec{-direction.y,direction.x}*(breadth*.5f);
+    const Vertex a{from-axis*.09f,{0,0},tint},b{from+axis*.09f,{1,0},tint};
+    const Vertex c{to+axis,{1,1},tint},d{to-axis,{0,1},tint};
+    vertices.insert(vertices.end(),{a,b,c,a,c,d});
+}
+
 void Renderer::cover(std::string_view name,Rect r,float zoom,Vec bias,Color tint) {
     const auto& t=asset(name);
     const float scale=std::max(r.w/t.w,r.h/t.h)*zoom;
