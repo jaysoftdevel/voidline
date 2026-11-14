@@ -2,12 +2,13 @@
 #include "render/shaders.hpp"
 #include "render/shaders/cinematic.hpp"
 #include <chrono>
+#include <sstream>
 #include <fstream>
 #include <stdexcept>
 
 namespace vl {
 Renderer::Renderer(SDL_Window* win,std::filesystem::path art,bool softwareMode)
-    :window(win),assets(std::move(art)),software(softwareMode) {
+    :window(win),assets(art),software(softwareMode) {
     gl.load();
     hdrFormat=chooseHdrFormat();
     drawProgram=program(shader::mesh,shader::texture);
@@ -70,12 +71,12 @@ Renderer::Renderer(SDL_Window* win,std::filesystem::path art,bool softwareMode)
         cloud=texture(size,size,pixels.data());
     }
     for (size_t i=0;i<fonts.size();++i) {
-        auto file=assets/"fonts"/(i==0?"font-regular.png":"font-black.png");
-        fonts[i].texture=readTexture(file);
-        file.replace_extension(".txt");
-        std::ifstream in(file);
+        const std::string base=i==0?"fonts/font-regular":"fonts/font-black";
+        fonts[i].texture=readTexture(base+".png");
+        const auto metrics=assets.read(base+".txt");
+        std::istringstream in(std::string(metrics.begin(),metrics.end()));
         for (auto& v:fonts[i].advances) in>>v;
-        if (!in) throw std::runtime_error("Missing or invalid font metrics: "+file.string());
+        if (!in) throw std::runtime_error("Invalid packaged font metrics: "+base);
     }
     raw=target(1200,600); mirror=target(600,300); lightMap=target(480,240); lit=target(1200,600); ldr=target(1200,600,GL_RGBA8);
     int w=600,h=300;

@@ -45,17 +45,40 @@ void App::multiplayer() {
     using State=net::Session::State;
     shell("orbital");
     heading("MULTIPLAYER","Two-player co-op","Play the same mission with separate controls and cameras.");
-    const Rect panel{55,177,1090,339};
+    const Rect panel{55,177,1090,357};
     r.gradient(panel,hex(0x172b38),hex(0x0d1b27));
     r.outline(panel,hex(0x496573));
 
-    if (lobby==Lobby::menu) {
+    if (lobby!=Lobby::menu && (network.state()==State::connected || rosterPreview) && mission==0) {
+        const bool host=network.hosting();
+        label({80,210},std::string("SQUAD ASSEMBLY  /  ")+(host?"HOST":"GUEST"),teal);
+        r.text({81,242},"Choose your operative",29,white,true);
+        label({664,219},std::string("YOU: ")+(characterLocked?"LOCKED IN":"SELECTING"),characterLocked?teal:amber);
+        label({876,219},std::string("PARTNER: ")+(remoteLocked?"READY":"SELECTING"),remoteLocked?teal:amber);
+        for (int i=0;i<static_cast<int>(characters.size());++i) {
+            const auto& c=characters[i];
+            const Rect card{76.f+(i%3)*353.f,260.f+(i/3)*105.f,344,98};
+            const bool chosen=i==coopCharacter;
+            r.rect(card,hex(0x091620));
+            r.cover(c.art,{card.x+2,card.y+2,80,card.h-4},1,{.5f,.28f});
+            r.gradient({card.x+66,card.y,30,card.h},hex(0x0b151e).alpha(0),hex(0x0b151e));
+            const Color tint=hex(c.color);
+            label({card.x+96,card.y+24},c.role,tint);
+            r.text({card.x+96,card.y+53},c.name,21,white,true);
+            r.text({card.x+96,card.y+77},c.trait,11,pale);
+            r.outline(card,chosen?tint:hex(0x445968),chosen?2.6f:1.f);
+            hit(card,[this,i]{if (!characterLocked) {coopCharacter=i;audio.event("switch",.6f);}},!characterLocked);
+        }
+        label({82,505},characterLocked?"WAITING FOR PARTNER TO LOCK IN":"SELECT ONE OF SIX OPERATIVES",characterLocked?teal:amber);
+        button({846,484,232,44},characterLocked?"READY  /  LOCKED":"LOCK IN CHARACTER",
+            [this]{lockOperative();},!characterLocked,true);
+    } else if (lobby==Lobby::menu) {
         r.text({81,245},"Host a mission",32,white,true);
         copy({81,279},"Set the difficulty and share your session key. Both players deploy together in Chapter 1.",439,18);
         button({81,359,401,48},"HOST GAME",[this]{lobby=Lobby::host; focus=-1; SDL_StartTextInput();},true,true);
         r.line({591,208},{591,470},1,hex(0x496573));
         r.text({630,245},"Join a mission",32,white,true);
-        copy({630,279},"Paste the host's session key to join their mission.",439,18);
+        copy({630,279},"Paste a session key, or search for nearby LAN hosts and request to join.",439,18);
         button({630,359,401,48},"JOIN GAME",[this]{lobby=Lobby::join; focus=-1; SDL_StartTextInput();});
     } else if (lobby==Lobby::host && network.state()==State::idle) {
         label({83,225},"CAMPAIGN START",teal);
@@ -75,7 +98,7 @@ void App::multiplayer() {
     } else if (lobby==Lobby::host) {
         label({83,226},"CHAPTER 1  /  THE DESCENT",teal);
         r.text({81,284},"Waiting for player 2",37,white,true);
-        copy({83,322},"Send the session key to your partner. The opening begins once both players are ready.",880,17);
+        copy({83,322},"Share the key or let a player discover this host on the LAN. All join requests require approval.",945,17);
         r.rect({83,353,730,58},hex(0x091722));
         r.outline({83,353,730,58},hex(0x547582));
         r.text({99,389},network.key(),22,white,true);
@@ -83,23 +106,57 @@ void App::multiplayer() {
             if (SDL_SetClipboardText(network.key().c_str())==0) inform("Session key copied.");
             else inform("Could not copy the key. You can type it on the other computer.");
         },true,true);
-        label({83,458},"1 / 2 PLAYERS CONNECTED",amber);
+        if (network.pendingApproval()) {
+            r.rect({83,423,994,94},hex(0x20303c));
+            r.outline({83,423,994,94},amber);
+            label({97,448},"PLAYER JOIN REQUEST  /  "+network.joiningAddress(),amber);
+            r.text({97,474},"Allow this player to join your mission?",18,white,true);
+            button({668,460,176,43},"DECLINE",[this]{network.approve(false);});
+            button({856,460,176,43},"ACCEPT",[this]{network.approve(true);},true,true);
+        } else {
+            label({83,458},network.state()==State::connected?"2 / 2 PLAYERS CONNECTED":
+                  (network.discoverable()?"1 / 2 PLAYERS  /  LAN VISIBLE":"1 / 2 PLAYERS  /  KEY ONLY"),amber);
+        }
     } else {
         const bool editable=network.state()==State::idle;
-        label({83,226},"SESSION KEY",teal);
-        r.rect({83,245,743,61},hex(0x091722));
-        r.outline({83,245,743,61},hex(0x547582));
-        r.text({99,284},joinKey.empty()?"Paste or type the host's key":joinKey,22,joinKey.empty()?muted:white,true);
-        button({849,245,228,61},"PASTE KEY",[this] {
+        label({83,219},"SESSION KEY  /  DIRECT CONNECT",teal);
+        r.rect({83,233,740,52},hex(0x091722));
+        r.outline({83,233,740,52},hex(0x547582));
+        r.text({97,265},joinKey.empty()?"Paste or type the host's key":joinKey,20,joinKey.empty()?muted:white,true);
+        button({836,233,241,52},"PASTE KEY",[this] {
             char* clipboard=SDL_GetClipboardText();
             if (clipboard) { joinKey.clear(); appendField(joinKey,clipboard,false); SDL_free(clipboard); }
         },editable);
-        button({83,343,284,45},editable?"CONNECT":"CONNECTING",[this] {
+        button({83,299,286,42},editable?"CONNECT WITH KEY":"WAIT FOR APPROVAL",[this] {
             if (network.join(joinKey)) { focus=-1; SDL_StopTextInput(); }
         },editable && !joinKey.empty(),true);
+        button({555,299,522,42},"FIND LOCAL HOSTS  /  REFRESH",[this] {
+            lanPage=0;
+            if (!network.searchLan()) inform("LAN discovery could not start. Check firewall permissions.");
+        },editable);
+        label({83,365},"AVAILABLE HOSTS ON YOUR LOCAL NETWORK",teal);
+        const auto& hosts=network.nearby();
+        if (hosts.empty()) copy({83,395},network.state()==State::approval?
+            "Request sent. Waiting for host approval...":
+            "No hosts found yet. Select FIND LOCAL HOSTS and allow UDP 38275 through the firewall.",920,17);
+        else for (size_t index=static_cast<size_t>(lanPage*3);index<hosts.size() && index<static_cast<size_t>((lanPage+1)*3);++index) {
+            const auto entry=hosts[index];
+            const float y=380+(index-static_cast<size_t>(lanPage*3))*42;
+            r.rect({83,y,996,38},hex(0x102632));
+            r.outline({83,y,996,38},hex(0x3b5362));
+            r.text({96,y+24},entry.name+"   /   "+entry.address+":"+std::to_string(entry.port),16,pale,true);
+            button({879,y+2,196,34},"REQUEST JOIN",[this,entry] {
+                if (network.joinLan(entry)) { focus=-1; SDL_StopTextInput(); }
+            },editable,true);
+        }
+        if (hosts.size()>3) {
+            button({83,510,155,30},"PREVIOUS",[this]{lanPage=std::max(0,lanPage-1);},lanPage>0);
+            button({250,510,155,30},"NEXT HOSTS",[this]{lanPage=std::min(int((network.nearby().size()-1)/3),lanPage+1);},(lanPage+1)*3<int(hosts.size()));
+        }
+
     }
-    if (!network.error().empty()) copy({83,482},network.error(),1010,16,amber);
-    button({55,534,160,41},lobby==Lobby::menu?"MAIN MENU":"BACK",[this]{closeAction();});
+    if (!network.error().empty()) copy({440,550},network.error(),700,15,amber);
+    button({55,545,160,41},lobby==Lobby::menu?"MAIN MENU":"BACK",[this]{closeAction();});
 }
 
 void App::coopOverlay() {

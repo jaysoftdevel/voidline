@@ -24,7 +24,10 @@ function Format-Size([string]$Name, [long]$Count) {
 try {
     Copy-Item -LiteralPath (Join-Path $BinaryDirectory 'voidline.exe') -Destination $stage
     Get-ChildItem -LiteralPath $BinaryDirectory -File -Filter '*.dll' | Copy-Item -Destination $stage
-    Copy-Item -LiteralPath (Join-Path $root 'assets') -Destination $stage -Recurse
+    New-Item -ItemType Directory -Path (Join-Path $stage 'assets') | Out-Null
+    Copy-Item -LiteralPath (Join-Path $BinaryDirectory 'assets/game.vpak') -Destination (Join-Path $stage 'assets/game.vpak')
+    New-Item -ItemType Directory -Force -Path (Join-Path $stage 'licenses') | Out-Null
+    Get-ChildItem -LiteralPath (Join-Path $root 'assets/licenses') -File | Copy-Item -Destination (Join-Path $stage 'licenses')
     $mesa = Join-Path $BinaryDirectory 'mesa'
     if (Test-Path -LiteralPath $mesa -PathType Container) {
         Copy-Item -LiteralPath $mesa -Destination $stage -Recurse
@@ -47,7 +50,7 @@ exit /b %ERRORLEVEL%
 '@ | Set-Content -LiteralPath (Join-Path $stage 'run.bat') -Encoding Ascii
     @'
 Launch run.bat from this folder. Use run.bat --windowed for a window.
-Keep the executable, DLLs, and assets together.
+Keep the executable, DLLs, and assets/game.vpak together. Raw image and sound files are not included.
 Builds made with Visual Studio use the Microsoft Visual C++ x64 runtime.
 To include Direct3D 12 support, add the Mesa runtime with install-mesa.bat in the source folder.
 Windows supplies Direct3D and the display driver.

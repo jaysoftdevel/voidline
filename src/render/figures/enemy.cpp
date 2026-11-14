@@ -6,6 +6,11 @@ namespace vl {
 void Renderer::drawEnemy(const Enemy& e,Color accent,Biome biome,float time,Vec target) {
     EnemyView v(e);
     if (e.elite) { accent=hex(0xffcb68); v.alert=accent; }
+    if (e.kind==EnemyKind::scavenger) accent=hex(0xb6e76b);
+    if (e.kind==EnemyKind::sniper) accent=hex(0x86dfff);
+    if (e.kind==EnemyKind::bulwark) accent=hex(0xf0bb5d);
+    if (e.kind==EnemyKind::interceptor) accent=hex(0xc9a0ff);
+    if (e.kind==EnemyKind::juggernaut) accent=hex(0xff775f);
     v.accent=accent;
     v.biome=biome; v.facing=e.facing; v.time=time; v.turn=e.turn; v.target=target;
     v.pace=clamp(std::abs(e.vx)/96);
@@ -40,6 +45,49 @@ void Renderer::drawEnemy(const Enemy& e,Color accent,Biome biome,float time,Vec 
     case EnemyKind::stalker: drawStalker(v); break;
     case EnemyKind::ranger: drawSoldier(v); break;
     case EnemyKind::boss: drawGuardian(v); break;
+    case EnemyKind::scavenger: drawStalker(v); break;
+    case EnemyKind::sniper: drawSoldier(v); break;
+    case EnemyKind::bulwark: drawSoldier(v); break;
+    case EnemyKind::interceptor: drawDrone(v); break;
+    case EnemyKind::juggernaut: drawSoldier(v); break;
+    }
+    // Secondary silhouette pass: each new archetype has its own identifiable
+    // equipment, independent of elite coloring or the current biome.
+    const Vec at=v.center;
+    if (e.kind==EnemyKind::scavenger) {
+        for (float side:{-1.f,1.f}) {
+            triangle(at+Vec{side*7,-7},at+Vec{side*15,-22},at+Vec{side*19,-7},v.plate);
+            line(at+Vec{side*9,-7},at+Vec{side*16,-18},1.2f,v.accent.energy(1.8f));
+        }
+        ellipse(at+Vec{v.facing*12,-4},{4,3},v.alert.energy(2));
+    } else if (e.kind==EnemyKind::sniper) {
+        const Vec barrel=at+Vec{v.facing*31,4};
+        line(at+Vec{v.facing*8,1},barrel,4,v.black);
+        line(at+Vec{v.facing*9,0},barrel,2,v.plate);
+        ellipse(at+Vec{v.facing*7,-5},{5,2},v.black);
+        line(at+Vec{v.facing*2,-11},at+Vec{v.facing*15,-11},1.8f,v.accent.energy(2));
+    } else if (e.kind==EnemyKind::bulwark) {
+        const Vec shield=at+Vec{v.facing*22,3};
+        polygon(shield+Vec{-9,-21},shield+Vec{10,-18},shield+Vec{9,22},shield+Vec{-9,23},v.black);
+        polygon(shield+Vec{-7,-18},shield+Vec{8,-16},shield+Vec{7,19},shield+Vec{-7,20},v.hull);
+        line(shield+Vec{0,-14},shield+Vec{0,14},2.5f,v.accent.energy(1.3f));
+        ellipse(shield,{4,4},v.alert.energy(1.5f));
+    } else if (e.kind==EnemyKind::interceptor) {
+        for (float side:{-1.f,1.f}) {
+            triangle(at+Vec{side*10,-4},at+Vec{side*32,1},at+Vec{side*18,11},v.hull);
+            line(at+Vec{side*12,4},at+Vec{side*28,3},1.5f,v.accent.energy(1.7f));
+            halo(at+Vec{side*18,9},10,v.accent.alpha(.35f));
+        }
+    } else if (e.kind==EnemyKind::juggernaut) {
+        for (float side:{-1.f,1.f}) {
+            polygon(at+Vec{side*8,-28},at+Vec{side*26,-24},at+Vec{side*24,-5},at+Vec{side*12,-7},v.hull);
+            line(at+Vec{side*15,-23},at+Vec{side*18,-11},2,v.accent.energy(2));
+        }
+        polygon(at+Vec{-22,-8},at+Vec{22,-8},at+Vec{19,13},at+Vec{-19,13},v.black);
+        polygon(at+Vec{-19,-6},at+Vec{19,-6},at+Vec{17,10},at+Vec{-17,10},v.plate);
+        line(at+Vec{-13,3},at+Vec{13,3},3,v.accent.energy(1.9f));
+        ellipse(at+Vec{0,-23},{12,7},v.black);
+        line(at+Vec{-8,-22},at+Vec{8,-22},3,v.alert.energy(2));
     }
     if (e.elite && e.alive) {
         const Vec at{v.x,v.y-e.box.h*.5f-18};

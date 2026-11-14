@@ -9,6 +9,7 @@ enum class ConnectStatus {waiting,connected,failed};
 
 bool socketRuntime();
 Socket openTcp();
+Socket openUdp();
 void closeSocket(Socket& socket);
 Socket acceptPeer(Socket server);
 bool listenExclusive(Socket socket);

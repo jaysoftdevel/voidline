@@ -2,7 +2,7 @@
 #include "core/math.hpp"
 
 namespace vl {
-enum class EnemyKind {drone,ranger,turret,stalker,boss};
+enum class EnemyKind {drone,ranger,turret,stalker,boss,scavenger,sniper,bulwark,interceptor,juggernaut};
 enum class Biome {mine,water,biodome,forge,orbital};
 inline constexpr int sectorCount=20;
 enum class SupplyKind {ammo,salvage,health};

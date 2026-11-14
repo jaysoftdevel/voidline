@@ -13,17 +13,22 @@ void Game::bury(const Enemy& e) {
     c.body.deathAge=0;
     const float strength=clamp(length(e.hitDir)*0+.5f+std::abs(e.kick)*.5f,.4f,1.f);
     switch (e.kind) {
+    case EnemyKind::sniper:
+    case EnemyKind::bulwark:
+    case EnemyKind::juggernaut:
     case EnemyKind::ranger:
         // The soldier staggers back, buckles and topples about its feet, dropping the rifle.
         c.pivotFeet=true; c.rest=away*1.52f; c.life=3.2f;
         c.v={away*(55+strength*150),0};
         break;
+    case EnemyKind::interceptor:
     case EnemyKind::drone:
         c.v={away*(70+random()*90),-60}; c.spin=away*(3+random()*4); c.rest=away*.5f; c.life=2.4f;
         break;
     case EnemyKind::turret:
         c.life=2.2f;
         break;
+    case EnemyKind::scavenger:
     case EnemyKind::stalker:
         c.v={away*(110+random()*110),-(190+random()*120)}; c.spin=away*(5+random()*3); c.rest=away*pi; c.life=2.4f;
         break;
@@ -32,7 +37,8 @@ void Game::bury(const Enemy& e) {
         break;
     }
     corpses.push_back(c);
-    if (e.kind==EnemyKind::ranger) {
+    if (e.kind==EnemyKind::ranger || e.kind==EnemyKind::sniper ||
+        e.kind==EnemyKind::bulwark || e.kind==EnemyKind::juggernaut) {
         // The rifle leaves the hands and tumbles to the ground.
         const Vec hand=e.box.center()+Vec{e.fallDir*-6.f,-2.f};
         const float life=3.f;
@@ -72,9 +78,14 @@ void Game::updateCorpses(float dt) {
         // Wounds keep glowing and cooling on the body.
         for (auto& w:c.body.wounds) w.age+=dt;
         switch (c.body.kind) {
+        case EnemyKind::sniper:
+        case EnemyKind::bulwark:
+        case EnemyKind::juggernaut:
         case EnemyKind::ranger: updateSoldierCorpse(c,dt); break;
+        case EnemyKind::interceptor:
         case EnemyKind::drone: updateDroneCorpse(c,dt); break;
         case EnemyKind::turret: updateTurretCorpse(c,dt); break;
+        case EnemyKind::scavenger:
         case EnemyKind::stalker: updateStalkerCorpse(c,dt); break;
         case EnemyKind::boss: updateGuardianCorpse(c,dt); break;
         }

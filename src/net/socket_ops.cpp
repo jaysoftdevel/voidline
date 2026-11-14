@@ -49,6 +49,16 @@ Socket openTcp() {
 #endif
 }
 
+Socket openUdp() {
+#ifdef _WIN32
+    Socket socket=WSASocketW(AF_INET,SOCK_DGRAM,IPPROTO_UDP,nullptr,0,WSA_FLAG_NO_HANDLE_INHERIT);
+    if (socket!=invalidSocket && !nonblocking(socket)) closeSocket(socket);
+    return socket;
+#else
+    return ::socket(AF_INET,SOCK_DGRAM|SOCK_NONBLOCK|SOCK_CLOEXEC,0);
+#endif
+}
+
 void closeSocket(Socket& socket) {
     if (socket==invalidSocket) return;
 #ifdef _WIN32

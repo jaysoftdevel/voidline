@@ -13,7 +13,9 @@ stage="$(mktemp -d -- "${destination}.XXXXXX")"
 trap 'rm -rf -- "$stage"' EXIT
 mkdir -- "$stage/lib" "$stage/licenses"
 install -m 755 -- "$binary" "$stage/voidline"
-cp -RL -- "$root/assets" "$stage/assets"
+mkdir -- "$stage/assets"
+cp -- "$(dirname -- "$binary")/assets/game.vpak" "$stage/assets/game.vpak"
+cp -R -- "$root/assets/licenses/." "$stage/licenses/"
 cp -- /usr/share/common-licenses/{LGPL-2.1,LGPL-3,GPL-3} "$stage/licenses/" 2>/dev/null || true
 
 # Keep game and codec libraries local. The desktop stack and drivers come from the host.
@@ -70,7 +72,7 @@ LAUNCH
 chmod 755 "$stage/run.sh"
 cat > "$stage/README.txt" <<'README'
 Run ./run.sh from this folder. Use ./run.sh --windowed for a window.
-Keep the executable, assets and lib directories together.
+Keep the executable, game.vpak and lib directories together; no loose artwork or audio is shipped.
 The system supplies glibc, desktop and audio services, and an OpenGL 3.3 core driver.
 Use ./run.sh --check-runtime to show the linked libraries and see missing dependencies.
 README

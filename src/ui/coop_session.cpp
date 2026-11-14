@@ -20,7 +20,10 @@ void App::event(std::string_view name,float gain,float pan,float rate) {
 
 void App::openMultiplayer() {
     network.close();
-    lobby=Lobby::menu;
+    lobby=Lobby::menu; lanPage=0; rosterPreview=false;
+    coopCharacter=std::clamp(save.character,0,static_cast<int>(characters.size())-1);
+    remoteCharacter=-1; characterLocked=remoteLocked=false;
+    openingSkipped=skipRequested=false;
     coopDifficulty=settings.difficulty;
     advertisedAddress=net::Session::localAddress();
     show(View::multiplayer);
@@ -33,6 +36,8 @@ void App::leaveCoop(const std::string& message) {
     game.release();
     input.reset();
     lobby=Lobby::menu;
+    characterLocked=remoteLocked=false;
+    remoteCharacter=-1; openingSkipped=skipRequested=false;
     SDL_StopTextInput();
     audio.pace(1);
     show(View::multiplayer);
@@ -47,7 +52,7 @@ void App::prepareCoop() {
     accumulator=netFrame=film=0; netInterpolation=1; notice=0;
     simulationTick=lastSnapshotTick=0;
     preloadStep=0; probes=0;
-    guestLoaded=scheduleConfirmed=loadingMusic=false;
+    guestLoaded=scheduleConfirmed=loadingMusic=openingSkipped=skipRequested=false;
     hostClock={};
     preparedAt=net::now(); filmAt=deployAt=probeAt=lastRemoteInput=guestLead=epilogueAt=0;
     input.reset();
@@ -58,7 +63,8 @@ void App::prepareCoop() {
 
 void App::startCoop(int index,bool retry) {
     using State=net::Session::State;
-    if (!network.hosting() || network.state()!=State::connected) return;
+    if (!network.hosting() || network.state()!=State::connected ||
+        !characterLocked || !remoteLocked || remoteCharacter<0) return;
     const bool valid=mission==0?(index==0 && !retry):
         retry?(view==View::failed && index==game.index):
               (view==View::cleared && index==game.index+1 && index<sectorCount);
@@ -69,7 +75,8 @@ void App::startCoop(int index,bool retry) {
         Save loadout;
         loadout.difficulty=coopDifficulty;
         loadout.cleared=index;
-        game.startCoop(index,loadout);
+        loadout.character=coopCharacter;
+        game.startCoop(index,loadout,remoteCharacter);
     }
     if (!network.send(net::Packet::prepare,net::encodeMission(game.index,coopDifficulty,mission))) return;
     prepareCoop();
@@ -88,10 +95,18 @@ void App::receiveCoop(std::span<const uint8_t> data) {
     net::Timing timing{};
     bool valid=false;
 
+    if (kind==Packet::operative && mission==0 && network.state()==net::Session::State::connected) {
+        valid=body.size()==1 && body[0]<characters.size() && !remoteLocked;
+        if (valid) {
+            remoteCharacter=body[0]; remoteLocked=true;
+            if (network.hosting() && characterLocked) startCoop(0);
+        }
+        if (!valid) network.fail("Invalid or repeated operative selection.");
+        return;
+    }
     if (network.hosting()) {
-        if (kind==Packet::ready && mission==0 && body.empty()) {
-            startCoop(0);
-            return;
+        if (kind==Packet::skipRequest && body.empty() && mission==1 && view==View::coopLoading) {
+            skipRequested=true; openingSkipped=true; return;
         }
         if (kind==Packet::controls && coopStarted) {
             Controls controls;
@@ -120,6 +135,19 @@ void App::receiveCoop(std::span<const uint8_t> data) {
             if (valid) scheduleConfirmed=true;
         }
     } else {
+        if (kind==Packet::skipOpening && mission==1 && view==View::coopLoading) {
+            valid=net::decodeTiming(body,timing) && timing.mission==mission &&
+                  timing.first>filmAt && timing.first<=hostClock.estimate(local)+5000 &&
+                  timing.second==0;
+            if (valid) {
+                deployAt=timing.first;
+                openingSkipped=true;
+                loadingMusic=true;
+                audio.track("");
+            }
+            if (!valid) network.fail("Invalid prologue skip timing.");
+            return;
+        }
         if (kind==Packet::epilogue && coopStarted && view==View::epilogue && !epilogueAt) {
             valid=net::decodeTiming(body,timing) && timing.mission==mission && timing.first>0 && timing.second==0;
             if (valid) epilogueAt=timing.first;
@@ -138,7 +166,10 @@ void App::receiveCoop(std::span<const uint8_t> data) {
                 mission=generation;
                 Save loadout;
                 loadout.difficulty=level; loadout.cleared=index;
-                game.startCoop(index,loadout);
+                loadout.character=remoteCharacter;
+                valid=characterLocked && remoteLocked && remoteCharacter>=0;
+                if (!valid) { network.fail("Missing operative lock-in before deployment."); return; }
+                game.startCoop(index,loadout,coopCharacter);
                 prepareCoop();
                 probeHost();
             }
@@ -185,8 +216,6 @@ void App::pollCoop(float dt) {
     if (coopStarted && !network.hosting()) netInterpolation=clamp(netInterpolation+dt/net::snapshotInterval);
     const auto prior=network.state();
     network.poll();
-    if (network.state()==net::Session::State::connected && prior!=network.state() && !network.hosting())
-        network.send(net::Packet::ready);
     for (const auto& data:network.receive()) {
         receiveCoop(data);
         if (network.state()==net::Session::State::idle) break;
@@ -241,6 +270,17 @@ void App::loadCoop() {
     if (!filmAt || !scheduleConfirmed) return;
     if (mission==1 && hostTime>=filmAt) {
         film=std::min(net::openingDuration,hostTime-filmAt)/1000.f;
+        if (skipRequested && network.hosting() && scheduleConfirmed) {
+            const auto earlier=net::now()+950;
+            if (earlier<deployAt) {
+                deployAt=earlier;
+                network.send(net::Packet::skipOpening,net::encodeTiming({mission,deployAt,0}));
+            }
+            skipRequested=false;
+            openingSkipped=true;
+            loadingMusic=true;
+            audio.track("");
+        }
         if (!loadingMusic) {
             audio.track("coop-intro",false,film);
             loadingMusic=true;
@@ -342,5 +382,24 @@ void App::showCoopOutcome() {
     audio.event(game.mode==Mode::complete?"complete":"failure");
     if (game.mode==Mode::complete) beginEpilogue();
     else show(View::failed);
+}
+}
+
+namespace vl {
+void App::lockOperative() {
+    if (view!=View::multiplayer || network.state()!=net::Session::State::connected ||
+        mission!=0 || characterLocked || coopCharacter<0 || coopCharacter>=static_cast<int>(characters.size())) return;
+    const uint8_t choice=static_cast<uint8_t>(coopCharacter);
+    if (!network.send(net::Packet::operative,std::span<const uint8_t>(&choice,1))) return;
+    characterLocked=true;
+    if (network.hosting() && remoteLocked) startCoop(0);
+}
+void App::skipPrologue() {
+    if (view==View::intro) { launch(0); return; }
+    if (view!=View::coopLoading || mission!=1 || openingSkipped) return;
+    openingSkipped=true;
+    if (network.hosting()) skipRequested=true;
+    else if (!network.send(net::Packet::skipRequest))
+        leaveCoop("Could not send the prologue skip request.");
 }
 }

@@ -125,7 +125,7 @@ std::optional<Save> Storage::get(int slot) const {
     constexpr int max=std::numeric_limits<int>::max();
     s.score=integer(obj,"score",0,0,max);
     s.credits=integer(obj,"credits",0,0,max);
-    s.character=integer(obj,"character",0,0,2);
+    s.character=integer(obj,"character",0,0,int(characters.size())-1);
     s.difficulty=integer(obj,"difficulty",1,0,2);
     s.updated=integer(obj,"updated",0,0,std::numeric_limits<int64_t>::max());
     const int w=integer(obj,"equipped",0,0,int(weaponCount)-1);

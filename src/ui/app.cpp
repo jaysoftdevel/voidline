@@ -21,7 +21,12 @@ void App::show(View v) {
     view=v; focus=-1; buttons.clear();
     worldFrame=mouseAiming=mouseMoved=false;
     // A new mission or a resumed view starts from a centered camera.
-    if (v==View::play) cameraTilt={};
+    if (v==View::play) {
+        cameraTilt={};
+        // Menu presses must not carry into the mission (solo or co-op).
+        // Re-arm fire only after the initiating click / button is released.
+        input.suppressUntilReleased(Act::fire);
+    }
     if (v!=View::multiplayer) SDL_StopTextInput();
     SDL_ShowCursor(v==View::play?0:1);
     if (v!=View::play && v!=View::pause && v!=View::intro && v!=View::failed && v!=View::epilogue) audio.track("menu");
@@ -112,6 +117,25 @@ Vec App::aimPoint() const {
 void App::event(const SDL_Event& e) {
     input.event(e);
     if (e.type==sdl::quit) { running=false; return; }
+    // The logo sequence owns its input. Skipping it can never click a menu item
+    // or fire a weapon on the first frame of gameplay.
+    if (view==View::splash) {
+        if (e.type==sdl::mouseDown || e.type==sdl::keyDown ||
+            (e.type==sdl::controllerButton && e.cbutton.state)) {
+            show(View::menu);
+            input.suppressUntilReleased(Act::fire);
+        }
+        return;
+    }
+    if ((view==View::intro || (view==View::coopLoading && mission==1 && loadingMusic)) &&
+        (e.type==sdl::mouseDown || (e.type==sdl::keyDown && !e.key.repeat &&
+          (e.key.keysym.scancode==sdl::key::esc || e.key.keysym.scancode==sdl::key::space || e.key.keysym.scancode==sdl::key::enter)) ||
+         (e.type==sdl::controllerButton && e.cbutton.state))) {
+        // A prologue skip owns the input edge; it cannot click through into gameplay.
+        skipPrologue();
+        input.suppressUntilReleased(Act::fire);
+        return;
+    }
     if (e.type==sdl::window && e.window.event==sdl::focusLost) {
         if (view==View::play && !coopStarted) closeAction();
         if (coopStarted) { mouseAiming=mouseMoved=false; pendingControls={}; }
@@ -158,6 +182,12 @@ void App::update(float dt) {
     clock+=dt; notice=std::max(0.f,notice-dt);
     if (script) script(scriptFrame++);
     input.poll();
+    if (view==View::splash) {
+        startup+=dt;
+        if (startup>=3.2f) show(View::menu);
+        audio.pace(1);
+        return;
+    }
     const bool followingMouse=settings.motion && view==View::play && !coopPaused && mouseAiming &&
         !input.aimStickActive();
     // Letterbox margins hold the nearest edge angle until the pointer leaves the window.
@@ -195,6 +225,7 @@ void App::update(float dt) {
 void App::draw() {
     buttons.clear();
     switch (view) {
+    case View::splash: splash(); break;
     case View::menu: menu(); break;
     case View::multiplayer: multiplayer(); break;
     case View::create: create(); break;
@@ -207,10 +238,10 @@ void App::draw() {
     case View::intro: cinematic(); break;
     case View::coopLoading: coopCinematic(); break;
     case View::epilogue: sectorCinematic(); break;
+    case View::cleared: levelSummary(); break;
     case View::play:
     case View::pause:
-    case View::failed:
-    case View::cleared: {
+    case View::failed: {
         const float alpha=coopStarted && !network.hosting()?netInterpolation:
             view==View::play?clamp(accumulator/step):1.f;
         r.drawWorld(game,settings.high,settings.motion,alpha,previousPlayer,previousCamera,

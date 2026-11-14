@@ -1,5 +1,5 @@
 #include "render/renderer.hpp"
-#include <fstream>
+#include <span>
 #include <stdexcept>
 
 
@@ -16,24 +16,23 @@ void png_image_free(PngImage*);
 
 
 namespace vl {
-Renderer::Texture Renderer::readTexture(const std::filesystem::path& path) {
+Renderer::Texture Renderer::readTexture(std::string_view path) {
     gl.ActiveTexture(GL_TEXTURE0);
-    std::ifstream in(path,std::ios::binary);
-    const std::vector<unsigned char> encoded{std::istreambuf_iterator<char>(in),{}};
-    if (encoded.empty()) throw std::runtime_error("Could not read "+path.string());
-    if (path.extension()==".png") {
+    const std::vector<uint8_t> encoded=assets.read(path);
+    if (encoded.empty()) throw std::runtime_error("Empty packaged image: "+std::string(path));
+    if (path.ends_with(".png")) {
         PngImage info{}; info.version=1;
         if (!png_image_begin_read_from_memory(&info,encoded.data(),encoded.size())) {
             const std::string error=info.message;
             png_image_free(&info);
-            throw std::runtime_error("PNG "+path.string()+": "+error);
+            throw std::runtime_error("PNG "+std::string(path)+": "+error);
         }
         info.format=3;
         std::vector<uint8_t> bytes(size_t(info.width)*info.height*4);
         if (!png_image_finish_read(&info,nullptr,bytes.data(),0,nullptr)) {
             const std::string error=info.message;
             png_image_free(&info);
-            throw std::runtime_error("PNG "+path.string()+": "+error);
+            throw std::runtime_error("PNG "+std::string(path)+": "+error);
         }
         const auto result=texture(info.width,info.height,bytes.data());
         png_image_free(&info);
@@ -41,7 +40,7 @@ Renderer::Texture Renderer::readTexture(const std::filesystem::path& path) {
     }
     int w=0,h=0;
     auto* rgba=WebPDecodeRGBA(encoded.data(),encoded.size(),&w,&h);
-    if (!rgba) throw std::runtime_error("Could not decode "+path.string());
+    if (!rgba) throw std::runtime_error("Could not decode "+std::string(path));
     const auto result=texture(w,h,rgba);
     WebPFree(rgba);
     return result;
@@ -50,8 +49,8 @@ Renderer::Texture& Renderer::asset(std::string_view name) {
     const auto it=images.find(name);
     if (it!=images.end()) return it->second;
     const std::string key(name);
-    auto path=assets/key;
-    if (!path.has_extension()) path+=".webp";
+    std::string path=key;
+    if (path.rfind('.',path.size())==std::string::npos) path+=".webp";
     return images.emplace(key,readTexture(path)).first->second;
 }
 } // namespace vl

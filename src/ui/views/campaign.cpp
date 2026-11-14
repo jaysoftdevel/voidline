@@ -12,7 +12,8 @@ void App::campaign() {
     r.cover(stage.art,{55,171,598,201},1.02f);
     r.gradient({55,171,598,201},hex(0x101920).alpha(.08f),hex(0x09121e).alpha(.79f));
     r.outline({55,171,598,201},hex(stage.accent).alpha(.69f));
-    label({70,317},"SECTOR "+digits(sector+1)+"   /   "+stage.threat,hex(stage.accent));
+    label({70,317},"SECTOR "+digits(sector+1)+"   /   "+stage.threat+
+        "   /   ROUTE "+std::to_string(int(stage.worldWidth)),hex(stage.accent));
     r.text({69,354},stage.name,39,white,true);
     r.gradient({671,171,474,201},hex(0x182c39),hex(0x101d29));
     r.outline({671,171,474,201},hex(0x465969));

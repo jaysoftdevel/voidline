@@ -9,12 +9,16 @@ using namespace vl;
 
 namespace {
 void cinematicTimelineAndGait() {
+    CHECK(story::cuts.size()==6);
+    CHECK(story::cuts.front().angle==story::Angle::establish);
+    CHECK(story::cuts.back().angle==story::Angle::aftermath);
     for (int i=0;i<static_cast<int>(story::cuts.size());++i) {
         CHECK(story::shotAt(story::cuts[i].at)==i);
+        CHECK(story::cuts[i].dialogue>=0 && story::cuts[i].dialogue<3);
         if (i>0) CHECK(story::shotAt(story::cuts[i].at-.001f)==i-1);
     }
     for (int i=0;i<sectorCount;++i) {
-        CHECK(story::duration(i)>story::cuts.back().at);
+        CHECK(story::duration(i)>story::cuts.back().at+5.f);
         CHECK(story::shotAt(story::duration(i))==static_cast<int>(story::cuts.size())-1);
     }
     for (float phase:{.05f,.24f,.51f,1.12f}) {

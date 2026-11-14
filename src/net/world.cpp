@@ -133,7 +133,7 @@ bool validOperative(const Game& game,const Operative& op,int character) {
         op.player.box.w>0 && op.player.box.h>0;
 }
 bool validEnemy(const Enemy& e) {
-    return e.kind>=EnemyKind::drone && e.kind<=EnemyKind::boss && e.maxHp>0 && e.woundCount>=0;
+    return e.kind>=EnemyKind::drone && e.kind<=EnemyKind::juggernaut && e.maxHp>0 && e.woundCount>=0;
 }
 }
 

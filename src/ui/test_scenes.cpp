@@ -1,6 +1,9 @@
 #include "ui/app.hpp"
+#include "game/detail.hpp"
 #include "ui/common.hpp"
 #include "ui/sector_story.hpp"
+#include "ui/coop_story.hpp"
+#include <cstdlib>
 
 using namespace vl::ui;
 
@@ -10,6 +13,36 @@ void App::sceneForTest(std::string_view scene) {
         save.cleared=sectorCount-1; sector=sectorCount-1; showMap(); return;
     }
     if (scene=="menu") { show(View::menu); return; }
+    if (scene=="splash") { show(View::splash); startup=0; return; }
+    if (scene.rfind("operative",0)==0) {
+        const int chosen=scene.size()>9?std::clamp(int(scene[9]-'0'),0,5):0;
+        save.character=chosen; save.cleared=3;
+        launch(0); game.entry=0; game.enemies.clear(); game.camera=0;
+        return;
+    }
+    if (scene=="summary") {
+        launch(4); game.score=4720; game.kills=31; game.time=387.4f;
+        show(View::cleared); return;
+    }
+    if (scene=="multiplayer-roster") {
+        openMultiplayer(); lobby=Lobby::host;
+        coopCharacter=5; remoteCharacter=3; remoteLocked=true; rosterPreview=true;
+        network.host("127.0.0.1",0);
+        return;
+    }
+    if (scene.rfind("prologue-",0)==0) {
+        const int shot=std::clamp(std::atoi(std::string(scene.substr(9)).c_str()),0,6);
+        film=story::opening[shot].at+.6f;
+        show(View::intro);
+        return;
+    }
+    if (scene=="multiplayer-join") {
+        openMultiplayer(); lobby=Lobby::join; return;
+    }
+    if (scene=="multiplayer-host") {
+        openMultiplayer(); lobby=Lobby::host;
+        network.host("127.0.0.1",0); return;
+    }
     if (scene=="create") { newGame(); return; }
     if (scene=="controls") {
         settings.diagnostics=false;
@@ -31,10 +64,12 @@ void App::sceneForTest(std::string_view scene) {
         const bool recover=scene=="cinematic-recover";
         save.character=recover?1:0;
         launch(recover?7:1);
-        const float at=scene=="cinematic-arrival"?1.0f:
-            scene=="cinematic-close"?6.6f:
-            scene=="cinematic-detail"?10.8f:
-            scene=="cinematic-recover"?6.6f:14.4f;
+        const float at=scene=="cinematic-establish"?1.4f:
+            scene=="cinematic-arrival"?5.8f:
+            scene=="cinematic-close"?12.0f:
+            scene=="cinematic-detail"?17.8f:
+            scene=="cinematic-recover"?12.0f:
+            scene=="cinematic-aftermath"?28.3f:23.0f;
         film=at;
         show(View::epilogue);
         return;
@@ -47,6 +82,25 @@ void App::sceneForTest(std::string_view scene) {
     if (scene.rfind("stand",0)==0) {
         prepare(0,scene.size()>5?scene[5]-'0':0);
         game.pointer({700,420});
+        return;
+    }
+    if (scene=="enemy-roster") {
+        save.cleared=19; save.equipped=0;
+        launch(0); game.entry=0; game.camera=0;
+        game.player.box.x=92; game.player.box.y=505-game.player.box.h;
+        constexpr EnemyKind kinds[]{EnemyKind::scavenger,EnemyKind::sniper,EnemyKind::bulwark,
+                                    EnemyKind::interceptor,EnemyKind::juggernaut};
+        for (size_t i=0;i<game.enemies.size();++i) {
+            auto& e=game.enemies[i];
+            if (i>=5) { e.alive=false; continue; }
+            const auto& size=spec(kinds[i]);
+            const float x=245.f+i*186.f;
+            const float y=kinds[i]==EnemyKind::interceptor?407.f:505.f-size.h;
+            e.kind=kinds[i]; e.box={x,y,size.w,size.h};
+            e.origin={x,y}; e.base=505; e.patrol=0; e.speed=0; e.damage=0;
+            e.reach=0; e.facing=-1; e.turn=-1; e.warning=0; e.timer=999;
+            e.hp=e.maxHp=size.hp;
+        }
         return;
     }
     if (scene.rfind("gallery",0)==0) {

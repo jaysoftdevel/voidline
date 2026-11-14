@@ -20,6 +20,9 @@ public:
     void event(const SDL_Event& event);
     void poll();
     void reset();
+    // Ignore an action inherited from a menu until its physical button/key is released.
+    // This stops the Start Campaign / Skip Scene click from firing the first shot.
+    void suppressUntilReleased(Act action);
     // Holds a scancode in software. Used for scripted scenes and tests, and combined with real input.
     void inject(int scancode, bool down);
     void injectButtons(unsigned mouseMask);
@@ -53,6 +56,7 @@ private:
     static size_t index(Act a) { return static_cast<size_t>(a); }
     std::array<Binding, actCount> bindings{};
     std::array<State, actCount> state{};
+    std::array<bool, actCount> suppressed{};
     std::array<U8, sdl::scancodes> synthetic{}, fromEvents{};
     std::vector<int> held;
     unsigned syntheticMouse = 0;

@@ -55,7 +55,7 @@ Options parseOptions(int argc,char** argv) {
                 "Move: A/D or arrows. Jump (twice to flip): Space, W, Up or K. Sprint: Shift. Crouch: C, S, Down or Ctrl.\n"
                 "Fire: mouse, F or J. Bullet time: Q, X or right mouse. Reload: R. Weapons: 1-7, E or mouse wheel.\n"
                 "Pause: Esc or P. Fullscreen: F11. A gamepad is supported when connected.\n"
-                "Diagnostics: --smoke-test [--frames N] [--width PIXELS] [--scene 1..20|map|menu|create|armory|intro|cinematic-arrival|cinematic-close|cinematic-detail|cinematic-recover|stand[0-2]|gallery[0-2]|walk|flip|slow] [--screenshot PATH.ppm]\n";
+                "Diagnostics: --smoke-test [--frames N] [--width PIXELS] [--scene 1..20|splash|enemy-roster|operative0..5|map|summary|multiplayer-join|multiplayer-roster|prologue-N|menu|create|armory|intro|cinematic-arrival|cinematic-close|cinematic-detail|cinematic-recover|stand[0-2]|gallery[0-2]|walk|flip|slow] [--screenshot PATH.ppm]\n";
             std::exit(0);
         } else if (arg=="--version") {
 #ifdef _WIN32
@@ -67,7 +67,7 @@ Options parseOptions(int argc,char** argv) {
         } else throw std::runtime_error("Unknown option "+arg+" (see --help).");
     }
     if (result.frames<0 || (result.smoke && result.frames==0)) throw std::runtime_error("Frame count must be positive.");
-    const bool named=result.scene=="map" || result.scene=="menu" || result.scene=="create" || result.scene.rfind("armory",0)==0 || result.scene=="intro" || result.scene.rfind("cinematic-",0)==0 ||
+    const bool named=result.scene=="map" || result.scene=="summary" || result.scene=="multiplayer-join" || result.scene=="multiplayer-host" || result.scene=="multiplayer-roster" || result.scene.rfind("prologue-",0)==0 || result.scene=="menu" || result.scene=="splash" || result.scene=="enemy-roster" || result.scene.rfind("operative",0)==0 || result.scene=="create" || result.scene.rfind("armory",0)==0 || result.scene=="intro" || result.scene.rfind("cinematic-",0)==0 ||
         result.scene=="flip" || result.scene=="slow" || result.scene.rfind("stand",0)==0 || result.scene.rfind("gallery",0)==0 || result.scene=="controls" || result.scene.rfind("hit",0)==0 || result.scene.rfind("arms",0)==0 || result.scene.rfind("event",0)==0 || result.scene=="walk" || result.scene=="boss";
     if (result.smoke && !named) {
         int sector=0;

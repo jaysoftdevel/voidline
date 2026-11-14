@@ -98,13 +98,14 @@ inline constexpr std::array<Chapter,sectorCount> chapters{{
         {Voice::partner,"Leaving the relay on. If anybody comes back, there'll be a light to follow."}}}}
 }};
 
-enum class Angle { arrival, close, detail, reaction, aftermath };
+enum class Angle { establish, arrival, close, detail, reaction, aftermath };
 struct Cut { Angle angle; float at; int dialogue; };
 inline constexpr std::array cuts{
-    Cut{Angle::arrival,0,0}, Cut{Angle::close,5.6f,1}, Cut{Angle::detail,9.8f,1},
-    Cut{Angle::reaction,13.4f,2}, Cut{Angle::aftermath,19.9f,2}
+    Cut{Angle::establish,0,0}, Cut{Angle::arrival,4.4f,0},
+    Cut{Angle::close,10.2f,1}, Cut{Angle::detail,15.9f,1},
+    Cut{Angle::reaction,21.1f,2}, Cut{Angle::aftermath,26.6f,2}
 };
-inline constexpr float duration(int index) { return index==sectorCount-1?27.f:24.4f; }
+inline constexpr float duration(int index) { return index==sectorCount-1?36.f:33.2f; }
 inline constexpr int shotAt(float time) {
     int shot=0;
     while (shot+1<static_cast<int>(cuts.size()) && time>=cuts[shot+1].at) ++shot;

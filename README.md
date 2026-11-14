@@ -1,6 +1,6 @@
-# VOIDLINE 2.9.1
+# VOIDLINE 2.9.7
 
-VOIDLINE is a native C++ 2D shooter for Linux and Windows 11 with 20 sectors, three operatives, difficulty levels and an armory. Destroy the guardian in each sector and reach extraction to turn mission score into upgrade points and see the next part of the Vega-9 rescue story.
+VOIDLINE is a native C++ 2D shooter for Linux and Windows 11 with 20 sectors, six operatives, difficulty levels and an armory. Destroy the guardian in each sector and reach extraction to turn mission score into upgrade points and see the next part of the Vega-9 rescue story.
 
 ## Build and run
 
@@ -17,17 +17,17 @@ Building from source requires a C++20 compiler, CMake, and the SDL2, libwebp, li
 
 `./build.sh` always starts from an empty `build/` directory. It prints the host, toolchain, configuration, every compile step, warnings, artifact checks (size, linked libraries, asset counts) and the unit test results, with a per-phase timing summary. The full log is saved to `build.log`. Options: `--verbose` shows every compiler command, `--no-tests` skips the unit tests and `--debug` builds without optimization. Other arguments go to CMake, for example `-DVOIDLINE_LTO=OFF`.
 
-The executable is `build/voidline/voidline`. The build links `assets/` next to it. The game starts in fullscreen. Use `./run.sh --windowed` or F11 to switch window modes. Settings includes High and Performance rendering modes.
+The executable is `build/voidline/voidline`. The build creates `build/voidline/assets/game.vpak` with all artwork, fonts and sound recordings, and loads them directly from memory. A Windows build requires Python 3 to build the same media pack. No external media extraction utility is needed at runtime. Media bundling deters casual browsing, but is not cryptographic DRM: a determined user can recover packaged assets. The game starts in fullscreen. Use `./run.sh --windowed` or F11 to switch window modes. Settings includes High and Performance rendering modes.
 
-A successful build also stages a copyable runtime folder. On Linux it is `build/dist/VOIDLINE`. On Windows it is `build-windows/dist/VOIDLINE` after a Release build. Ship that folder as a unit. Its build-size report lists the executable, assets, libraries and total payload. Testers can launch from that folder with `run.sh` or `run.bat`.
+A successful build also stages a copyable runtime folder. On Linux it is `build/dist/VOIDLINE`. On Windows it is `build-windows/dist/VOIDLINE` after a Release build. Ship **only that folder** as a unit: it contains a single opaque asset archive, not the original image/sound files. Its build-size report lists the executable, assets, libraries and total payload. Testers can launch from that folder with `run.sh` or `run.bat`.
 
 Progress lives in `${XDG_DATA_HOME:-$HOME/.local/share}/voidline/campaign.json`. Use `--save-file /path/to/campaign.json` for a custom location. Campaigns, settings, best sector records and armory purchases persist. Field checkpoints are available for retries during the current mission.
 
 ## Two-player co-op
 
-1. Both players launch VOIDLINE 2.9.0 or later and open **Multiplayer**.
+1. Both players launch VOIDLINE **2.9.7** and open **Multiplayer**.
 2. On the host, choose **Host Game**, select a difficulty, and select **Generate Session Key**. The lobby waits for player 2. Copy the key and share it with your partner.
-3. On the other computer, choose **Join Game**, paste the key, and select **Connect**. Once both computers load the mission, they play the shared opening cinematic and deploy together in **Chapter 1, The Descent**.
+3. On the other computer, choose **Join Game**, paste the key, and select **Connect**. After host approval, **each player selects and locks in a character** from the six-operative roster. The mission does not start until both lock in. The shared prologue plays before deployment and either player can request to skip it for both. They deploy together in **Chapter 1, The Descent**.
 
 Use a local network or an IPv4 VPN. The host menu fills in a local IPv4 address. Edit it before generating the key if your partner reaches you through a different interface. The key contains that address and a random session identifier. The connection goes directly to the host on TCP port 38274. A key alone cannot connect through an unreachable address, and the game has no relay or matchmaking server.
 
@@ -35,13 +35,37 @@ Each player controls a separate operative and camera. The host simulates enemies
 
 The co-op menu leaves the mission running for your partner. Closing the session or disconnecting returns the other player to Multiplayer. Co-op progress lasts for the session and unlocks equipment as the team clears sectors. Solo save slots remain independent.
 
+## Enemy escalation and new operatives (v2.9.5)
+
+Five enemy roles join the original five, with deterministic introductions and increasing late-game frequency. **Scavengers** (sector 1 onward) are weak fast melee flankers; **marksmen** (sector 4 onward) telegraph accurate long-range fire; **bulwarks** (sector 7 onward) use a front-facing shield that reduces incoming damage; **interceptors** (sector 10 onward) fly in fast evasive patterns and fire twin shots; **juggernauts** (sector 15 onward) are heavily armored infantry with seven-projectile suppression volleys. Higher sectors replace an increasing proportion of the appropriate ground or airborne enemy placements while retaining guardian encounters, checkpoint positions, route lengths and total placements.
+
+The six selectable operatives are Mara Voss, Iona Rook, Kade Vale, **Jax Mercer** (male, reinforced breacher suit), **Darius Cole** (male, fast helmeted recon ranger) and **Sera Nyx** (female, ammunition specialist). All six have distinct armor palettes, character portraits, suit integrity/movement values and starting ammo capacity where applicable. New portraits are original modifications of the existing project portrait art and are included in this update. New campaigns use a 2-by-3 operative selector; existing saves and the three save slots remain valid. Multiplayer world snapshots accept the new operative and enemy IDs (use matching v2.9.6 builds for co-op).
+
+On startup, VOIDLINE now plays a **3.2-second animated signal-acquisition splash** with radar rings, moving grid, scan light and startup progress. Any key, click or controller press skips directly to the menu without triggering a menu action. This splash animation does **not** change the intentionally static story cutscenes in v2.9.4.
+
+## Two-page cutscenes and Windows/Linux co-op (v2.9.6)
+
+After clearing a sector, the **first page** now shows one static, painted environment picture with the complete three-line chapter story. No live character models, camera animation, or animated cutscene overlays are rendered. Select **Level Summary** (or press Esc) to move to **page two**, which gives mission score, targets defeated, completion time, and sector progress. The story page also advances after its reading interval. In co-op the host advances both players together. The separate animated *startup splash* is unchanged; story sequences remain static.
+
+Linux and Windows use the same C++ simulation, enemy and operative types, 120 Hz host-side update logic, binary world-state format, packet framing, protocol version, and shared gameplay assets. The Windows build uses Visual Studio/vcpkg as described in `docs/WINDOWS.md`. **Version 2.9.6 clients only** can play together; older VL4 session keys are not compatible with the updated approval handshake. This release was built/tested on Linux; a real Windows build and Windows-to-Linux playtest are still required before treating cross-platform operation as verified.
+
+**Host a LAN mission:** Select Multiplayer → Host Game, choose the IPv4 address, and generate a session key. The host listens on TCP port **38274** (default) and advertises discovery on UDP **38275**. Other players can still connect by typing the private session key, even when LAN broadcast is unavailable. **Join a LAN mission:** Select Multiplayer → Join Game → **Find Local Hosts**. A list of discoverable games appears with the computer name and IP address; choose **Request Join**. Every incoming request, whether from LAN discovery or the session key, pauses at a host prompt showing the requester's IP address. The host must explicitly **Accept** or **Decline**. Rejected guests see a clear refusal message, and the host can accept another candidate. Join requests expire after 30 seconds without approval. The host stops advertising as soon as its two-player session fills.
+
+LAN discovery broadcasts only a version tag and a public address/port; it never publishes the session key or sends gameplay state over UDP. Gameplay uses the existing authoritative TCP stream. LAN broadcast is usually restricted to one network segment; VPNs, guest Wi-Fi isolation, router/firewall policies, and multiple network interfaces may block it. Use the session key as fallback. These connections are not end-to-end encrypted; host only on networks you trust.
+
+## Expanded campaign (v2.9.3)
+
+All twenty sectors now grow progressively longer, from 4,030 to 19,768 world units. The original five hand-authored missions gain one to five additional combat/traversal sections **before** their existing guardian arenas. Later missions are assembled from biome-specific sections in deliberately staggered orders, with more lifts, broken paths, crossfire, vents, explosives, patrols and elite units. Enemy placements progress from 11 in Sector 1 to 92 in Sector 20, while supplies and checkpoints scale with the length. Stage lengths and encounter counts increase strictly with each new sector. The campaign map displays route length in world units. All of this works with existing campaign saves, including co-op and checkpoints.
+
 ## Chapter cutscenes
 
-Version 2.9.1 refines character animation with acceleration/braking curves that preserve foot-to-ground movement, subtler breathing and weight transfer, and additional close-up suit plating, facial shading and equipment detail. Scene objects now draw behind the operatives, and subtitle mattes occupy the lower safe area instead of darkening the characters. Shot dissolves hold the outgoing frame's final pose.
+Version 2.9.4 originally presented the opening and between-level story as **static illustrated panels**. Actors, camera, effects and transitions do not animate within a panel. Text is displayed immediately, and discrete page markers replace moving progress bars. Panels automatically advance to retain all dialogue, and Skip still works. The Start Campaign / Skip Scene mouse click is now suppressed until released when gameplay starts, preventing an unintended first shot, including in multiplayer.
 
-Every successful extraction plays a five-shot scene before the sector results. The selected operative appears in solo, and both operatives appear together in co-op. The story runs from the first distress call to Vega-9's evacuation. Scenes show flooded passages clearing, survivors boarding, records being recovered and the cutter lifting away. The cinematics use captioned dialogue, in-engine character animation and a four-part score.
+Version 2.9.3 extends the five-shot sequence to six cinematic shots, introducing a wide establishing view of the sector objective before the operative enters. Scene transitions hold the outgoing pose, while a slower camera dolly and synchronized acceleration / braking keep footsteps grounded. Close-up gestures and the objective reveal have been retimed so the acting and environmental action breathe. The final sequence lasts 33.2 seconds (36 seconds for the finale) and remains skippable. Version 2.9.1 refined character animation with acceleration/braking curves that preserve foot-to-ground movement, subtler breathing and weight transfer, and additional close-up suit plating, facial shading and equipment detail. Scene objects now draw behind the operatives, and subtitle mattes occupy the lower safe area instead of darkening the characters. Shot dissolves hold the outgoing frame's final pose.
 
-Select **Skip Scene** or press **Esc** to continue. In co-op the host controls skipping for both players. Players on Linux and Windows can join the same session using VL4 keys. Solo progress is saved when the sector clears, before playback starts.
+Until v2.9.5 every successful extraction played a six-shot scene with the operative composited over the background. In v2.9.6 this has been replaced by the two-page story/summary described above. The story runs from the first distress call to Vega-9's evacuation. The restored story artwork conveys the rescue storyline through static environments and chapter dialogue. No characters are drawn in the story panel.
+
+Select **Level Summary** or press **Esc** to continue. In co-op the host controls skipping for both players. Matching Linux and Windows builds use VL5 keys, or LAN discovery with host approval. Solo progress is saved when the sector clears, before playback starts.
 
 ## Controls
 
@@ -135,9 +159,17 @@ Each folder under `src/` that has sources becomes one static library (game, serv
 
 ## Diagnostics
 
-Render a short, deterministic scene through the renderer with an offscreen SDL driver. Scenes are `cinematic-arrival`, `cinematic-close`, `cinematic-detail`, `cinematic-recover`, `1` to `20`, `map`, `menu`, `create`, `armory`, `intro`, `stand0` to `stand6`, `flip` and `slow`, `walk`, `arms`, `armsrun`, `boss`, `controls`, `hit0` to `hit4` (one enemy type shot to death) and `gallery0` to `gallery2`. Add `--follow` to crop the screenshot around the action.
+Render a short, deterministic scene through the renderer with an offscreen SDL driver. Scenes include `splash`, `enemy-roster`, `operative0` to `operative5`, and `cinematic-establish`, `cinematic-arrival`, `cinematic-close`, `cinematic-detail`, `cinematic-reaction`, `cinematic-aftermath`, `cinematic-recover`, `1` to `20`, `map`, `menu`, `create`, `armory`, `intro`, `stand0` to `stand6`, `flip` and `slow`, `walk`, `arms`, `armsrun`, `boss`, `controls`, `hit0` to `hit4` (one enemy type shot to death) and `gallery0` to `gallery2`. Add `--follow` to crop the screenshot around the action.
 
 ```bash
 SDL_VIDEODRIVER=offscreen SDL_AUDIODRIVER=dummy \
   ./run.sh --smoke-test --windowed --scene slow --frames 90 --screenshot slow.ppm
 ```
+
+## Animated prologue and bundled assets (v2.9.7)
+
+A new seven-shot 31.5-second prologue explains the Europa colony, the Tideworks flood, the Helix machine lockdown, Neri's distress call, the Aster rescue cutter, and the mission to restore the Terminus uplink. Every shot has continuous camera moves and procedural animated signal, radar, atmospheric dust and rescue-ship effects. Solo and co-op prologues can be skipped by mouse, Enter, Space or Escape; in co-op either player can skip and the host advances the scheduled deployment for both. The animated startup splash is unchanged; **post-level story stills and the following level-summary page remain static**. No operative model is superimposed on the prologue artwork.
+
+The `scripts/pack-assets.py` tool builds `game.vpak` (all original artwork, audio, font atlases and font metrics) for both platforms. Runtime image/audio decoders now read the archive in memory, including OGG music through libsndfile virtual I/O. The copyable tester runtime contains **only `assets/game.vpak`**, the executable, libraries, launch scripts and required license notices. Source media remain in the developer tree to allow editing/repacking; do not distribute the source tree as the tester runtime. The package is obfuscated to stop direct opening as a picture/audio track, not encrypted DRM.
+
+The multiplayer protocol is now `VL6`; old `VL5` (v2.9.6) game builds cannot connect. Windows and Linux use the same byte-level session packets, player choice handshake and world serialization. Native Windows compilation and an actual mixed-OS co-op session must still be checked on Windows hardware.

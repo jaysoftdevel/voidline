@@ -1,5 +1,6 @@
 #pragma once
 #include "content/content.hpp"
+#include "content/asset_pack.hpp"
 #include "game/entities.hpp"
 #include "platform/sdl.hpp"
 #include <array>
@@ -26,7 +27,7 @@ private:
         float left=0,right=0,stereo=1,filter=1,filteredLeft=0,filteredRight=0;
     };
     struct Track { const Sample* sample=nullptr; double position=0; float fade=0; bool loop=true; };
-    std::filesystem::path assets;
+    AssetPack assets;
     std::unordered_map<std::string,std::vector<Sample*>> variations;
     std::unordered_map<std::string,size_t> cursors;
     std::unordered_map<std::string,Sample> samples;

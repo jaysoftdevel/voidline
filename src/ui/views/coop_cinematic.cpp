@@ -87,7 +87,7 @@ void landing(Renderer& r,float time,Color tint) {
 }
 
 void App::coopCinematic() {
-    if (mission!=1 || !loadingMusic) {
+    if (mission!=1 || !loadingMusic || openingSkipped) {
         const auto& stage=*game.stage;
         r.cover(stage.art,screen,1.04f,{.52f,.48f},hex(0x91aab9));
         r.gradient(screen,hex(0x061018).alpha(.17f),hex(0x060b12).alpha(.94f));
@@ -95,16 +95,18 @@ void App::coopCinematic() {
         r.text({68,482},stage.name,53,white,true);
         const size_t assets=story::missionPreloads+(mission==1?story::opening.size():0);
         const auto status=preloadStep<assets
-            ?"Loading the mission":scheduleConfirmed?"Deployment confirmed":deployAt?"Confirming deployment":"Waiting for both operatives";
+            ?"Loading the mission":openingSkipped?"Prologue skipped  /  synchronizing deployment":scheduleConfirmed?"Deployment confirmed":deployAt?"Confirming deployment":"Waiting for both operatives";
         r.text({72,519},status,18,pale);
         button({1008,516,136,42},"LEAVE",[this]{leaveCoop();});
         return;
     }
 
     drawOpening(true);
+    button({995,528,160,35},"SKIP PROLOGUE",[this]{skipPrologue();});
 }
 
 void App::drawOpening(bool team) {
+    (void)team;
     int index=0;
     while (index+1<static_cast<int>(story::opening.size()) && film>=story::opening[index+1].at) ++index;
     const float duration=net::openingDuration/1000.f;
@@ -112,64 +114,71 @@ void App::drawOpening(bool team) {
         return (n+1==static_cast<int>(story::opening.size())?duration:story::opening[n+1].at)-story::opening[n].at;
     };
     const auto& shot=story::opening[index];
-    const float elapsed=std::max(0.f,film-shot.at);
-    const float reveal=smooth(elapsed/.55f);
-    const bool blend=index>0 && elapsed<.55f;
-    const auto render=[&](int n,float time,int layer) {
+    const auto render=[&](int n,int layer) {
         const auto& take=story::opening[n];
-        const float shotTime=settings.motion?time:length(n)*.55f;
+        const float shotTime=clamp(film-take.at,0.f,length(n));
         const float p=cinematicEase(shotTime/length(n));
         const Color tint=hex(take.tint);
         r.beginCinematic(layer);
-        r.cover(take.art,screen,mix(1.05f,1.15f,p),mix(take.start,take.end,p),
-                mix(hex(0xdce5ee),tint,.18f));
-        r.gradient(screen,hex(0x07111b).alpha(.21f),hex(0x080e17).alpha(.78f));
+        // Dolly/zoom is slow, continuous and tied to the shot's own time.
+        // No character models are drawn into the prologue; environmental
+        // artwork is the visual narrative, with procedural cinematic overlays.
+        r.cover(take.art,screen,mix(1.09f,1.19f,p),mix(take.start,take.end,p),
+                mix(hex(0xdce5ee),tint,.17f));
+        r.gradient(screen,hex(0x07111b).alpha(.18f),hex(0x080e17).alpha(.73f));
         dust(r,shotTime+take.at,tint,n>=3);
         switch (n) {
         case 0: radar(r,shotTime,tint); break;
         case 1: signal(r,shotTime,tint,true); break;
-        case 2: signal(r,shotTime,tint,false); break;
-        case 3: cutter(r,shotTime,tint); break;
-        case 4: radar(r,shotTime,tint); break;
-        case 5: {
-            landing(r,shotTime,tint);
-            const bool swap=team && !network.hosting();
-            const auto& lead=team?(swap?*game.teammate().character:*game.character):characters[save.character];
-            const float distance=231*cinematicCruise(shotTime,0.f,4.32f,.74f);
-            const float gait=settings.motion?cinematicWalk(shotTime,0.f,4.32f,.74f):0.f;
-            r.imagePlane("cinematic/deck",{-130,height},{width+125,height},{width+59,395},{-61,407},hex(0x667988));
-            r.softShaft({901,192},{573,496},335,tint.alpha(.71f));
-            const Vec feet{403.f+distance-p*36,478};
-            if (team) {
-                const auto& mate=swap?*game.character:*game.teammate().character;
-                r.cinematicOperative(mate,{.feet=feet-Vec{151,19},.scale=3.12f,.time=shotTime+1.05f,
-                    .walk=gait,.distance=distance+29,.look=-.16f,.light=hex(0xb1c2d7).energy(1.19f),.rim=tint,.carried={}});
+        case 2:
+            signal(r,shotTime,tint,true);
+            for (int i=0;i<5;++i) {
+                const float blink=.23f+.65f*(std::sin(shotTime*5+i*2.4f)>.4f);
+                r.rect({927.f+i*23,187,13,5},hex(0xf5a08b).alpha(blink));
             }
-            r.cinematicOperative(lead,{.feet=feet,.scale=3.88f,.time=shotTime,.walk=gait,.distance=distance,
-                 .look=mix(-.06f,-.36f,p),.light=mix(white,tint,.16f).energy(1.12f),.rim=tint,.carried={}});
+            break;
+        case 3: signal(r,shotTime,tint,false); break;
+        case 4: cutter(r,shotTime,tint); break;
+        case 5: radar(r,shotTime,tint); break;
+        case 6:
+            landing(r,shotTime,tint);
+            r.imagePlane("cinematic/deck",{-130,height},{width+125,height},
+                         {width+59,395},{-61,407},hex(0x667988));
+            r.softShaft({901,192},{573,496},335,tint.alpha(.45f));
             break;
         }
-        }
+        // Animated scan band and occasional emergency warning flash.
+        const float scan=std::fmod(shotTime*92+float(n)*107,560.f);
+        r.line({0,scan},{width,scan},1,tint.alpha(.055f));
+        if (n==2 && std::sin(shotTime*7)>.94f)
+            r.rect(screen,hex(0xea644d).alpha(.043f));
     };
-    if (blend) render(index-1,length(index-1),0);
-    render(index,elapsed,blend?1:0);
+    const float since=film-story::opening[index].at;
+    const float transition=cinematicEase(since/.72f);
+    if (index>0 && since<.72f) {
+        render(index-1,0);
+        render(index,1);
+    } else render(index,0);
     const Color tint=hex(shot.tint);
-    r.finishCinematic(settings.motion?film:0.f,smooth(film/.57f),tint,blend?reveal:1.f,
-        {.66f,.46f},index==5?.22f:.05f);
+    r.finishCinematic(film,1.f,tint,index>0 && since<.72f?transition:1.f,{.66f,.46f},index==6?.20f:.05f);
 
-    // The original full-width gradient covered the operative from the waist down.
-    // Reserve the dark matte for the subtitle band below the actors' boots.
+    // Story overlays live in a protected band below the image focal point.
     r.gradient({0,493,width,76},hex(0x071019).alpha(.08f),hex(0x070e16).alpha(.94f));
     r.rect({0,0,width,27},hex(0x05090e));
     r.rect({0,569,width,31},hex(0x05090e));
-    const auto& caption=blend && reveal<.5f?story::opening[index-1]:shot;
-    const float textAlpha=index==0?smooth(elapsed/.45f):blend?std::abs(reveal*2-1):1.f;
-    r.rect({63,392,37,2},tint.alpha(textAlpha));
-    label({64,413},caption.location,tint.alpha(textAlpha));
-    r.text({61,457},caption.title,41,white.alpha(textAlpha),true);
-    label({65,485},caption.speaker,tint.alpha(textAlpha));
-    copy({65,512},caption.line,817,20,pale.alpha(textAlpha));
-    r.rect({65,580,1070,2},hex(0x243440));
-    r.rect({65,580,1070*clamp(film/duration),2},tint);
+    const float captionOpacity=smooth(std::max(0.f,since-.38f)/.48f);
+    r.rect({63,392,37*captionOpacity,2},tint);
+    label({64,413},shot.location,tint.alpha(captionOpacity));
+    r.text({61,457},shot.title,41,white.alpha(captionOpacity),true);
+    label({65,485},shot.speaker,tint.alpha(captionOpacity));
+    copy({65,512},shot.line,817,20,pale.alpha(captionOpacity));
+    // Progress bar follows the actual time in every shot.
+    for (int page=0;page<static_cast<int>(story::opening.size());++page) {
+        constexpr float gap=5.f;
+        const float unit=(1070.f-gap*(story::opening.size()-1))/story::opening.size();
+        const float filled=page<index?1.f:page==index?clamp(since/length(index)):0.f;
+        r.rect({65+page*(unit+gap),580,unit,2},hex(0x243440));
+        if (filled>0) r.rect({65+page*(unit+gap),580,unit*filled,2},tint);
+    }
 }
 }

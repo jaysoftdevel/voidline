@@ -19,7 +19,7 @@ public:
     Rect followCrop(bool enabled) const;
     bool active() const { return running; }
 private:
-    enum class View { menu,multiplayer,create,load,campaign,armory,settings,controls,credits,intro,coopLoading,play,pause,failed,epilogue,cleared,confirm };
+    enum class View { splash,menu,multiplayer,create,load,campaign,armory,settings,controls,credits,intro,coopLoading,play,pause,failed,epilogue,cleared,confirm };
     struct Button { Rect box; std::function<void()> action; };
     SDL_Window* window;
     Renderer& r;
@@ -28,17 +28,20 @@ private:
     Game game;
     Settings settings;
     Save save;
-    View view=View::menu,settingsReturn=View::menu,confirmReturn=View::menu;
+    View view=View::splash,settingsReturn=View::menu,confirmReturn=View::menu;
     bool running=true,finished=false;
     int rebinding=-1;
     int slot=0,newSlot=1,newCharacter=0,newDifficulty=1,sector=0,weapon=0,focus=-1;
-    float clock=0,film=0,accumulator=0,previousCamera=0,notice=0;
+    float clock=0,film=0,accumulator=0,previousCamera=0,notice=0,startup=0;
     Player previousPlayer,previousPartner;
     net::Session network;
     std::string advertisedAddress,joinKey;
+    int lanPage=0;
     enum class Lobby {menu,host,join};
     Lobby lobby=Lobby::menu;
-    int coopDifficulty=1;
+    int coopDifficulty=1,coopCharacter=0,remoteCharacter=-1;
+    bool characterLocked=false,remoteLocked=false,rosterPreview=false;
+    bool openingSkipped=false,skipRequested=false;
     uint32_t mission=0,simulationTick=0,lastSnapshotTick=0;
     net::HostClock hostClock;
     net::Millis preparedAt=0,filmAt=0,deployAt=0,probeAt=0,lastRemoteInput=0,guestLead=0;
@@ -66,11 +69,14 @@ private:
     void deployCoop();
     void coopCinematic();
     void drawOpening(bool team);
+    void skipPrologue();
+    void lockOperative();
     void beginEpilogue();
     void updateEpilogue(float dt);
     void skipEpilogue();
     void endEpilogue();
     void sectorCinematic();
+    void levelSummary();
     void receiveCoop(std::span<const uint8_t> data);
     void sendWorld();
     Controls readCoopControls() const;
@@ -118,6 +124,7 @@ private:
     void copy(Vec at,std::string_view text,float maxWidth,float size=16,Color tint=hex(0xd1dbe4));
     void shell(std::string_view art);
     void heading(std::string_view tag,std::string_view title,std::string_view detail={});
+    void splash();
     void menu();
     void create();
     void load();

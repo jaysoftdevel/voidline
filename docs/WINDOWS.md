@@ -1,6 +1,6 @@
 # Windows 11 compatibility
 
-For cross-platform LAN sessions, use matching clients with the VL4 session protocol introduced in VOIDLINE 2.9.0.
+For cross-platform LAN sessions, use matching clients with the VL5 protocol and approval handshake in VOIDLINE 2.9.6. Older VL4 keys are rejected.
 
 ## Build
 
@@ -38,7 +38,13 @@ VOIDLINE submits its existing graphics pipeline through [Mesa's Direct3D 12 driv
 
 ## Saves and multiplayer
 
-Windows stores campaigns and settings in `%LOCALAPPDATA%\VOIDLINE\campaign.json`. To load an existing Linux save, copy its JSON file there or point `run.bat --save-file` at the copied file. To host on Windows, the other player must be able to reach your selected IPv4 address over TCP port 38274.
+Windows stores campaigns and settings in `%LOCALAPPDATA%\VOIDLINE\campaign.json`. To load an existing Linux save, copy its JSON file there or point `run.bat --save-file` at the copied file. To host on Windows, the other player must be able to reach your selected IPv4 address over **TCP 38274** (unless using a custom port). Open **UDP 38275 inbound and outbound** in Windows Defender Firewall for the *Find Local Hosts* feature. The game uses one shared C++ TCP protocol on both Windows and Linux, so matching 2.9.6 builds use the same message format and world-state simulation. Host approval is required for LAN requests and for key-based requests. A discovered host stops advertising after accepting player two.
+
+Typical flow: the host selects Multiplayer → Host Game → Generate Session Key. The guest selects Multiplayer → Join Game → Find Local Hosts → Request Join, or enters a VL5 session key. The host must choose Accept to let the guest deploy. Decline and timeout return the host to waiting. For a VPN or routed network that blocks broadcast, use the session key; there is no internet lobby server.
+
+LAN discovery and the TCP co-op protocol are not encrypted; use trusted networks. The program does not send the private session key in UDP discovery advertisements. A `VL5-` key embeds the host IP, port, and a random identifier, and should only be shared with intended players.
+
+**Cross-platform verification:** run the same 2.9.6 source revision on both operating systems; run `verify-windows.bat` and `ctest --test-dir build-windows -C Release --output-on-failure` on Windows. Host on Windows, join from Linux using Find Local Hosts, accept the request and play through a checkpoint and extraction. Repeat with Linux hosting and Windows joining, then repeat with the session key. This needs actual Windows hardware or a VM with networking; tests in this Linux development environment do not substitute for that run.
 
 ## Verification
 
@@ -48,3 +54,7 @@ run.bat --renderer warp --windowed --smoke-test --scene 20 --frames 3
 ```
 
 The first command reports the Direct3D device capabilities and renders a short hardware smoke test. The second checks the WARP path separately. The graphics mode and driver appear in the startup output. The 2.9.0 tester package was cross-compiled on Linux and checked for loader dependencies. Native Windows 11 rendering still needs a smoke test on the target hardware.
+
+### 2.9.7 packaged media and LAN character selection
+
+Install **Python 3** (available in PATH for CMake's `find_package(Python3)`) before building. CMake creates `build-windows/voidline/assets/game.vpak` instead of copying separate images and audio. Release staging copies only this archive and required license notices. Both players running protocol VL6 select their operatives independently and lock in after host approval. For LAN discovery, allow UDP 38275 and TCP 38274 on the host. Cross-OS multiplayer still requires final Windows hardware verification.

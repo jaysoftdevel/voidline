@@ -13,24 +13,29 @@ struct Shot {
     float at;
     Vec start,end;
 };
+// Original seven-scene prologue. Every scene is animated in the renderer, while
+// post-sector story pages intentionally remain static (per the player's preference).
 inline constexpr std::array opening{
-    Shot{"orbital","VEGA-9  /  YEAR 2187","A city below the ice","COLONY ARCHIVE",
-         "Eleven thousand people came here to mine ice. In the dark season, the heat from the mines kept the whole colony alive.",
-         0x85b6e3,0,{.25f,.39f},{.68f,.54f}},
-    Shot{"tideworks","TIDEWORKS  /  SHIFT 63","The night the pumps stopped","SHIFT LOG  /  02:13",
-         "When the coolant pumps failed, Helix sealed the transit shafts. It diverted the last power to the ore lifts and cut every civilian transmitter.",
-         0x6eced6,5.2f,{.72f,.46f},{.39f,.60f}},
-    Shot{"overgrowth","RESEARCH DOME  /  LAST CIVILIAN SIGNAL","A voice from below","DISTRESS RECORDING",
-         "We got the children down to the old mine. The machines are guarding the stairs. If you hear this, get the relay back on.",
-         0x9bd6a6,10.5f,{.34f,.54f},{.66f,.42f}},
-    Shot{"cinematic/sky","RESCUE CUTTER  /  FINAL APPROACH","One way through","RESCUE COMMS",
-         "Follow the high route until you see the mining lift. The sentries below are still active. Keep a channel open.",
-         0xf1a170,15.9f,{.73f,.47f},{.42f,.54f}},
-    Shot{"terminus","ORBITAL RELAY  /  BLACKOUT","Bring the relay back","RESCUE COMMS",
-         "The relay will give the evacuation ships a way in. The only route is from below, past Mule-7.",
-         0xadc2fb,21.1f,{.35f,.41f},{.68f,.51f}},
-    Shot{"descent","LOWER MINE  /  INSERTION","Chapter 1. The Descent","TEAM COMMS",
-         "Landing lights ahead. Check your suit and stay on comms.",
-         0xf4af7b,26.1f,{.42f,.58f},{.62f,.49f}}
+    Shot{"orbital","VEGA-9  /  EUROPA ORBIT  /  2187","The last warm city","COLONY RECORD  /  ARCHIVE 01",
+         "Under Europa's ice, eleven thousand colonists built a city around the deep mines. The reactors and the pumps kept the shelters alive.",
+         0x87bded,0,{.29f,.38f},{.65f,.52f}},
+    Shot{"tideworks","TIDEWORKS  /  DARK SHIFT 63","When the pumps went silent","CIVILIAN EMERGENCY CHANNEL",
+         "At 02:13 the coolant pumps stopped. Floodwater entered the workers' corridors. Automated doors sealed, trapping families below ground.",
+         0x6ad5e0,4.5f,{.76f,.48f},{.34f,.59f}},
+    Shot{"cinematic/relay","HELIX CONTROL  /  TRANSIT SHUTDOWN","The order came from inside","RECOVERED MACHINE LOG",
+         "Helix diverted the colony's remaining power to the ore lifts. Rescue beacons were suppressed. Security machines began hunting survivors.",
+         0xd78d77,9.0f,{.29f,.49f},{.69f,.46f}},
+    Shot{"overgrowth","RESEARCH DOME  /  LAST TRANSMISSION","A voice beneath the ice","DR. NERI  /  DISTRESS RECORDING",
+         "We're in the old mine with the children. We have six hours of heat left. Find the uplink. Please tell the ships we're still here.",
+         0xa4e0a9,13.5f,{.30f,.55f},{.72f,.38f}},
+    Shot{"cinematic/sky","RESCUE CUTTER ASTER  /  FINAL APPROACH","One ship answered","ASTER FLIGHT DECK",
+         "A rescue cutter broke through the radio silence. Its crew could land one operative team, but the sealed orbital relay kept evacuation ships away.",
+         0xf5aa78,18.0f,{.79f,.41f},{.42f,.56f}},
+    Shot{"terminus","TERMINUS  /  ORBITAL UPLINK","Twenty sectors to daylight","MISSION COMMAND",
+         "Reach the old relay from the mine floor, unlock the lifts and open the sky. Every sector between you and Terminus is still defended.",
+         0xb5baff,22.5f,{.38f,.42f},{.68f,.52f}},
+    Shot{"descent","LOWER MINE  /  INSERTION POINT","Chapter 1. The Descent","TEAM COMMS",
+         "The cutter is leaving. The air is thin, the machines are awake, and someone below is waiting. Move out. Bring them home.",
+         0xffc189,27.0f,{.44f,.57f},{.63f,.48f}}
 };
 }

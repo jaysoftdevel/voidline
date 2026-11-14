@@ -5,7 +5,7 @@
 
 namespace vl::net {
 namespace {
-constexpr std::string_view prefix="VL4-";
+constexpr std::string_view prefix="VL6-";
 constexpr uint8_t heartbeat=0;
 using namespace std::chrono_literals;
 
@@ -56,14 +56,15 @@ bool Session::host(const std::string& address,uint16_t port) {
     appendHex(code,boundPort>>8); appendHex(code,boundPort&255);
     for (const auto byte:token) appendHex(code,byte);
     status=State::waiting; hostSide=true;
+    lan.advertise(boundPort);
     return true;
 }
 
 bool Session::join(const std::string& key) {
     close();
     if (!socketRuntime()) { fail("Could not initialize networking."); return false; }
-    if (key.starts_with("VL1-") || key.starts_with("VL2-") || key.starts_with("VL3-")) {
-        fail("This session requires both players to use VOIDLINE 2.9 or later."); return false;
+    if (key.starts_with("VL1-") || key.starts_with("VL2-") || key.starts_with("VL3-") || key.starts_with("VL4-") || key.starts_with("VL5-")) {
+        fail("Update both players to VOIDLINE 2.9.7 or newer for cross-platform multiplayer."); return false;
     }
     if (!key.starts_with(prefix) || key.size()!=prefix.size()+2*(6+token.size())) {
         fail("Enter the complete session key from the host."); return false;
@@ -79,29 +80,65 @@ bool Session::join(const std::string& key) {
     endpoint.sin_family=AF_INET; endpoint.sin_port=htons(uint16_t(256*decoded[4]+decoded[5]));
     std::copy_n(decoded.begin(),4,reinterpret_cast<uint8_t*>(&endpoint.sin_addr.s_addr));
     if (!usable(endpoint.sin_addr) || endpoint.sin_port==0) { fail("The key has an invalid network address."); return false; }
+    return connectTo(endpoint,false);
+}
+
+bool Session::joinLan(const LanHost& host) {
+    close();
+    if (!socketRuntime()) { fail("Could not initialize networking."); return false; }
+    sockaddr_in address{};
+    address.sin_family=AF_INET;
+    address.sin_port=htons(host.port);
+    if (!host.port || inet_pton(AF_INET,host.address.c_str(),&address.sin_addr)!=1 ||
+        !usable(address.sin_addr)) { fail("The LAN host address is invalid."); return false; }
+    return connectTo(address,true);
+}
+
+bool Session::connectTo(const sockaddr_in& address,bool lanRequest) {
+    lanJoin=lanRequest;
     peer=openTcp();
     if (peer==invalidSocket) { fail("Could not open a network connection."); return false; }
     status=State::connecting; heard=Clock::now();
-    const int result=connect(peer,reinterpret_cast<const sockaddr*>(&endpoint),sizeof(endpoint));
+    const int result=connect(peer,reinterpret_cast<const sockaddr*>(&address),sizeof(address));
     if (result==0) readySocket();
     else if (!connectPending()) { fail("Could not reach the host."); return false; }
     return true;
 }
 
+void Session::approve(bool allow) {
+    if (!pendingApproval()) return;
+    if (allow) {
+        if (!send(Packet::welcome)) return;
+        closeSocket(server);
+        lan.close(); // A full mission should no longer appear in LAN discovery.
+        status=State::connected;
+    } else {
+        if (!send(Packet::denied)) { dropCandidate(); return; }
+        status=State::rejecting;
+        flush();
+        if (status==State::rejecting && !pendingOutput()) dropCandidate();
+    }
+}
+
 void Session::readySocket() {
     lowLatency(peer);
     status=State::handshake; heard=sent=Clock::now();
-    if (!hostSide) send(Packet::hello,token);
+    if (!hostSide) {
+        if (lanJoin) send(Packet::helloLan);
+        else send(Packet::hello,token);
+        status=State::approval;
+    }
 }
 
 void Session::dropCandidate() {
     closeSocket(peer);
     incoming.clear(); outgoing.clear(); packets.clear(); sentBytes=0;
+    candidateAddress.clear();
     status=State::waiting;
 }
 void Session::close() {
-    dropCandidate(); closeSocket(server);
-    hostSide=false; status=State::idle; code.clear(); issue.clear();
+    dropCandidate(); closeSocket(server); lan.close();
+    hostSide=lanJoin=false; status=State::idle; code.clear(); issue.clear();
 }
 void Session::fail(std::string message) {
     close(); issue=std::move(message);
@@ -124,23 +161,32 @@ bool Session::send(Packet packet,std::span<const uint8_t> data) {
 }
 
 bool Session::process(std::span<const uint8_t> data) {
-    if (status==State::handshake) {
-        if (hostSide) {
-            if (data[0]!=static_cast<uint8_t>(Packet::hello) || data.size()!=token.size()+1 ||
-                !std::equal(token.begin(),token.end(),data.begin()+1)) {
-                dropCandidate(); return false;
-            }
-            closeSocket(server);
-        } else if (data.size()!=1 || data[0]!=static_cast<uint8_t>(Packet::welcome)) {
-            fail("The host did not accept this key."); return false;
-        }
-        status=State::connected;
-        if (hostSide) send(Packet::welcome);
+    if (status==State::handshake && hostSide) {
+        const bool keyed=data[0]==static_cast<uint8_t>(Packet::hello) &&
+            data.size()==token.size()+1 &&
+            std::equal(token.begin(),token.end(),data.begin()+1);
+        const bool discovered=data.size()==1 && data[0]==static_cast<uint8_t>(Packet::helloLan);
+        if (!keyed && !discovered) { dropCandidate(); return false; }
+        status=State::approval;
         heard=Clock::now();
         return true;
     }
+    if (status==State::approval && !hostSide) {
+        if (data.size()==1 && data[0]==static_cast<uint8_t>(Packet::denied)) {
+            fail("The host declined your request to join."); return false;
+        }
+        if (data.size()!=1 || data[0]!=static_cast<uint8_t>(Packet::welcome)) {
+            fail("The host sent an incompatible approval response."); return false;
+        }
+        status=State::connected;
+        heard=Clock::now();
+        return true;
+    }
+    if (status==State::handshake || status==State::approval || status==State::rejecting) {
+        fail("Received a message before the session was approved."); return false;
+    }
     if (data.size()==1 && data[0]==heartbeat) return true;
-    if (data[0]<static_cast<uint8_t>(Packet::ready) || data[0]>static_cast<uint8_t>(Packet::epilogueDone) || packets.size()>=128) {
+    if (data[0]<static_cast<uint8_t>(Packet::ready) || data[0]>static_cast<uint8_t>(Packet::skipOpening) || packets.size()>=128) {
         fail("Received an invalid multiplayer message."); return false;
     }
     packets.emplace_back(data.begin(),data.end());
@@ -162,9 +208,18 @@ void Session::flush() {
 }
 
 void Session::poll() {
+    lan.poll();
     if (status==State::waiting) {
         peer=acceptPeer(server);
-        if (peer!=invalidSocket) readySocket();
+        if (peer!=invalidSocket) {
+            sockaddr_in address{};
+            SocketSize length=sizeof(address);
+            if (getpeername(peer,reinterpret_cast<sockaddr*>(&address),&length)==0) {
+                char ip[INET_ADDRSTRLEN]{};
+                if (inet_ntop(AF_INET,&address.sin_addr,ip,sizeof(ip))) candidateAddress=ip;
+            }
+            readySocket();
+        }
     }
     if (peer==invalidSocket) return;
     const auto now=Clock::now();
@@ -179,8 +234,8 @@ void Session::poll() {
         }
         readySocket();
     }
-    if (now-heard>(status==State::handshake?5s:10s)) {
-        if (hostSide && status==State::handshake) dropCandidate();
+    if (now-heard>((status==State::handshake)?5s:(status==State::approval?30s:10s))) {
+        if (hostSide && (status==State::handshake || status==State::approval)) dropCandidate();
         else fail("The multiplayer connection timed out.");
         return;
     }
@@ -194,7 +249,7 @@ void Session::poll() {
             if (error==IoStatus::again) break;
         }
         if (n<=0) {
-            if (hostSide && status==State::handshake) dropCandidate();
+            if (hostSide && (status==State::handshake || status==State::approval || status==State::rejecting)) dropCandidate();
             else fail(status==State::handshake?"The host did not accept this key.":"The other player disconnected.");
             return;
         }
@@ -204,7 +259,7 @@ void Session::poll() {
             const auto* header=incoming.data()+consumed;
             const auto size=(uint32_t(header[0])<<24)|(uint32_t(header[1])<<16)|(uint32_t(header[2])<<8)|header[3];
             if (!size || size>maxPacket) {
-                if (hostSide && status==State::handshake) dropCandidate();
+                if (hostSide && (status==State::handshake || status==State::approval || status==State::rejecting)) dropCandidate();
                 else fail("Received an invalid multiplayer message.");
                 return;
             }
@@ -216,6 +271,7 @@ void Session::poll() {
     incoming.erase(incoming.begin(),incoming.begin()+consumed);
     if (status==State::connected && now-sent>2s && outgoing.empty()) send(static_cast<Packet>(heartbeat));
     flush();
+    if (status==State::rejecting && !pendingOutput()) dropCandidate();
 }
 std::vector<Bytes> Session::receive() { return std::exchange(packets,{}); }
 }

@@ -171,22 +171,27 @@ void populateBay(Stage& stage,const Bay& bay,float x,float w,int rank,int number
 
 Stage makeMission(const Mission& mission,int rank) {
     constexpr const char* art[]{"descent","tideworks","overgrowth","foundry","terminus"};
-    const int count=static_cast<int>(mission.bays.size());
-    const float length=4820.f+435.f*rank;
-    const float arena=790.f+12.f*rank;
+    const int sourceCount=static_cast<int>(mission.bays.size());
+    // More sectors must mean more encounters, not just larger empty walkways.
+    // Repeat the mission's hand-authored traversal motifs in a staggered order.
+    const int count=std::max(sourceCount,8+rank/2);
+    const float length=8400.f+560.f*rank+18.f*rank*rank;
+    const float arena=870.f+14.f*rank;
     float walkable=length-arena;
-    for (const auto& bay:mission.bays) walkable-=crossingWidth(bay.crossing);
+    for (int i=0;i<count;++i)
+        walkable-=crossingWidth(mission.bays[(i+i/sourceCount)%sourceCount].crossing);
     const float bayWidth=walkable/count;
     Stage stage{mission.name,art[static_cast<int>(mission.biome)],mission.location,
         rank<4?"HIGH":rank<8?"SEVERE":rank<12?"EXTREME":"CRITICAL",
         mission.accent,mission.cold,mission.briefing,mission.guardian,mission.biome,
         length,{length-105,mission.arenaFloor},{},{},{},{},{},{},{}};
     float x=0;
-    const int checkpoints=rank<7?2:3;
+    const int checkpoints=std::min(7,4+rank/3);
     const int escorts=int(rank>=4)+int(rank>=8)+int(rank>=12);
-    const int reinforcements=19+rank*2-count*3-escorts-1;
+    const int targetEnemies=36+4*rank;
+    const int reinforcements=std::max(0,targetEnemies-count*3-escorts-1);
     for (int i=0;i<count;++i) {
-        const auto& bay=mission.bays[i];
+        const auto& bay=mission.bays[(i+i/sourceCount)%sourceCount];
         const float w=bayWidth+(i==0?80.f:i==count-1?-80.f:0.f);
         stage.ground.push_back({x,bay.floor,w,110});
         const int bayOrder=(i+rank)%count;
@@ -197,7 +202,7 @@ Stage makeMission(const Mission& mission,int rank) {
         }
         if (i==count-1) stage.beacons.push_back({x+w-61,bay.floor});
         layCrossing(stage,bay.crossing,x+w,bay.floor,
-                    i+1<count?mission.bays[i+1].floor:mission.arenaFloor,rank+i);
+                    i+1<count?mission.bays[(i+1+(i+1)/sourceCount)%sourceCount].floor:mission.arenaFloor,rank+i);
         x+=w+crossingWidth(bay.crossing);
     }
 
@@ -216,6 +221,57 @@ Stage makeMission(const Mission& mission,int rank) {
     stage.enemies.push_back({EnemyKind::boss,x+arena*.68f,floor,arena*.19f});
     return stage;
 }
+
+// Early sectors are hand-built. Insert coherent additional combat/traversal
+// chapters before their original guardian arenas; keep the boss and exit intact.
+// The original bridge still joins the first extension section.
+void extendOpening(Stage& stage,int sector) {
+    const int sections=sector+1;
+    const float sectionWidth=680.f;
+    const float extra=sections*sectionWidth;
+    const Rect arena=stage.ground.back();
+    const float seam=arena.x;
+    const auto shift=[&](float& x) { if (x>=seam) x+=extra; };
+    shift(stage.exit.x);
+    for (auto& beacon:stage.beacons) shift(beacon.x);
+    for (auto& ledge:stage.ledges) shift(ledge.x);
+    for (auto& lift:stage.lifts) shift(lift.x);
+    for (auto& vent:stage.vents) shift(vent.x);
+    for (auto& enemy:stage.enemies) shift(enemy.x);
+    for (auto& supply:stage.supplies) shift(supply.x);
+    for (auto& rect:stage.cover) shift(rect.x);
+    for (auto& crate:stage.crates) shift(crate.base.x);
+    stage.ground.back().x+=extra;
+    stage.worldWidth+=extra;
+
+    for (int i=0;i<sections;++i) {
+        const float x=seam+i*sectionWidth;
+        const float floor=arena.y+(i%3==1?-23.f:i%3==2?13.f:0.f);
+        // 112-unit floor breaks are traversable even without sprint upgrades.
+        const float groundWidth=sectionWidth-112.f;
+        stage.ground.insert(stage.ground.end()-1,{x,floor,groundWidth,110});
+        stage.ledges.push_back({x+122,floor-94,137,17});
+        stage.ledges.push_back({x+336,floor-115,131,17});
+        stage.ledges.push_back({x+groundWidth-40,floor-67,108,17});
+        stage.ledges.push_back({x+sectionWidth-64,floor-83,96,17});
+        stage.cover.push_back({x+263,floor-43,46,43});
+        stage.crates.push_back({sector>=3 && i%2 ? CrateKind::fuel : CrateKind::charge,
+                                {x+380,floor}});
+        stage.supplies.push_back({SupplyKind::ammo,x+78,floor});
+        stage.supplies.push_back({i%2==0?SupplyKind::health:SupplyKind::salvage,
+                                  x+203,i%2==0?floor:floor-94});
+        if (sector>=2 && i%2==1) stage.vents.push_back({x+475,floor,float(i)*.73f});
+        if (i%2==1 || i==sections-1) stage.beacons.push_back({x+35,floor});
+        const bool elite=sector>=3 && i%2==0;
+        stage.enemies.insert(stage.enemies.end()-1,
+            {i%3==1?EnemyKind::stalker:EnemyKind::ranger,x+350,floor,65,elite});
+        stage.enemies.insert(stage.enemies.end()-1,
+            {i%3==2?EnemyKind::turret:EnemyKind::drone,x+460,
+             i%3==2?floor-115:floor-175,0,sector>=4});
+        if (sector>=2) stage.enemies.insert(stage.enemies.end()-1,
+            {EnemyKind::ranger,x+510,floor,39,sector>=4 && i%3==0});
+    }
+}
 }
 
 const std::array<Stage,sectorCount> stages=[] {
@@ -223,18 +279,39 @@ const std::array<Stage,sectorCount> stages=[] {
     auto opening=campaign::openingSectors();
     for (size_t i=0;i<opening.size();++i) {
         auto& stage=opening[i];
+        extendOpening(stage,static_cast<int>(i));
         const auto& first=stage.ground.front();
-        const auto& middle=stage.ground[stage.ground.size()/2-1];
+        const auto& middle=stage.ground[std::min<size_t>(2,stage.ground.size()-2)];
         const auto& arena=stage.ground.back();
-        stage.cover={{first.right()-95,first.y-43,44,43},
+        stage.cover.insert(stage.cover.end(),{{first.right()-95,first.y-43,44,43},
                      {middle.x+75,middle.y-43,46,43},
-                     {arena.x+116,arena.y-43,46,43}};
-        stage.crates={{CrateKind::charge,{first.right()-28,first.y}},
+                     {arena.x+116,arena.y-43,46,43}});
+        stage.crates.insert(stage.crates.end(),{{CrateKind::charge,{first.right()-28,first.y}},
                       {i>=1?CrateKind::fuel:CrateKind::charge,{middle.x+320,middle.y}},
-                      {i>=3?CrateKind::reactor:CrateKind::fuel,{stage.exit.x-235,arena.y}}};
+                      {i>=3?CrateKind::reactor:CrateKind::fuel,{stage.exit.x-235,arena.y}}});
         campaign[i]=std::move(stage);
     }
     for (size_t i=0;i<missions.size();++i) campaign[opening.size()+i]=makeMission(missions[i],static_cast<int>(i));
+    // Deterministic tiered roster. The spawn position remains compatible with
+    // the inherited ground/flying type, so no enemy is spawned below a ledge.
+    for (int sector=0;sector<sectorCount;++sector) {
+        auto& roster=campaign[sector].enemies;
+        const int level=sector+1;
+        int ground=0,air=0;
+        for (auto& enemy:roster) {
+            if (enemy.kind==EnemyKind::ranger) {
+                const int slot=(ground++*7+sector*3)%20;
+                if (level>=15 && slot<2+(level-15)/2) enemy.kind=EnemyKind::juggernaut;
+                else if (level>=7 && slot<3+std::min(5,(level-7)/2)) enemy.kind=EnemyKind::bulwark;
+                else if (level>=4 && slot<6+std::min(4,(level-4)/3)) enemy.kind=EnemyKind::sniper;
+                else if (slot%4==0) enemy.kind=EnemyKind::scavenger;
+            } else if (enemy.kind==EnemyKind::drone && level>=10) {
+                if ((air++*5+sector)%8 < std::min(7,2+(level-10)/2))
+                    enemy.kind=EnemyKind::interceptor;
+            }
+            if (enemy.kind==EnemyKind::juggernaut) enemy.elite=level>=18;
+        }
+    }
     return campaign;
 }();
 }

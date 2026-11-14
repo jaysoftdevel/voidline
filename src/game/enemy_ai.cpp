@@ -20,7 +20,8 @@ void Game::moveEnemies(float dt) {
         e.kick=approach(e.kick,0,dt*5.f);
         e.recoil=std::max(0.f,e.recoil-dt*6.f);
         e.landed=std::max(0.f,e.landed-dt*5.f);
-        e.turn=approach(e.turn,float(e.facing),dt*(e.kind==EnemyKind::stalker?14.f:8.f));
+        e.turn=approach(e.turn,float(e.facing),dt*((e.kind==EnemyKind::stalker ||
+            e.kind==EnemyKind::scavenger)?14.f:8.f));
         const float oldX=e.box.x;
         const Vec origin{e.box.center().x,e.box.y+e.box.h*.43f};
         Vec target=first;
@@ -43,21 +44,28 @@ void Game::moveEnemies(float dt) {
             shake=8; audio.event("launch",.76f);
         }
 
-        if (e.kind==EnemyKind::drone) {
-            e.box.x=e.origin.x+std::sin(time*1.42f+e.phase)*72;
-            e.box.y=e.origin.y+std::sin(time*2.37f+e.phase)*19;
+        if (e.kind==EnemyKind::drone || e.kind==EnemyKind::interceptor) {
+            const bool interceptor=e.kind==EnemyKind::interceptor;
+            e.box.x=e.origin.x+std::sin(time*(interceptor?2.45f:1.42f)+e.phase)*(interceptor?112.f:72.f);
+            e.box.y=e.origin.y+std::sin(time*(interceptor?3.3f:2.37f)+e.phase)*(interceptor?32.f:19.f);
             e.facing=sign(d.x);
         } else if (e.kind==EnemyKind::turret) {
             e.facing=sign(d.x);
         } else {
             const bool stalker=e.kind==EnemyKind::stalker;
-            if (inRange) e.facing=sign(d.x);
+            const bool scavenger=e.kind==EnemyKind::scavenger;
+            const bool sniper=e.kind==EnemyKind::sniper;
+            const bool heavy=e.kind==EnemyKind::bulwark || e.kind==EnemyKind::juggernaut;
+            if (inRange || (scavenger && std::abs(d.x)<390)) e.facing=sign(d.x);
             float targetSpeed=0;
-            if (stalker || (inRange && e.warning<=0 && std::abs(d.x)>(boss?188:171)))
+            if (scavenger && std::abs(d.x)<390) targetSpeed=e.facing*e.speed*pace;
+            else if (sniper && std::abs(d.x)<210) targetSpeed=-e.facing*e.speed*pace;
+            else if (stalker || (inRange && e.warning<=0 && std::abs(d.x)>(boss?188:171)))
                 targetSpeed=e.facing*e.speed*pace*(inRange?1.f:.35f);
             else if (!inRange && !boss) targetSpeed=e.facing*e.speed*.60f*pace;
+            if (heavy) targetSpeed*=.65f;
             if (e.flinch>0) targetSpeed*=.3f;
-            e.vx=approach(e.vx,targetSpeed,dt*(stalker?670.f:420.f));
+            e.vx=approach(e.vx,targetSpeed,dt*(stalker || scavenger?670.f:420.f));
             e.box.x=clamp(e.box.x+e.vx*dt,e.origin.x-e.patrol,e.origin.x+e.patrol);
             if (e.box.x==e.origin.x-e.patrol || e.box.x==e.origin.x+e.patrol) {
                 if (!inRange && !boss && e.patrol>0) e.facing=e.box.x<e.origin.x?1:-1;
@@ -89,7 +97,7 @@ void Game::moveEnemies(float dt) {
             swapOperatives(); hurt(contact); swapOperatives();
         }
         if (mode!=Mode::active) return;
-        if (e.kind==EnemyKind::stalker) continue;
+        if (e.kind==EnemyKind::stalker || e.kind==EnemyKind::scavenger) continue;
         const bool visible=inRange && entry<.95f && !blocked(origin,target);
         if (e.warning>0) {
             e.warning=std::max(0.f,e.warning-dt);
@@ -100,7 +108,10 @@ void Game::moveEnemies(float dt) {
         } else if (visible) {
             e.timer-=dt;
             if (e.timer<=0) {
-                e.warning=std::max(boss?.27f:.19f,(boss?.38f:e.elite?.31f:.26f)/pace);
+                const float telegraph=e.kind==EnemyKind::sniper?.68f:
+                    e.kind==EnemyKind::juggernaut?.52f:
+                    e.kind==EnemyKind::bulwark?.42f:boss?.38f:e.elite?.31f:.26f;
+                e.warning=std::max(boss?.27f:.19f,telegraph/pace);
                 e.aim=std::atan2(d.y,d.x);
             }
         }
@@ -112,10 +123,19 @@ void Game::enemyFire(Enemy& e,float targetX) {
     const int later=std::max(0,index-4);
     const auto& pattern=patterns[static_cast<int>(stage->biome)];
     const int volley=boss?pattern.fans+(phase?2:0)+(later>=8?2:0)
-        :e.kind==EnemyKind::turret && index>=2?(e.elite?5:3):e.elite?2:1;
-    const float spread=boss?pattern.spread+(phase?.22f:0)+(later>=8?.12f:0):e.elite?.38f:.25f;
-    const Color color=hex(boss?pattern.color:e.elite?0xffcb68:e.kind==EnemyKind::turret?0xff8f65:0xfd6471);
-    const float speed=(boss?pattern.velocity:e.kind==EnemyKind::drone?310:355)
+        :e.kind==EnemyKind::juggernaut?7:e.kind==EnemyKind::bulwark?3:
+        e.kind==EnemyKind::interceptor?2:e.kind==EnemyKind::sniper?1:
+        e.kind==EnemyKind::turret && index>=2?(e.elite?5:3):e.elite?2:1;
+    const float spread=boss?pattern.spread+(phase?.22f:0)+(later>=8?.12f:0):
+        e.kind==EnemyKind::sniper?0.f:e.kind==EnemyKind::juggernaut?.83f:
+        e.kind==EnemyKind::bulwark?.48f:e.elite?.38f:.25f;
+    const Color color=hex(boss?pattern.color:e.kind==EnemyKind::sniper?0x8feaff:
+        e.kind==EnemyKind::interceptor?0xce91ff:e.kind==EnemyKind::juggernaut?0xff704a:
+        e.kind==EnemyKind::bulwark?0xffcb68:e.elite?0xffcb68:
+        e.kind==EnemyKind::turret?0xff8f65:0xfd6471);
+    const float speed=(boss?pattern.velocity:e.kind==EnemyKind::sniper?680:
+        e.kind==EnemyKind::interceptor?465:e.kind==EnemyKind::juggernaut?390:
+        e.kind==EnemyKind::drone?310:355)
         *std::sqrt(difficulty->pace)*(1+later*.012f)*(e.elite?1.12f:1.f);
     const Vec direction=ray(e.aim);
     const Vec origin{e.box.center().x+direction.x*e.box.w*.24f,e.box.y+e.box.h*(.43f+direction.y*.22f)};

@@ -169,7 +169,42 @@ void controlModes() {
     CHECK(!input.down(Act::sprint));
 }
 
+void menuClickMustNotFire() {
+    Input input;
+    input.injectButtons(sdl::buttonLeft);
+    input.poll();
+    CHECK(input.down(Act::fire));
+    // Re-entering play while the menu click is still held cannot fire.
+    input.reset();
+    input.suppressUntilReleased(Act::fire);
+    input.poll();
+    CHECK(!input.down(Act::fire) && !input.pressed(Act::fire));
+    input.poll();
+    CHECK(!input.down(Act::fire) && !input.pressed(Act::fire));
+    // The button must be released before fresh gameplay input is accepted.
+    input.injectButtons(0);
+    input.poll();
+    CHECK(!input.down(Act::fire) && !input.pressed(Act::fire));
+    input.injectButtons(sdl::buttonLeft);
+    input.poll();
+    CHECK(input.down(Act::fire) && input.pressed(Act::fire));
+    // Keyboard fire bindings are protected by the same gate.
+    input.reset();
+    input.injectButtons(0);
+    CHECK(input.assign(Act::fire,0,sdl::key::v));
+    input.inject(sdl::key::v,true);
+    input.suppressUntilReleased(Act::fire);
+    input.poll();
+    CHECK(!input.down(Act::fire) && !input.pressed(Act::fire));
+    input.inject(sdl::key::v,false);
+    input.poll();
+    input.inject(sdl::key::v,true);
+    input.poll();
+    CHECK(input.pressed(Act::fire) && input.down(Act::fire));
+}
+
 void runInputTests() {
+    menuClickMustNotFire();
     inputChords();
     directionsAndOrder();
     eventStreamAlone();

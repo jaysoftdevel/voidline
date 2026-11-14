@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(voidline VERSION 2.9.2 LANGUAGES CXX)
+project(voidline VERSION 2.9.7 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -11,6 +11,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/voidline)
 add_compile_definitions(VOIDLINE_VERSION="${PROJECT_VERSION}")
 
 find_package(Threads REQUIRED)
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
 # Link-time optimization lets the compiler inline across the game, renderer and input sources.
 include(CheckIPOSupported)
@@ -82,12 +83,24 @@ if(WIN32)
   if(MINGW)
     target_link_options(voidline PRIVATE -municode)
   endif()
+endif()
+# The packaged runtime never contains individual images or sound recordings.
+file(GLOB_RECURSE VOIDLINE_PACK_INPUTS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/assets/*)
+set(VOIDLINE_ASSET_PACK ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets/game.vpak)
+add_custom_command(OUTPUT ${VOIDLINE_ASSET_PACK}
+  COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/pack-assets.py
+          ${CMAKE_SOURCE_DIR}/assets ${VOIDLINE_ASSET_PACK}
+  DEPENDS ${VOIDLINE_PACK_INPUTS} ${CMAKE_SOURCE_DIR}/scripts/pack-assets.py
+  COMMENT "Bundling artwork and audio into game.vpak"
+  VERBATIM)
+add_custom_target(voidline_media ALL DEPENDS ${VOIDLINE_ASSET_PACK})
+add_dependencies(voidline voidline_media)
+# Visual Studio multi-configuration builds place the EXE under voidline/Release.
+# Stage the media beside the actual executable on Windows as well as Linux.
+if(WIN32)
   add_custom_command(TARGET voidline POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets $<TARGET_FILE_DIR:voidline>/assets
-    VERBATIM)
-else()
-  add_custom_command(TARGET voidline POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E create_symlink ${CMAKE_SOURCE_DIR}/assets $<TARGET_FILE_DIR:voidline>/assets
+    COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:voidline>/assets
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${VOIDLINE_ASSET_PACK} $<TARGET_FILE_DIR:voidline>/assets/game.vpak
     VERBATIM)
 endif()
 
@@ -99,7 +112,7 @@ else()
 endif()
 
 install(TARGETS voidline RUNTIME DESTINATION voidline)
-install(DIRECTORY assets DESTINATION voidline)
+install(FILES ${VOIDLINE_ASSET_PACK} DESTINATION voidline/assets)
 
 include(CTest)
 if(BUILD_TESTING)
@@ -107,6 +120,8 @@ if(BUILD_TESTING)
   add_executable(voidline_tests ${VOIDLINE_TEST_SOURCES})
   target_compile_options(voidline_tests PRIVATE ${VOIDLINE_WARNINGS})
   target_link_libraries(voidline_tests PRIVATE voidline_services)
+  add_dependencies(voidline_tests voidline_media)
+  target_compile_definitions(voidline_tests PRIVATE VOIDLINE_TEST_ASSET_ROOT="${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets")
   add_test(NAME voidline_tests COMMAND voidline_tests)
 endif()
 

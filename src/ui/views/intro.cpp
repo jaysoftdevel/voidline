@@ -6,6 +6,6 @@ using namespace vl::ui;
 namespace vl {
 void App::cinematic() {
     drawOpening(false);
-    button({1010,528,132,35},"SKIP INTRO",[this]{launch(0);});
+    button({1010,528,132,35},"SKIP PROLOGUE",[this]{launch(0);});
 }
 }

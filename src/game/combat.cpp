@@ -4,6 +4,10 @@
 namespace vl {
 void Game::damageEnemy(Enemy& e,float damage,Vec point,Vec direction,bool crit) {
     if (!e.alive) return;
+    // Front armor is meaningful: flank or jump behind the heavy units for full damage.
+    const bool plated=e.kind==EnemyKind::bulwark || e.kind==EnemyKind::juggernaut;
+    if (plated && direction.x*e.facing<-.15f)
+        damage*=e.kind==EnemyKind::bulwark?.50f:.68f;
     e.hp-=std::max(1,static_cast<int>(damage));
     e.hit=.094f;
     registerHit(e,point,direction,damage,crit);
@@ -58,6 +62,9 @@ void Game::destroy(Enemy& e) {
     const Color accent=hex(stage->accent);
     const Vec at=e.box.center();
     switch (e.kind) {
+    case EnemyKind::sniper:
+    case EnemyKind::bulwark:
+    case EnemyKind::juggernaut:
     case EnemyKind::ranger:
         burstCone(at,e.hitDir,.7f,accent,10,170);
         burst(at,hex(0xfff0b8),5,150);
@@ -65,6 +72,7 @@ void Game::destroy(Enemy& e) {
         burst(at,hex(0x93a5ac),6,125,ParticleKind::chip);
         ring(at,hex(0xfff0b8),44,.3f);
         break;
+    case EnemyKind::scavenger:
     case EnemyKind::stalker:
         burst(at,accent,12,170);
         burst(at,hex(0xfff0b8),7,230);

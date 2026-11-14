@@ -1,4 +1,5 @@
 // Upgrades, perks and campaign data.
+#include "game/detail.hpp"
 #include "support.hpp"
 
 using namespace test;
@@ -30,6 +31,53 @@ void upgradesAndPerks() {
     // Every original gun reaches farther than before (760, 365, 970 and 680).
     CHECK(weapons[0].range > 760 && weapons[1].range > 365 && weapons[2].range > 970 && weapons[3].range > 680);
 }
+void rosterAndCharacters() {
+    CHECK(characters.size()==6);
+    CHECK(spec(EnemyKind::scavenger).hp < spec(EnemyKind::sniper).hp);
+    CHECK(spec(EnemyKind::sniper).hp < spec(EnemyKind::bulwark).hp);
+    CHECK(spec(EnemyKind::bulwark).hp < spec(EnemyKind::juggernaut).hp);
+    Silent audio;
+    Game game(audio);
+    for (int c=0;c<static_cast<int>(characters.size());++c) {
+        Save save=fullSave(); save.character=c;
+        game.start(0,save);
+        CHECK(game.character==&characters[c]);
+        CHECK(game.maxHealth==characters[c].health);
+        CHECK(game.player.hp==game.maxHealth);
+        CHECK(game.guns[0].maxReserve==int(std::lround(weapons[0].reserve*characters[c].ammo)));
+    }
+    constexpr EnemyKind newKinds[]{EnemyKind::scavenger,EnemyKind::sniper,EnemyKind::bulwark,
+                                   EnemyKind::interceptor,EnemyKind::juggernaut};
+    constexpr int firstSectors[]{1,4,7,10,15};
+    for (int kind=0;kind<5;++kind) {
+        int first=-1;
+        for (int sector=0;sector<sectorCount;++sector)
+            for (const auto& e:stages[sector].enemies)
+                if (e.kind==newKinds[kind] && first<0) first=sector+1;
+        CHECK(first>=firstSectors[kind]);
+        CHECK(first<=std::min(sectorCount,firstSectors[kind]+3));
+    }
+    int earlyHeavy=0,lateHeavy=0;
+    for (int sector=0;sector<sectorCount;++sector) {
+        int heavy=0;
+        for (const auto& e:stages[sector].enemies)
+            if (e.kind==EnemyKind::bulwark || e.kind==EnemyKind::juggernaut ||
+                e.kind==EnemyKind::interceptor || e.kind==EnemyKind::sniper) ++heavy;
+        if (sector<5) earlyHeavy+=heavy;
+        if (sector>=15) lateHeavy+=heavy;
+    }
+    CHECK(lateHeavy>earlyHeavy*3);
+    game.start(15,fullSave());
+    auto& e=game.enemies[0];
+    e.kind=EnemyKind::bulwark; e.facing=-1;
+    e.hp=e.maxHp=500;
+    game.damageEnemy(e,100,e.box.center(),{1,0},false);
+    const int frontal=500-e.hp;
+    e.hp=500;
+    game.damageEnemy(e,100,e.box.center(),{-1,0},false);
+    CHECK(frontal<500-e.hp);
+}
+
 void stageData() {
     float length=0;
     size_t enemies=0;
@@ -39,18 +87,32 @@ void stageData() {
         const auto& stage=stages[i];
         CHECK(stage.worldWidth>length && stage.worldWidth>stage.exit.x);
         CHECK(stage.enemies.size()>enemies);
+        CHECK(stage.worldWidth>=4000.f+530.f*i);
+        CHECK(stage.enemies.size()>=size_t(11+2*i));
+        if (i>0) CHECK(stage.worldWidth-length>=390.f);
+        if (i>0) CHECK(stage.enemies.size()-enemies>=2);
         length=stage.worldWidth;
         enemies=stage.enemies.size();
         CHECK(!stage.ground.empty());
         CHECK(stage.enemies.back().kind==EnemyKind::boss);
         CHECK(!stage.cover.empty() && !stage.crates.empty());
-        CHECK(!stage.beacons.empty());
+        CHECK(stage.beacons.size()>=2);
+        CHECK(stage.ground.back().right()+.1f>=stage.worldWidth);
+        for (size_t g=1;g<stage.ground.size();++g) {
+            const float gap=stage.ground[g].x-stage.ground[g-1].right();
+            CHECK(gap>=-0.1f && gap<=420.1f);
+        }
+        for (const auto& placement:stage.enemies) {
+            CHECK(placement.x>=0.f && placement.x<stage.worldWidth);
+        }
         for (const auto& beacon:stage.beacons) {
             CHECK(std::any_of(stage.ground.begin(),stage.ground.end(),[&](const Rect& g) {
                 return std::abs(g.y-beacon.y)<.01f && g.x+16<beacon.x && beacon.x<g.right()-16;
             }));
             const Rect standing{beacon.x-16,beacon.y-56,32,56};
-            CHECK(std::none_of(stage.cover.begin(),stage.cover.end(),[&](Rect b) { return b.overlaps(standing); }));
+            const bool clearBeacon=std::none_of(stage.cover.begin(),stage.cover.end(),[&](Rect b) { return b.overlaps(standing); });
+            if (!clearBeacon) std::cerr << "blocked beacon in sector " << i+1 << " at " << beacon.x << "," << beacon.y << "\n";
+            CHECK(clearBeacon);
         }
         game.start(i,fullSave());
         CHECK(game.stage==&stage);
@@ -102,6 +164,7 @@ void checkpointRestore() {
 
 void runProgressionTests() {
     upgradesAndPerks();
+    rosterAndCharacters();
     stageData();
     checkpointRestore();
 }

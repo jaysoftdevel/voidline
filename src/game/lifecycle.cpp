@@ -41,9 +41,12 @@ void Game::start(int sector,const Save& save) {
         const int id=static_cast<int>(enemies.size());
         const float scaling=1+std::min(index,4)*(boss?.27f:.085f)+later*(boss?.11f:.042f);
         const int hp=std::lround(s.hp*scaling*(item.elite?1.45f:1.f)*difficulty->hp);
-        const Vec origin{item.x-s.w*.5f,item.y-(item.kind==EnemyKind::drone?0:s.h)};
+        const bool flying=item.kind==EnemyKind::drone || item.kind==EnemyKind::interceptor;
+        const Vec origin{item.x-s.w*.5f,item.y-(flying?0:s.h)};
         enemies.push_back({item.kind,{origin.x,origin.y,s.w,s.h},origin,item.y,
-            item.patrol>0?item.patrol:(boss?160.f:0.f),float((id*97+index*47)%239),
+            item.kind==EnemyKind::scavenger?std::max(240.f,item.patrol):
+                item.kind==EnemyKind::sniper?std::max(110.f,item.patrol):
+                item.patrol>0?item.patrol:(boss?160.f:0.f),float((id*97+index*47)%239),
             .66f+(id%4)*.23f,s.damage*difficulty->damage*(1+std::min(index,4)*.045f+later*.025f)
                 *(item.elite?1.18f:1.f),s.reach+(item.elite?35.f:0.f),
             s.speed*(item.elite?1.25f:1.f),hp,hp,id%2?-1:1});

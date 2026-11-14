@@ -11,6 +11,7 @@ int main() {
     runCoopTests();
     runCinematicTests();
     runWeaponArtTests();
+    runAssetPackTests();
     if (test::failures) { std::cerr << test::failures << " check(s) failed\n"; return EXIT_FAILURE; }
     std::cout << "All checks passed\n";
     return EXIT_SUCCESS;

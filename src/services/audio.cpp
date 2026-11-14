@@ -2,23 +2,30 @@
 #include <bit>
 #include <cstdlib>
 #include <iostream>
+#include <cstring>
+#include <cstdio>
 #include <memory>
 
 extern "C" {
 struct SndFile;
 struct SoundInfo { int64_t frames; int samplerate,channels,format,sections,seekable; };
 #ifdef _WIN32
-SndFile* sf_wchar_open(const wchar_t*,int,SoundInfo*);
-#else
-SndFile* sf_open(const char*,int,SoundInfo*);
 #endif
+struct VirtualIO {
+    int64_t (*length)(void*);
+    int64_t (*seek)(int64_t,int,void*);
+    int64_t (*read)(void*,int64_t,void*);
+    int64_t (*write)(const void*,int64_t,void*);
+    int64_t (*tell)(void*);
+};
+SndFile* sf_open_virtual(const VirtualIO*,int,SoundInfo*,void*);
 int sf_close(SndFile*);
 int64_t sf_readf_float(SndFile*,float*,int64_t);
 }
 
 namespace vl {
 Audio::Audio(const std::filesystem::path& root)
-    :assets(root/"audio") {
+    :assets(root) {
     SDL_AudioSpec desired{},result{};
     desired.freq=48000;
     desired.format=std::endian::native==std::endian::little?0x8120:0x9120;
@@ -32,7 +39,7 @@ Audio::Audio(const std::filesystem::path& root)
         if (auto* sample=load(name)) group.push_back(sample);
         for (int i=2;i<=4;++i) {
             const std::string variant=std::string(name)+"-"+std::to_string(i);
-            if (!std::filesystem::exists(assets/(variant+".ogg"))) break;
+            if (!assets.contains("audio/"+variant+".ogg")) break;
             if (auto* sample=load(variant)) group.push_back(sample);
         }
     }
@@ -44,15 +51,33 @@ Audio::~Audio() { if (device) SDL_CloseAudioDevice(device); }
 Audio::Sample* Audio::load(std::string_view name) {
     std::string key(name);
     if (auto it=samples.find(key);it!=samples.end()) return &it->second;
-    const auto file=assets/(key+".ogg");
+    const std::string file="audio/"+key+".ogg";
+    if (!assets.contains(file)) return nullptr;
+    const auto data=assets.read(file);
+    struct Cursor { const std::vector<uint8_t>& bytes; size_t pos=0; } cursor{data};
+    static const VirtualIO callbacks{
+        [](void* p)->int64_t { return static_cast<Cursor*>(p)->bytes.size(); },
+        [](int64_t offset,int origin,void* p)->int64_t {
+            auto& v=*static_cast<Cursor*>(p);
+            const int64_t base=origin==SEEK_SET?0:origin==SEEK_CUR?int64_t(v.pos):int64_t(v.bytes.size());
+            if (origin!=SEEK_SET && origin!=SEEK_CUR && origin!=SEEK_END) return -1;
+            if (offset < -base || offset>int64_t(v.bytes.size())-base) return -1;
+            v.pos=static_cast<size_t>(base+offset); return v.pos;
+        },
+        [](void* output,int64_t n,void* p)->int64_t {
+            auto& v=*static_cast<Cursor*>(p);
+            if (n<=0) return 0;
+            const auto count=std::min<size_t>(static_cast<size_t>(n),v.bytes.size()-v.pos);
+            std::memcpy(output,v.bytes.data()+v.pos,count);
+            v.pos+=count; return count;
+        },
+        [](const void*,int64_t,void*)->int64_t { return 0; },
+        [](void* p)->int64_t { return static_cast<Cursor*>(p)->pos; }
+    };
     SoundInfo info{};
-#ifdef _WIN32
-    const std::unique_ptr<SndFile,decltype(&sf_close)> in(sf_wchar_open(file.c_str(),0x10,&info),sf_close);
-#else
-    const std::unique_ptr<SndFile,decltype(&sf_close)> in(sf_open(file.c_str(),0x10,&info),sf_close);
-#endif
+    const std::unique_ptr<SndFile,decltype(&sf_close)> in(sf_open_virtual(&callbacks,0x10,&info,&cursor),sf_close);
     if (!in || info.frames<=0 || info.frames>16000000 || info.channels<1 || info.channels>2 || info.samplerate<=0) {
-        std::cerr<<"Could not decode "<<file<<'\n'; return nullptr;
+        std::cerr<<"Could not decode bundled "<<file<<'\n'; return nullptr;
     }
     Sample s{{},info.channels,info.samplerate};
     s.frames.resize(size_t(info.frames)*info.channels);

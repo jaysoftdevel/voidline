@@ -15,7 +15,12 @@ struct EnemySpec { float w,h,speed,reach,delay; int hp,damage,score; };
 constexpr EnemySpec specs[]{
     {48,30,78,390,1.65f,57,10,14}, {35,54,72,435,1.34f,82,13,20},
     {48,46,0,490,1.52f,102,14,27}, {54,37,176,330,1.65f,93,17,25},
-    {108,97,67,600,1.30f,420,16,135}
+    {108,97,67,600,1.30f,420,16,135},
+    {32,32,225,82,0,42,9,14},            // Scavenger: fast melee flanker, no ranged attack.
+    {35,54,62,590,2.15f,90,18,43},      // Marksman: precise long-range telegraphed shot.
+    {49,62,48,390,1.86f,250,22,65},     // Bulwark: front-facing shield and heavy spread.
+    {56,33,108,440,.96f,116,17,52},     // Interceptor: fast, evasive aerial harrier.
+    {70,74,55,470,1.65f,365,27,108}     // Juggernaut: heavily armored late-game assault.
 };
 struct Pattern { int fans; float spread,velocity,interval; uint32_t color; };
 constexpr Pattern patterns[]{

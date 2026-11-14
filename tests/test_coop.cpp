@@ -20,30 +20,71 @@ bool until(net::Session& host,net::Session& guest,const auto& condition) {
 void handshake() {
     using State=net::Session::State;
     net::Session host,wrong,guest,third;
-    if (!host.host("127.0.0.1",0)) {
-        std::cerr<<"Co-op host test: "<<host.error()<<'\n';
-        CHECK(false);
+    CHECK(host.host("127.0.0.1",0));
+    if (host.state()!=State::waiting) {
+        std::cerr<<"Host setup: "<<host.error()<<'\n';
         return;
     }
     const auto key=host.key();
-    CHECK(key.starts_with("VL4-") && key.size()==40 && host.state()==State::waiting && host.receive().empty());
+    CHECK(key.starts_with("VL6-") && key.size()==40 && host.receive().empty());
     CHECK(!wrong.join("not-a-session-key"));
-    CHECK(!wrong.join("VL1-"+key.substr(4)));
-    CHECK(wrong.error().find("2.9")!=std::string::npos);
-    CHECK(!wrong.join("VL2-"+key.substr(4)));
-    CHECK(!wrong.join("VL3-"+key.substr(4)));
-    auto wrongKey=key; wrongKey.back()=wrongKey.back()=='0'?'1':'0';
+    for (const auto old:{"VL1-","VL2-","VL3-","VL4-","VL5-"}) {
+        CHECK(!wrong.join(std::string(old)+key.substr(4)));
+        CHECK(wrong.error().find("2.9.7")!=std::string::npos);
+    }
+    auto wrongKey=key;
+    wrongKey.back()=wrongKey.back()=='0'?'1':'0';
     CHECK(wrong.join(wrongKey));
     CHECK(until(host,wrong,[&] { return host.state()==State::waiting && wrong.state()==State::idle; }));
     CHECK(host.key()==key && host.receive().empty());
+
+    CHECK(guest.searchLan());
+    CHECK(until(host,guest,[&] { return !guest.nearby().empty(); }));
+    const auto found=guest.nearby();
+    CHECK(!found.empty());
+    if (!found.empty()) {
+        CHECK(!found[0].address.empty() && found[0].port>0);
+        CHECK(found[0].name.size()>0 && found[0].name.size()<=25);
+        CHECK(found[0].name.find(key)==std::string::npos); // No private key in a broadcast.
+        CHECK(guest.joinLan(found[0]));
+        CHECK(until(host,guest,[&] { return host.pendingApproval(); }));
+        CHECK(!host.joiningAddress().empty());
+        CHECK(host.state()==State::approval && guest.state()==State::approval);
+        CHECK(host.receive().empty() && guest.receive().empty());
+        host.approve(false);
+        CHECK(until(host,guest,[&] { return guest.state()==State::idle && host.state()==State::waiting; }));
+        CHECK(guest.error().find("declined")!=std::string::npos);
+    }
+
     CHECK(guest.join(key));
+    CHECK(until(host,guest,[&] { return host.pendingApproval(); }));
+    CHECK(host.state()==State::approval && guest.state()==State::approval);
+    host.approve(true);
     CHECK(until(host,guest,[&] { return host.state()==State::connected && guest.state()==State::connected; }));
     CHECK(host.hosting() && !guest.hosting());
     CHECK(host.receive().empty() && guest.receive().empty());
-    CHECK(guest.send(net::Packet::ready));
+    CHECK(guest.send(net::Packet::operative,std::array<uint8_t,1>{5}));
     std::vector<net::Bytes> messages;
     CHECK(until(host,guest,[&] { messages=host.receive(); return !messages.empty(); }));
-    CHECK(messages.size()==1 && messages.front().front()==static_cast<uint8_t>(net::Packet::ready));
+    CHECK(messages.size()==1 && messages.front().front()==static_cast<uint8_t>(net::Packet::operative) && messages.front().size()==2 && messages.front()[1]==5);
+    // Each side independently announces its own lock-in; the selection must
+    // survive the wire without being replaced by a default character ID.
+    CHECK(host.send(net::Packet::operative,std::array<uint8_t,1>{3}));
+    CHECK(until(host,guest,[&] { messages=guest.receive(); return !messages.empty(); }));
+    CHECK(messages.size()==1 && messages.front().size()==2 &&
+          messages.front()[0]==static_cast<uint8_t>(net::Packet::operative) && messages.front()[1]==3);
+    // Both operating systems use these same frame types for synchronized skip.
+    CHECK(guest.send(net::Packet::skipRequest));
+    CHECK(until(host,guest,[&] { messages=host.receive(); return !messages.empty(); }));
+    CHECK(messages.size()==1 && messages.front().size()==1 &&
+          messages.front()[0]==static_cast<uint8_t>(net::Packet::skipRequest));
+    CHECK(host.send(net::Packet::skipOpening,net::encodeTiming({1,123450,0})));
+    CHECK(until(host,guest,[&] { messages=guest.receive(); return !messages.empty(); }));
+    net::Timing skip{};
+    CHECK(messages.size()==1 && messages.front().size()>1 &&
+          messages.front()[0]==static_cast<uint8_t>(net::Packet::skipOpening) &&
+          net::decodeTiming(std::span<const uint8_t>(messages.front()).subspan(1),skip) &&
+          skip.mission==1 && skip.first==123450 && skip.second==0);
     third.join(key);
     CHECK(until(host,third,[&] { return third.state()==State::idle; }));
     CHECK(host.state()==State::connected);
@@ -57,8 +98,10 @@ void handshake() {
 void sharedSimulation() {
     Silent audio;
     Game host(audio),guest(audio);
-    host.startCoop(0,fullSave());
-    guest.startCoop(0,fullSave());
+    auto loadout=fullSave(); loadout.character=3;
+    host.startCoop(0,loadout,5);
+    guest.startCoop(0,loadout,5);
+    CHECK(host.character==&characters[3] && host.teammate().character==&characters[5]);
     const auto hostStart=host.player.box.x;
     const auto guestStart=host.teammate().player.box.x;
     for (auto& enemy:host.enemies) enemy.damage=0;

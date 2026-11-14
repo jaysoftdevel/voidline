@@ -1,5 +1,6 @@
 #pragma once
 #include "game/game.hpp"
+#include "content/asset_pack.hpp"
 #include "platform/gl.hpp"
 #include "platform/sdl.hpp"
 #include "render/camera_view.hpp"
@@ -86,7 +87,7 @@ private:
         bool casts=true;
     };
     SDL_Window* window;
-    std::filesystem::path assets;
+    AssetPack assets;
     GL gl;
     bool software=false;
     GLenum hdrFormat=GL_R11F_G11F_B10F;
@@ -137,7 +138,7 @@ private:
     std::vector<Rect> blockers;
     GLuint program(const char* vertex,const char* fragment);
     Texture texture(int w,int h,const void* pixels,GLenum format=GL_RGBA8);
-    Texture readTexture(const std::filesystem::path& path);
+    Texture readTexture(std::string_view name);
     Texture& asset(std::string_view name);
     Target target(int w,int h,GLenum format=0);
     GLenum chooseHdrFormat();

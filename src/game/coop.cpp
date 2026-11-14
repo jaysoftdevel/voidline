@@ -3,11 +3,11 @@
 #include <utility>
 
 namespace vl {
-void Game::startCoop(int sector,const Save& loadout) {
+void Game::startCoop(int sector,const Save& loadout,int guestCharacter) {
     start(sector,loadout);
     coop=true;
     auto guest=loadout;
-    guest.character=(loadout.character+1)%characters.size();
+    guest.character=guestCharacter<0?(loadout.character+1)%characters.size():guestCharacter;
     swapOperatives();
     setupLoadout(guest);
     swapOperatives();

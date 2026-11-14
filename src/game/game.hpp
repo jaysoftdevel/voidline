@@ -11,7 +11,7 @@ public:
     Game& operator=(const Game&)=delete;
     void setTeammate(const Operative& value) { partner=value; }
     void start(int sector,const Save& save);
-    void startCoop(int sector,const Save& loadout);
+    void startCoop(int sector,const Save& loadout,int guestCharacter=-1);
     void retry();
     void applyControls(const Controls& controls,bool second=false,bool pointerMoved=true);
     const Operative& teammate() const { return partner; }

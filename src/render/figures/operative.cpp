@@ -13,11 +13,16 @@ Renderer::Humanoid Renderer::operativeFigure(const Character& character) const {
     static constexpr Palette palettes[]{
         {0x323b48,0x566474,0xd5a07c,0x2e211b,0x4a382c,0x232832},
         {0x234650,0x3a6c7a,0x9a6a4d,0x15141c,0x4d3d30,0x1c2d33},
-        {0x2f2d49,0x4d4a72,0xc79b78,0x8d919c,0x433a33,0x23212f}
+        {0x2f2d49,0x4d4a72,0xc79b78,0x8d919c,0x433a33,0x23212f},
+        {0x4e2e2b,0x995b44,0xbd916e,0x251a18,0x4a352a,0x302021},
+        {0x243d52,0x4a7194,0x79533d,0x121b21,0x2f353b,0x1d2d3d},
+        {0x3e324d,0x6b567e,0xbd917c,0x28202f,0x3d3247,0x2e233b}
     };
-    const auto& pal=palettes[std::clamp(index,0,2)];
+    const auto& pal=palettes[std::clamp(index,0,5)];
     Humanoid h;
-    h.look=static_cast<Look>(std::clamp(index,0,2));
+    // Reuse the existing fully articulated male/female rigs with separate armor palettes.
+    constexpr Look rigs[]{Look::voss,Look::rook,Look::vale,Look::vale,Look::vale,Look::rook};
+    h.look=rigs[std::clamp(index,0,5)];
     h.suit=hex(pal.suit); h.shell=hex(pal.shell);
     h.trim=trim; h.edge=mix(trim,hex(0xffffff),.7f); h.shadow=hex(0x1d2430).energy(1.1f);
     h.ink=hex(0x06080d); h.skin=hex(pal.skin); h.hair=hex(pal.hair);

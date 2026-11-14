@@ -56,3 +56,4 @@ void runCoopTests();
 
 void runCinematicTests();
 void runWeaponArtTests();
+void runAssetPackTests();

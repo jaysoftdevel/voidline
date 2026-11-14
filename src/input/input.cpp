@@ -117,11 +117,18 @@ void Input::event(const SDL_Event& e) {
 
 void Input::reset() {
     for (auto& s : state) s = {};
+    suppressed.fill(false);
     synthetic.fill(0);
     fromEvents.fill(0);
     held.clear();
     syntheticMouse = 0;
     sprintLatched = crouchLatched = false;
+}
+
+void Input::suppressUntilReleased(Act action) {
+    const size_t i=index(action);
+    suppressed[i]=true;
+    state[i]={};
 }
 
 void Input::inject(int scancode, bool isDown) {
@@ -180,6 +187,13 @@ void Input::poll() {
 
     for (size_t i = 0; i < actCount; ++i) {
         State& s = state[i];
+        // A UI button may still be physically down on the first gameplay frame.
+        // Discard its press edge and held state until we observe a full release.
+        if (suppressed[i]) {
+            if (!now[i]) suppressed[i]=false;
+            now[i]=false;
+            s.latchedDown=s.latchedUp=false;
+        }
         s.pressed = (now[i] && !s.held) || s.latchedDown;
         s.released = (!now[i] && s.held) || (s.latchedUp && !now[i]);
         s.held = now[i];
