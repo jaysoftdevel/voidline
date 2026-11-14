@@ -109,7 +109,9 @@ void Session::approve(bool allow) {
     if (!pendingApproval()) return;
     if (allow) {
         if (!send(Packet::welcome)) return;
-        closeSocket(server);
+        // Keep the TCP listener alive to reject excess connections immediately.
+        // Closing it here left Windows clients waiting for TCP connect/handshake
+        // timeouts even though the two-player session was already full.
         lan.close(); // A full mission should no longer appear in LAN discovery.
         status=State::connected;
     } else {
@@ -209,6 +211,18 @@ void Session::flush() {
 
 void Session::poll() {
     lan.poll();
+    if (hostSide && status==State::connected && server!=invalidSocket) {
+        // Consume pending connects rather than leaving them in the OS backlog.
+        // On Windows a connect against a recently closed listener may linger,
+        // making the joining client time out instead of rejecting promptly.
+        for (int attempts=0; attempts<8; ++attempts) {
+            Socket extra=acceptPeer(server);
+            if (extra==invalidSocket) break;
+            constexpr std::array<uint8_t,5> deniedFrame{0,0,0,1,static_cast<uint8_t>(Packet::denied)};
+            (void)writeSocket(extra,deniedFrame);
+            closeSocket(extra);
+        }
+    }
     if (status==State::waiting) {
         peer=acceptPeer(server);
         if (peer!=invalidSocket) {

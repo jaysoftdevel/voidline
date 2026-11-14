@@ -34,7 +34,6 @@ try {
     }
     if ($VcpkgInstalled -and (Test-Path -LiteralPath $VcpkgInstalled -PathType Container)) {
         $licenses = Join-Path $stage 'licenses'
-        New-Item -ItemType Directory -Path $licenses | Out-Null
         foreach ($port in (Get-ChildItem -LiteralPath $VcpkgInstalled -Directory)) {
             $notice = Join-Path $port.FullName 'copyright'
             if (Test-Path -LiteralPath $notice -PathType Leaf) {

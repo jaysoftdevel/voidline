@@ -59,15 +59,15 @@ void Renderer::drawEnemy(const Enemy& e,Color accent,Biome biome,float time,Vec 
             triangle(at+Vec{side*7,-7},at+Vec{side*15,-22},at+Vec{side*19,-7},v.plate);
             line(at+Vec{side*9,-7},at+Vec{side*16,-18},1.2f,v.accent.energy(1.8f));
         }
-        ellipse(at+Vec{v.facing*12,-4},{4,3},v.alert.energy(2));
+        ellipse(at+Vec{v.facing*12.f,-4},{4,3},v.alert.energy(2));
     } else if (e.kind==EnemyKind::sniper) {
-        const Vec barrel=at+Vec{v.facing*31,4};
-        line(at+Vec{v.facing*8,1},barrel,4,v.black);
-        line(at+Vec{v.facing*9,0},barrel,2,v.plate);
-        ellipse(at+Vec{v.facing*7,-5},{5,2},v.black);
-        line(at+Vec{v.facing*2,-11},at+Vec{v.facing*15,-11},1.8f,v.accent.energy(2));
+        const Vec barrel=at+Vec{v.facing*31.f,4};
+        line(at+Vec{v.facing*8.f,1},barrel,4,v.black);
+        line(at+Vec{v.facing*9.f,0},barrel,2,v.plate);
+        ellipse(at+Vec{v.facing*7.f,-5},{5,2},v.black);
+        line(at+Vec{v.facing*2.f,-11},at+Vec{v.facing*15.f,-11},1.8f,v.accent.energy(2));
     } else if (e.kind==EnemyKind::bulwark) {
-        const Vec shield=at+Vec{v.facing*22,3};
+        const Vec shield=at+Vec{v.facing*22.f,3};
         polygon(shield+Vec{-9,-21},shield+Vec{10,-18},shield+Vec{9,22},shield+Vec{-9,23},v.black);
         polygon(shield+Vec{-7,-18},shield+Vec{8,-16},shield+Vec{7,19},shield+Vec{-7,20},v.hull);
         line(shield+Vec{0,-14},shield+Vec{0,14},2.5f,v.accent.energy(1.3f));
@@ -90,9 +90,9 @@ void Renderer::drawEnemy(const Enemy& e,Color accent,Biome biome,float time,Vec 
         line(at+Vec{-8,-22},at+Vec{8,-22},3,v.alert.energy(2));
     }
     if (e.elite && e.alive) {
-        const Vec at{v.x,v.y-e.box.h*.5f-18};
-        line(at+Vec{-6,0},at+Vec{0,-4},1.7f,v.alert);
-        line(at+Vec{0,-4},at+Vec{6,0},1.7f,v.alert);
+        const Vec marker{v.x,v.y-e.box.h*.5f-18};
+        line(marker+Vec{-6,0},marker+Vec{0,-4},1.7f,v.alert);
+        line(marker+Vec{0,-4},marker+Vec{6,0},1.7f,v.alert);
     }
     drawWounds(v);
     if (e.warning>0 && e.alive) {

@@ -50,6 +50,10 @@ else()
 endif()
 if(NOT MSVC)
   set(VOIDLINE_WARNINGS -Wall -Wextra -Wpedantic -Wshadow -Wnon-virtual-dtor -Woverloaded-virtual)
+  # Match MSVC C2397: braced int-to-float narrowing is a build error on all platforms.
+  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    list(APPEND VOIDLINE_WARNINGS -Werror=narrowing)
+  endif()
 endif()
 
 # The sources are split into modules with a one-way dependency order:

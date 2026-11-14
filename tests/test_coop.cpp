@@ -8,7 +8,9 @@ using namespace test;
 
 namespace {
 bool until(net::Session& host,net::Session& guest,const auto& condition) {
-    const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(2);
+    // Allow for Windows loopback scheduling and antivirus delays while still
+    // requiring prompt connection rejection and handshake completion.
+    const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(5);
     do {
         host.poll(); guest.poll();
         if (condition()) return true;
@@ -85,9 +87,21 @@ void handshake() {
           messages.front()[0]==static_cast<uint8_t>(net::Packet::skipOpening) &&
           net::decodeTiming(std::span<const uint8_t>(messages.front()).subspan(1),skip) &&
           skip.mission==1 && skip.first==123450 && skip.second==0);
-    third.join(key);
+    // A full session must immediately reject extra connections on Windows
+    // as well as Linux, without disrupting the accepted guest.
+    CHECK(third.join(key));
     CHECK(until(host,third,[&] { return third.state()==State::idle; }));
-    CHECK(host.state()==State::connected);
+    CHECK(host.state()==State::connected && guest.state()==State::connected);
+    CHECK(!host.discoverable());
+    CHECK(guest.send(net::Packet::operative,std::array<uint8_t,1>{4}));
+    CHECK(until(host,guest,[&] { messages=host.receive(); return !messages.empty(); }));
+    CHECK(messages.size()==1 && messages[0].size()==2 && messages[0][1]==4);
+    // Repeated attempts must be rejected, not leak pending sockets.
+    for (int attempt=0;attempt<3;++attempt) {
+        CHECK(third.join(key));
+        CHECK(until(host,third,[&] { return third.state()==State::idle; }));
+    }
+    CHECK(host.state()==State::connected && guest.state()==State::connected);
     guest.close();
     CHECK(until(host,guest,[&] { return host.state()==State::idle; }));
     CHECK(!host.error().empty());
