@@ -5,6 +5,9 @@ using namespace vl::ui;
 
 namespace vl {
 void App::sceneForTest(std::string_view scene) {
+    if (scene=="map") {
+        save.cleared=sectorCount-1; sector=sectorCount-1; showMap(); return;
+    }
     if (scene=="menu") { show(View::menu); return; }
     if (scene=="create") { newGame(); return; }
     if (scene=="controls") {
@@ -135,7 +138,7 @@ void App::sceneForTest(std::string_view scene) {
         };
         return;
     }
-    const int index=std::clamp(std::stoi(std::string(scene))-1,0,4);
+    const int index=std::clamp(std::stoi(std::string(scene))-1,0,sectorCount-1);
     launch(index);
     game.entry=0;
     input.inject(sdl::key::d,true);

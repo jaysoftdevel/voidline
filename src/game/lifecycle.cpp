@@ -5,7 +5,7 @@ namespace vl {
 float Game::random() { return std::generate_canonical<float,22>(rng); }
 
 void Game::resetTransient() {
-    release();
+    releaseBoth();
     ambient.clear(); skyFlash=0; ambientTimer=1.2f;
     shots.clear(); hostile.clear(); particles.clear(); messages.clear(); rings.clear(); corpses.clear();
     style={}; combo=0; comboTimer=0; flash=0; pain=0; punch=0; hitStop=0; timeScale=1; slowing=slowLocked=false;
@@ -13,11 +13,11 @@ void Game::resetTransient() {
 }
 
 void Game::start(int sector,const Save& save) {
+    coop=false; partner={}; partnerInput={};
     index=sector;
     stage=&stages[index]; campaign=save;
-    character=&characters[save.character]; difficulty=&difficulties[save.difficulty];
+    difficulty=&difficulties[save.difficulty];
     const auto& rank=save.perks;
-    maxHealth=int(std::lround(character->health*(1+.10f*rank[0])));
     speedScale=1+.04f*rank[1]; jumpScale=1+.03f*rank[1];
     slowDrain=.16f/(1+.25f*rank[2]); slowRegen=.045f*(1+.25f*rank[2]);
     pickupAmmo=.41f*(1+.20f*rank[3]); pickupHeal=42*(1+.15f*rank[4]);
@@ -26,18 +26,43 @@ void Game::start(int sector,const Save& save) {
     for (const auto& box:stage->ground) platforms.push_back({box,{},true});
     for (const auto& box:stage->ledges) platforms.push_back({box,{}});
     for (const auto& lift:stage->lifts) platforms.push_back({{lift.x,lift.y,lift.w,15},{},false,&lift});
+    for (const auto& box:stage->cover) platforms.push_back({box,{},false,nullptr,true});
+    crates.clear();
+    for (const auto& placement:stage->crates) {
+        const Vec base=placement.base;
+        const auto& spec=crateSpec(placement.kind);
+        crates.push_back({placement.kind,{base.x-spec.w*.5f,base.y-spec.h,spec.w,spec.h},spec.hits});
+    }
     enemies.clear(); supplies.clear();
+    const int later=std::max(0,index-4);
     for (const auto& item:stage->enemies) {
         const auto& s=spec(item.kind);
         const bool boss=item.kind==EnemyKind::boss;
         const int id=static_cast<int>(enemies.size());
-        const int hp=std::lround(s.hp*(1+index*(boss?.27f:.085f))*difficulty->hp);
+        const float scaling=1+std::min(index,4)*(boss?.27f:.085f)+later*(boss?.11f:.042f);
+        const int hp=std::lround(s.hp*scaling*(item.elite?1.45f:1.f)*difficulty->hp);
         const Vec origin{item.x-s.w*.5f,item.y-(item.kind==EnemyKind::drone?0:s.h)};
         enemies.push_back({item.kind,{origin.x,origin.y,s.w,s.h},origin,item.y,
             item.patrol>0?item.patrol:(boss?160.f:0.f),float((id*97+index*47)%239),
-            .66f+(id%4)*.23f,s.damage*difficulty->damage*(1+index*.045f),s.reach,s.speed,hp,hp,id%2?-1:1});
+            .66f+(id%4)*.23f,s.damage*difficulty->damage*(1+std::min(index,4)*.045f+later*.025f)
+                *(item.elite?1.18f:1.f),s.reach+(item.elite?35.f:0.f),
+            s.speed*(item.elite?1.25f:1.f),hp,hp,id%2?-1:1});
+        enemies.back().elite=item.elite;
     }
     for (const auto& item:stage->supplies) supplies.push_back({item.kind,{item.x,item.y-20}});
+    setupLoadout(save);
+    resetTransient(); backup={}; slowEnergy=1; bestCombo=0;
+    score=0; kills=0; time=0; camera=0;
+    activeBeacon=-1; bossActive=bossDead=false;
+    spawn({100,stage->ground.front().y});
+    moveLifts(0);
+    mode=Mode::active;
+}
+
+void Game::setupLoadout(const Save& save) {
+    character=&characters[save.character];
+    maxHealth=int(std::lround(character->health*(1+.10f*save.perks[0])));
+    gun=save.equipped;
     for (size_t i=0;i<guns.size();++i) {
         const auto& w=weapons[i];
         const auto& t=save.tiers[i];
@@ -47,12 +72,6 @@ void Game::start(int sector,const Save& save) {
                  w.reload*(1-t[2]*.15f),0,save.cleared>=w.unlock,
                  w.range*(1+t[4]*.14f),w.interval*(1-t[5]*.08f),w.spread*(1-t[6]*.22f),t[7]*.07f};
     }
-    resetTransient(); backup={}; slowEnergy=1; bestCombo=0;
-    gun=save.equipped; score=0; kills=0; time=0; camera=0;
-    checkpoint=bossActive=bossDead=false;
-    spawn({100,stage->ground.front().y});
-    moveLifts(0);
-    mode=Mode::active;
 }
 
 void Game::spawn(Vec safe) {
@@ -82,17 +101,28 @@ void Game::resetPose() {
 }
 
 void Game::retry() {
-    if (!checkpoint) { start(index,campaign); return; }
+    if (activeBeacon<0) {
+        const auto save=campaign;
+        if (coop) startCoop(index,save);
+        else start(index,save);
+        return;
+    }
     resetTransient();
     time=backup.time; score=backup.score; kills=backup.kills; gun=backup.gun;
     guns=backup.guns; for (auto& g:guns) g.reload=0;
-    enemies=backup.enemies; supplies=backup.supplies;
+    enemies=backup.enemies; supplies=backup.supplies; crates=backup.crates;
     bossActive=backup.bossActive; bossDead=backup.bossDead;
     player.support=-1;
     moveLifts(0);
-    spawn(stage->beacon+Vec{14,0});
-    camera=clamp(stage->beacon.x-width*.32f,0,stage->worldWidth-width);
+    const Vec beacon=stage->beacons[activeBeacon];
+    spawn(beacon-Vec{playerW*.5f,0});
+    camera=clamp(beacon.x-width*.32f,0,stage->worldWidth-width);
     player.flash=.9f; entry=0; mode=Mode::active;
+    if (coop) {
+        partner=backup.partner;
+        for (auto& g:partner.guns) g.reload=0;
+        spawnPartner(player.safe);
+    }
 }
 
 void Game::pause(bool paused) { release(); mode=paused?Mode::paused:Mode::active; }
@@ -113,7 +143,8 @@ float Game::advance(float dt) {
     if (mode!=Mode::active) { timeScale=1; slowing=false; return 1; }
     // Slow motion drains a reserve in real time. A drained reserve must refill a little before it re-engages.
     if (slowLocked && slowEnergy>.22f) slowLocked=false;
-    const bool wants=held(Key::slow) && !slowLocked && slowEnergy>0;
+    const bool wants=(held(Key::slow) || (coop && partnerInput.keys[static_cast<size_t>(Key::slow)]))
+        && !slowLocked && slowEnergy>0;
     if (wants && !slowing) audio.event("switch",.5f,0,.62f);
     if (!wants && slowing) audio.event("switch",.4f,0,1.25f);
     slowing=wants;
@@ -141,15 +172,29 @@ void Game::tick(float dt) {
     time+=dt; entry=std::max(0.f,entry-dt); shake=std::max(0.f,shake-36*dt);
     moveLifts(dt); movePlayer(dt);
     if (mode!=Mode::active) return;
-    shoot(dt); moveEnemies(dt); moveShots(dt);
+    shoot(dt);
+    if (coop) {
+        swapOperatives();
+        movePlayer(dt);
+        if (mode==Mode::active) shoot(dt);
+        updateCamera(dt);
+        swapOperatives();
+    }
     if (mode!=Mode::active) return;
-    triggers(); updateParticles(dt); updateCorpses(dt); updateAmbient(dt);
-    const float target=clamp(player.box.x-width*.34f+player.velocity.x*.28f,0,stage->worldWidth-width);
-    camera=mix(camera,target,1-std::exp(-4.9f*dt));
-    if (mode==Mode::active && bossDead && std::abs(player.box.center().x-stage->exit.x)<48 &&
-        std::abs(player.box.bottom()-stage->exit.y)<45) {
+    moveEnemies(dt); moveShots(dt); detonateCrates();
+    if (mode!=Mode::active) return;
+    triggers();
+    if (coop && mode==Mode::active) {
+        swapOperatives();
+        triggers();
+        swapOperatives();
+    }
+    if (mode==Mode::active) checkpoints();
+    updateParticles(dt); updateCorpses(dt); updateAmbient(dt);
+    updateCamera(dt);
+    if (mode==Mode::active && bossDead && atExtraction(player) && (!coop || atExtraction(partner.player))) {
         score+=std::lround((60+index*18)*difficulty->score);
-        release(); mode=Mode::complete;
+        releaseBoth(); mode=Mode::complete;
     }
 }
 } // namespace vl

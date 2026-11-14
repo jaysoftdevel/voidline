@@ -72,7 +72,7 @@ void Game::updateGait(float dt,float travel,float accel,int priorSupport,float l
                     foot.anchor=clamp(clamp(projected,center-24,center+24),surface.x+2,surface.right()-2)-surface.x;
                     if (!changedSurface && phase<.13f && speed>40) {
                         const auto& s=platforms[p.support];
-                        audio.event(s.ground?footSounds[index]:"step-grate",g.crouch>.6f?.28f:.31f+pace*.40f,0,.95f+random()*.10f+campaign.character*.022f);
+                        audio.event(s.ground?footSounds[static_cast<int>(stage->biome)]:"step-grate",g.crouch>.6f?.28f:.31f+pace*.40f,0,.95f+random()*.10f+campaign.character*.022f);
                         if (pace>.52f) burst({surface.x+foot.anchor,floor},hex(stage->cold),2,32,ParticleKind::smoke);
                     }
                 }

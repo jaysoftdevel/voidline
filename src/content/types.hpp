@@ -3,6 +3,8 @@
 
 namespace vl {
 enum class EnemyKind {drone,ranger,turret,stalker,boss};
+enum class Biome {mine,water,biodome,forge,orbital};
+inline constexpr int sectorCount=20;
 enum class SupplyKind {ammo,salvage,health};
 struct Character {
     const char *name,*role,*art,*color,*trait,*description;
@@ -21,14 +23,27 @@ struct Upgrade { const char *key,*name,*description; int base; };
 struct Perk { const char *key,*name,*description; int base,maxRank; };
 struct Lift { float x,y,w,dx,dy,period,phase; };
 struct Vent { float x,y,phase; };
-struct EnemyPlacement { EnemyKind kind; float x,y,patrol; };
+struct EnemyPlacement { EnemyKind kind; float x,y,patrol; bool elite=false; };
 struct SupplyPlacement { SupplyKind kind; float x,y; };
+enum class CrateKind {charge,fuel,reactor};
+struct CrateSpec { const char* name; int hits; float radius,damage,w,h; uint32_t color; };
+inline constexpr CrateSpec crateSpecs[]{
+    {"Charge box",2,100,48,32,30,0xffd55b},
+    {"Fuel crate",4,155,87,40,33,0xff8e51},
+    {"Reactor cell",7,218,141,45,38,0xff557e}
+};
+inline const CrateSpec& crateSpec(CrateKind kind) { return crateSpecs[static_cast<int>(kind)]; }
+struct CratePlacement { CrateKind kind; Vec base; };
 struct Stage {
-    const char *name,*art,*location,*threat,*accent,*cold,*briefing,*boss,*pit;
-    float worldWidth; Vec beacon,exit;
+    const char *name,*art,*location,*threat,*accent,*cold,*briefing,*boss;
+    Biome biome;
+    float worldWidth; Vec exit;
+    std::vector<Vec> beacons;
     std::vector<Rect> ground,ledges;
     std::vector<Lift> lifts; std::vector<Vent> vents;
     std::vector<EnemyPlacement> enemies; std::vector<SupplyPlacement> supplies;
+    std::vector<Rect> cover{};
+    std::vector<CratePlacement> crates{};
 };
 struct Record { float time=0; int score=0; };
 struct Save {
@@ -36,7 +51,7 @@ struct Save {
     int64_t updated=0;
     std::array<std::array<int,upgradeCount>,weaponCount> tiers{};
     std::array<int,perkCount> perks{};
-    std::array<Record,5> records{};
+    std::array<Record,sectorCount> records{};
 };
 // Keyboard remapping slots. Every action has keysPerAction slots. A slot holds a scancode, 0 for unassigned or -1 for the default.
 inline constexpr size_t keysPerAction = 3, actionSlots = 24, keymapSize = keysPerAction * actionSlots;

@@ -45,7 +45,7 @@ void Renderer::ambient(const Game& g) {
             const float dir=a.v.x>0?1.f:-1.f;
             if (a.variant==0) {
                 // Silhouetted transport with strobing nav lights and a glowing engine.
-                const float big=(g.index==4?1.55f:1.f)*s;
+                const float big=(g.stage->biome==Biome::orbital?1.55f:1.f)*s;
                 const Color hull=hex(0x070b12);
                 const Vec nose=c+Vec{dir*34*big,0}, tail=c-Vec{dir*34*big,0};
                 polygon(nose,c+Vec{dir*6*big,-8*big},tail+Vec{dir*4*big,-6*big},c+Vec{0,7*big},hull.alpha(.94f*fade));
@@ -106,7 +106,7 @@ void Renderer::ambient(const Game& g) {
         case AmbientKind::streak: {
             const Vec dirv=normal(a.v);
             const float alpha=std::min(1.f,std::sin(clamp(t)*pi)*2.f);
-            const Color tint=g.index==2?hex(0xd6b8ff):hex(0xfff0d8);
+            const Color tint=g.stage->biome==Biome::biodome?hex(0xd6b8ff):hex(0xfff0d8);
             beam(c,2,c-dirv*86,.4f,tint.energy(2.4f).alpha(.9f*alpha),tint.alpha(0));
             halo(c,10,tint.energy(2.4f).alpha(.7f*alpha));
             break;
@@ -135,7 +135,7 @@ void Renderer::ambient(const Game& g) {
             const float sweep=std::sin(age*.8f)*.58f*(a.v.y>0?1.f:-1.f);
             const float angle=a.v.x+sweep;
             const Vec dirv=ray(angle);
-            const Color tint=g.index==4?hex(0xb7d4ff):hex(0xfff0cc);
+            const Color tint=g.stage->biome==Biome::orbital?hex(0xb7d4ff):hex(0xfff0cc);
             beam(c,4,c+dirv*980,190,tint.energy(1.6f).alpha(.26f*fade),tint.alpha(0));
             beam(c,2,c+dirv*980,70,tint.energy(2.f).alpha(.14f*fade),tint.alpha(0));
             halo(c+dirv*10,26,tint.energy(2.f).alpha(.4f*fade));
@@ -155,7 +155,7 @@ void Renderer::ambient(const Game& g) {
             break;
         }
         case AmbientKind::spores: {
-            const Color glow=g.index==2?hex(0xd18cff):cold;
+            const Color glow=g.stage->biome==Biome::biodome?hex(0xd18cff):cold;
             for (int i=0;i<24;++i) {
                 const float hx=hashf(a.seed,i);
                 const Vec at=c+Vec{std::sin(hx*6.f+age*.7f)*55*s+(hx-.5f)*150*s,-age*(14+hashf(a.seed,i+10)*24)+std::sin(age*2.f+i)*6};

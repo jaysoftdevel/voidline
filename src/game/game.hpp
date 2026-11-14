@@ -1,5 +1,5 @@
 #pragma once
-#include "game/entities.hpp"
+#include "game/operative.hpp"
 #include "game/geometry.hpp"
 #include <random>
 
@@ -7,8 +7,17 @@ namespace vl {
 class Game {
 public:
     explicit Game(AudioSink& output):audio(output) {}
+    Game(const Game&)=delete;
+    Game& operator=(const Game&)=delete;
+    void setTeammate(const Operative& value) { partner=value; }
     void start(int sector,const Save& save);
+    void startCoop(int sector,const Save& loadout);
     void retry();
+    void applyControls(const Controls& controls,bool second=false);
+    const Operative& teammate() const { return partner; }
+    bool coop=false;
+    bool atExtraction(const Player& body) const;
+    void syncLifts() { moveLifts(0); }
     void tick(float dt=step);
     void pause(bool paused);
     void input(Key key,bool down);
@@ -29,25 +38,35 @@ public:
     // Starts a background event. Without arguments the sector picks one from its own weighted table.
     void spawnAmbient(int forcedKind=-1,int forcedVariant=0);
     int ventState(float phase) const;
+    bool nearCover() const { return nearCover(player); }
+    bool nearCover(const Player& body) const;
+    Vec weaponPivot(const Player& body) const;
+    Vec muzzle(const Operative& operative) const;
     Vec weaponPivot() const;
     Vec muzzle() const;
     void resetPose();
 
     const Stage* stage=nullptr;
-    const Character* character=nullptr;
+    Operative operative;
+    const Character*& character=operative.character;
     const Difficulty* difficulty=nullptr;
-    int index=0, gun=0, score=0,kills=0;
-    bool checkpoint=false,bossActive=false,bossDead=false,pointerActive=false;
+    int index=0,score=0,kills=0;
+    int& gun=operative.gun;
+    int activeBeacon=-1;
+    bool bossActive=false,bossDead=false;
     Mode mode=Mode::paused;
-    float time=0,entry=0,shake=0,camera=0;
+    float time=0,entry=0,shake=0;
+    float& camera=operative.camera;
     float timeScale=1,hitStop=0,punch=0,slowEnergy=1,comboTimer=0,flash=0,pain=0;
     // Crosshair feedback. hitMarker lights up on every hit and killMarker on a kill.
     float hitMarker=0,killMarker=0;
     int combo=0,bestCombo=0;
-    Vec mouse;
-    Player player;
-    std::array<Gun,weaponCount> guns{};
-    int maxHealth=100;
+    OperativeInput localInput;
+    Vec& mouse=localInput.mouse;
+    bool& pointerActive=localInput.pointerActive;
+    Player& player=operative.player;
+    std::array<Gun,weaponCount>& guns=operative.guns;
+    int& maxHealth=operative.maxHealth;
     // Values derived from the operative upgrades that were purchased in the armory.
     float speedScale=1,jumpScale=1,slowDrain=.16f,slowRegen=.045f,pickupAmmo=.41f,pickupHeal=42,damageTaken=1;
     std::vector<Ambient> ambient;
@@ -57,6 +76,7 @@ public:
     std::vector<Platform> platforms;
     std::vector<Enemy> enemies;
     std::vector<Supply> supplies;
+    std::vector<Explosive> crates;
     std::vector<Shot> shots,hostile;
     std::vector<Particle> particles;
     std::vector<Message> messages;
@@ -72,15 +92,25 @@ private:
         std::array<Gun,weaponCount> guns{};
         std::vector<Enemy> enemies;
         std::vector<Supply> supplies;
+        std::vector<Explosive> crates;
+        Operative partner;
     } backup;
     AudioSink& audio;
     Save campaign;
-    std::array<bool,static_cast<size_t>(Key::count)> keys{};
-    Vec stickAim{};
+    Operative partner;
+    OperativeInput partnerInput;
+    std::array<bool,static_cast<size_t>(Key::count)>& keys=localInput.keys;
+    Vec& stickAim=localInput.stickAim;
+    bool& stickActive=localInput.stickActive;
+    void swapOperatives();
+    void releaseBoth();
+    void updateCamera(float dt);
+    void setupLoadout(const Save& save);
+    void spawnPartner(Vec safe);
 
     std::minstd_rand ambientRng{0x51f};
     float ambientRandom() { return std::generate_canonical<float,22>(ambientRng); }
-    bool stickActive=false,slowing=false,slowLocked=false;
+    bool slowing=false,slowLocked=false;
     std::minstd_rand rng{0x2796};
     float random();
     bool held(Key k) const { return keys[static_cast<size_t>(k)]; }
@@ -106,10 +136,14 @@ private:
     void reload();
     void shoot(float dt);
     void moveEnemies(float dt);
-    void enemyFire(Enemy& e);
+    void enemyFire(Enemy& e,float targetX);
     void moveShots(float dt);
     void destroy(Enemy& e);
     void explode(Vec at,float radius,float damage,Color color);
+    int crateOnSegment(Vec start,Vec change,float& first) const;
+    void strikeCrate(Explosive& crate,Vec hit);
+    void detonateCrates();
+    void blastEffects(Vec at,float radius,Color color);
     void registerHit(Enemy& e,Vec point,Vec direction,float damage,bool crit);
     void flushDamageNumber(Enemy& e);
     void updateEnemyFeedback(Enemy& e,float dt);
@@ -120,6 +154,7 @@ private:
     void ring(Vec p,Color color,float radius,float life=.42f);
     void hurt(float damage,bool force=false);
     void triggers();
+    void checkpoints();
     void burst(Vec p,Color color,int count,float speed,ParticleKind kind=ParticleKind::spark);
     void message(Vec p,std::string text,Color color,float duration=1.05f);
     void updateParticles(float dt);

@@ -8,7 +8,7 @@ namespace {
 void ambientEvents() {
     using namespace vl;
     Silent audio;
-    for (int sector = 0; sector < 5; ++sector) {
+    for (int sector = 0; sector < sectorCount; ++sector) {
         Game game(audio);
         game.start(sector, startSave());
         game.entry = 0;

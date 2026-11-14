@@ -1,10 +1,12 @@
-# VOIDLINE 2.2.0
+# VOIDLINE 2.4.0
 
-VOIDLINE is a native Linux 2D shooter written in C++20 with five sectors, three operatives, difficulty levels, an armory and a skippable opening cinematic. Destroy the guardian in each sector and reach extraction to turn mission score into upgrade points.
+VOIDLINE is a native Linux 2D shooter written in C++20 with 20 sectors, three operatives, difficulty levels, an armory and a skippable opening cinematic. Destroy the guardian in each sector and reach extraction to turn mission score into upgrade points.
 
 ## Build and run
 
-Requires a C++20 compiler, CMake, and the SDL2, libwebp, libpng16, libsndfile and json-c runtime libraries plus an OpenGL 3.3 core driver. Development packages are not needed because the platform ABI is declared in `src/platform.hpp`. On Debian or Ubuntu, `./install_deps.sh` installs everything.
+Run `./run.sh` to use the included x86-64 Linux executable. It requires glibc 2.38 or later and the runtime libraries below. The script uses the locally built executable when one is available.
+
+Building from source requires a C++20 compiler, CMake, and the SDL2, libwebp, libpng16, libsndfile and json-c runtime libraries plus an OpenGL 3.3 core driver. Development packages are not needed because the platform ABI is declared in `src/platform.hpp`. On Debian or Ubuntu, `./install_deps.sh` installs everything.
 
 ```bash
 ./build.sh
@@ -16,6 +18,18 @@ Requires a C++20 compiler, CMake, and the SDL2, libwebp, libpng16, libsndfile an
 The executable is `build/voidline/voidline`. The build links `assets/` next to it. The game starts in fullscreen. Use `./run.sh --windowed` or F11 to switch window modes. Settings includes High and Performance rendering modes.
 
 Progress lives in `${XDG_DATA_HOME:-$HOME/.local/share}/voidline/campaign.json`. Use `--save-file /path/to/campaign.json` for a custom location. Campaigns, settings, best sector records and armory purchases persist. Field checkpoints are available for retries during the current mission.
+
+## Two-player co-op
+
+1. Both players launch VOIDLINE 2.4.0 and open **Multiplayer**.
+2. On the host, choose **Host Game**, select a starting sector and difficulty, and select **Generate Session Key**. The lobby waits for player 2. Copy the key and share it with your partner.
+3. On the other computer, choose **Join Game**, paste the key, and select **Connect**. The mission starts on both computers after the connection is accepted.
+
+Use a local network or an IPv4 VPN. The host menu fills in a local IPv4 address. Edit it before generating the key if your partner reaches you through a different interface. The key contains that address and a random session identifier. The connection goes directly to the host on TCP port 38274. A key alone cannot connect through an unreachable address, and the game has no relay or matchmaking server.
+
+Each player controls a separate operative and camera. The host simulates enemies, projectiles, pickups, checkpoints and explosive crates for both players. Bullet time slows the shared mission. Clear the guardian and bring both operatives to the extraction gate. Either operative going down ends the attempt, and the host can retry from the team's latest checkpoint. The host can advance the same session through the remaining sectors.
+
+The co-op menu leaves the mission running for your partner. Closing the session or disconnecting returns the other player to Multiplayer. Co-op progress lasts for the session and uses a separate loadout based on the starting sector. Solo save slots remain independent.
 
 ## Controls
 
@@ -56,9 +70,23 @@ Esc, F3, F11, Tab and Enter are reserved and cannot be assigned. Jumping from a 
 
 Every weapon has eight upgrades with three ranks each: damage, magazine, reload speed, ammo reserve, range, fire rate, accuracy and critical hits. The Operative tab of the armory adds six upgrades that apply to every weapon: suit integrity, a lighter frame (speed and jump), a larger bullet-time reserve, a scavenger bonus for pickups, field medic healing and ballistic plating. The carbine, pistol, shotgun and arc rifle all reach farther than in 2.0. Saves from earlier versions load unchanged.
 
+## Campaign and cover
+
+The sector map shows five missions per page. Clear a sector to unlock the next one. Existing saves keep their progress and unlock Sector 6 when Terminus is already cleared. Routes get longer, with wider gaps, moving lifts, elevated routes, timed vents and elite enemies. Later sectors have multiple field checkpoints and guarded approaches to the extraction arena.
+
+Crouch behind a barricade with **C** to break enemy line of sight. Stand and aim over it to fire. Jump to cross it. Shots hit barricades from either side.
+
+| Explosive container | Projectile hits | Blast radius |
+| --- | ---: | ---: |
+| Charge box | 2 | 100 |
+| Fuel crate | 4 | 155 |
+| Reactor cell | 7 | 218 |
+
+Each projectile, including an individual shotgun pellet or an enemy round, removes one lit segment. The larger containers deal more damage. Blast damage falls off with distance and walls reduce the damage behind them. A blast detonates other containers within range and can damage the operative and enemies.
+
 ## Living backdrops
 
-Each sector has its own background events that play out behind the action: distant detonations and transports in The Descent, steam vents, geysers and eels in Tideworks, drifting spores and bat flocks in Overgrowth, forge eruptions and lava fountains in the Foundry, and lightning, search lights and shooting stars at Terminus. Blasts and lightning light the scene, shake the ground slightly and are heard in the distance.
+Each environment has its own background events that play out behind the action: distant detonations and transports in The Descent, steam vents, geysers and eels in Tideworks, drifting spores and bat flocks in Overgrowth, forge eruptions and lava fountains in the Foundry, and lightning, search lights and shooting stars at Terminus. Blasts and lightning light the scene, shake the ground slightly and are heard in the distance.
 
 
 ## Style
@@ -76,11 +104,12 @@ Each enemy type dies differently. Soldiers stagger, buckle, drop the rifle and t
 | Path | Contents |
 | --- | --- |
 | `src/core/` | Vectors, colors and math helpers |
-| `src/content/` | Characters, weapons, upgrades and the five sector layouts as data |
+| `src/content/` | Characters, weapons, upgrades and the 20 sector layouts as data |
 | `src/game/` | The simulation, one file per feature: lifecycle, player movement (stance, run, jump, fall, gait, aim), weapons, projectiles, enemy AI, combat, hit reactions, death animations, effects, ambient events, triggers |
 | `src/input/` | Actions, key bindings and the polled input state |
 | `src/platform/` | SDL and OpenGL declarations and the OpenGL loader |
 | `src/services/` | Audio mixing and campaign storage |
+| `src/net/` | Direct multiplayer sessions, input and world snapshots |
 | `src/render/` | Renderer core, GPU helpers, shaders, post-processing passes, scenery, ambient scenes and the figures (rig, legs, torso, head, arms, per-enemy drawing) |
 | `src/ui/` | Application state, widgets and one file per screen |
 | `src/engine/` | Window, frame loop and command line options |
@@ -92,7 +121,7 @@ Each folder under `src/` that has sources becomes one static library (game, serv
 
 ## Diagnostics
 
-Render a short, deterministic scene through the renderer with an offscreen SDL driver. Scenes are `1` to `5`, `menu`, `create`, `armory`, `intro`, `stand0` to `stand6`, `flip` and `slow`, `walk`, `arms`, `armsrun`, `boss`, `controls`, `hit0` to `hit4` (one enemy type shot to death) and `gallery0` to `gallery2`. Add `--follow` to crop the screenshot around the action.
+Render a short, deterministic scene through the renderer with an offscreen SDL driver. Scenes are `1` to `20`, `map`, `menu`, `create`, `armory`, `intro`, `stand0` to `stand6`, `flip` and `slow`, `walk`, `arms`, `armsrun`, `boss`, `controls`, `hit0` to `hit4` (one enemy type shot to death) and `gallery0` to `gallery2`. Add `--follow` to crop the screenshot around the action.
 
 ```bash
 SDL_VIDEODRIVER=offscreen SDL_AUDIODRIVER=dummy \

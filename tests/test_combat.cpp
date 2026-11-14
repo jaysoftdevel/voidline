@@ -84,10 +84,86 @@ void explosives() {
     CHECK(game.kills >= 2);
     CHECK(game.guns[5].ammo >= game.guns[5].capacity - 2);
 }
+
+void coverAndCrates() {
+    Silent audio;
+    Game game(audio);
+    auto start=[&] {
+        game.start(0,fullSave());
+        for (auto& e:game.enemies) e.alive=false;
+        game.crates.clear();
+        game.entry=0;
+    };
+    auto bullet=[&](float x,float y) {
+        game.shots.push_back({{x,y},{1200,0},1,20,hex(0xffffff)});
+        run(game,10);
+    };
+
+    start();
+    game.platforms.push_back({{147,462,44,43},{},false,nullptr,true});
+    game.input(Key::crouch,true);
+    game.tick();
+    CHECK(game.player.crouched && game.nearCover());
+    const auto hp=game.player.hp;
+    game.hostile.push_back({{210,481},{-1200,0},1,20,hex(0xffffff)});
+    run(game,12);
+    CHECK(game.player.hp==hp && game.hostile.empty());
+    game.input(Key::crouch,false);
+    game.tick();
+    CHECK(game.weaponPivot().y<462);
+    game.hostile.push_back({{210,455},{-1200,0},1,20,hex(0xffffff)});
+    run(game,12);
+    CHECK(game.player.hp<hp);
+
+    for (const auto kind:{CrateKind::charge,CrateKind::fuel,CrateKind::reactor}) {
+        start();
+        const auto& spec=crateSpec(kind);
+        game.crates.push_back({kind,{153,472,36,33},spec.hits});
+        auto& e=game.enemies.front();
+        e.alive=true; e.kind=EnemyKind::ranger; e.hp=e.maxHp=200;
+        e.box={202,451,35,54}; e.origin={202,451}; e.patrol=0; e.damage=0; e.reach=0;
+        for (int hits=spec.hits-1;hits>0;--hits) {
+            bullet(126,488);
+            CHECK(!game.crates.front().spent && game.crates.front().hits==hits);
+            CHECK(game.player.hp==game.maxHealth && e.hp==200);
+        }
+        bullet(126,488);
+        CHECK(game.crates.front().spent);
+        CHECK(game.player.hp<game.maxHealth && e.hp<200);
+    }
+
+    start();
+    game.crates={{CrateKind::reactor,{242,472,36,33},7},{CrateKind::charge,{153,472,36,33},1}};
+    bullet(126,488);
+    CHECK(game.crates[0].spent && game.crates[1].spent);
+}
+
+void piercingBeyondThirtyTwoEnemies() {
+    Silent audio;
+    Game game(audio);
+    game.start(sectorCount-1,fullSave());
+    CHECK(game.enemies.size()>32);
+    for (auto& e:game.enemies) e.alive=false;
+    game.crates.clear();
+    auto& first=game.enemies[0];
+    auto& later=game.enemies[32];
+    auto place=[](Enemy& e,float x) {
+        e.alive=true; e.kind=EnemyKind::turret; e.hp=e.maxHp=100;
+        e.box={x,455,31,36}; e.origin={x,455}; e.damage=0; e.reach=0;
+    };
+    const float floor=game.stage->ground.front().y;
+    place(first,250); place(later,290);
+    game.shots.push_back({{244,floor-35},{1200,0},1,20,hex(0xffffff),1});
+    run(game,10);
+    CHECK(first.hp==80 && later.hp==80);
+}
+
 }
 
 void runCombatTests() {
     comboScoring();
     reactions();
     explosives();
+    coverAndCrates();
+    piercingBeyondThirtyTwoEnemies();
 }

@@ -14,6 +14,7 @@ struct SDL_AudioSpec {
 };
 struct SDL_Keysym { int scancode,sym; U16 mod; U32 unused; };
 struct SDL_KeyboardEvent { U32 type,timestamp,windowID; U8 state,repeat,padding2,padding3; SDL_Keysym keysym; };
+struct SDL_TextInputEvent { U32 type,timestamp,windowID; char text[32]; };
 struct SDL_WindowEvent { U32 type,timestamp,windowID; U8 event,p1,p2,p3; int data1,data2; };
 struct SDL_MouseMotionEvent { U32 type,timestamp,windowID,which,state; int x,y,xrel,yrel; };
 struct SDL_MouseButtonEvent { U32 type,timestamp,windowID,which; U8 button,state,clicks,padding; int x,y; };
@@ -22,6 +23,7 @@ struct SDL_ControllerDeviceEvent { U32 type,timestamp; int which; };
 struct SDL_ControllerButtonEvent { U32 type,timestamp; int which; U8 button,state,padding1,padding2; };
 union SDL_Event {
     U32 type; SDL_KeyboardEvent key; SDL_WindowEvent window;
+    SDL_TextInputEvent text;
     SDL_MouseMotionEvent motion; SDL_MouseButtonEvent button; SDL_MouseWheelEvent wheel;
     SDL_ControllerDeviceEvent cdevice; SDL_ControllerButtonEvent cbutton; void* alignment; U8 padding[56];
 };
@@ -49,6 +51,9 @@ const U8* SDL_GetKeyboardState(int*);
 const char* SDL_GetScancodeName(int);
 void SDL_StartTextInput();
 void SDL_StopTextInput();
+int SDL_SetClipboardText(const char*);
+char* SDL_GetClipboardText();
+void SDL_free(void*);
 int SDL_NumJoysticks();
 int SDL_IsGameController(int);
 SDL_GameController* SDL_GameControllerOpen(int);
@@ -67,9 +72,10 @@ void SDL_UnlockAudioDevice(U32);
 namespace vl::sdl {
 constexpr U32 video=0x20,audio=0x10,gameController=0x2000, openGL=2,hidden=8,resizable=0x20, highDPI=0x2000, fullscreen=0x1001;
 constexpr int centered=0x2fff0000;
-constexpr U32 quit=0x100,window=0x200,keyDown=0x300,keyUp=0x301,mouseMotion=0x400,mouseDown=0x401,mouseUp=0x402,
+constexpr U32 quit=0x100,window=0x200,keyDown=0x300,keyUp=0x301,textInput=0x303,mouseMotion=0x400,mouseDown=0x401,mouseUp=0x402,
     mouseWheel=0x403,controllerButton=0x650,controllerAdded=0x653,controllerRemoved=0x654;
 constexpr U8 focusLost=13;
+constexpr U32 inputFocus=0x00000200;
 // USB HID scancodes as defined by SDL_scancode.h.
 namespace key {
 constexpr int a=4,c=6,d=7,e=8,f=9,j=13,k=14,p=19,q=20,r=21,s=22,v=25,w=26,x=27,y=28,z=29,

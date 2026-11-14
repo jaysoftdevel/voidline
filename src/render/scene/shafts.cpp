@@ -7,7 +7,7 @@ namespace vl {
 // Cones of light under lamps. They are drawn before lighting and fog, so they pick up haze and bloom.
 void Renderer::shafts(const Game& g) {
     const Color accent=hex(g.stage->accent),cold=hex(g.stage->cold);
-    for (int i=0;i<17;i+=2) {
+    for (int i=0;140+i*273<g.stage->worldWidth+215;i+=2) {
         const float x=140+i*273+hash(i+g.index*32)*90;
         if (!visible(x,160)) continue;
         const float y=253+hash(i+54)*126;
@@ -18,7 +18,7 @@ void Renderer::shafts(const Game& g) {
         beam(lamp,7,lamp+lean,150,accent.energy(1.5f).alpha(.20f*flicker),accent.alpha(0));
         beam(lamp,4,lamp+lean*.8f+Vec{16,0},88,hex(0xfff0d8).alpha(.10f*flicker),accent.alpha(0));
     }
-    for (int i=0;i<9;++i) {
+    for (int i=0;167+511*i<g.stage->worldWidth+215;++i) {
         const float x=167+511*i;
         if (!visible(x,260)) continue;
         const Vec lamp=Vec{x,143+hash(i+43)*102}+offset;

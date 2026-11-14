@@ -21,7 +21,7 @@ void Game::spawnAmbient(int forcedKind,int forcedVariant) {
         {{AmbientKind::fountain,2,3},{AmbientKind::blast,1,2},{AmbientKind::steam,1,1},{AmbientKind::flyer,0,1}},
         {{AmbientKind::lightning,0,3},{AmbientKind::flyer,0,3},{AmbientKind::streak,0,2},{AmbientKind::searchlight,1,1}}
     };
-    const auto& options=table[std::clamp(index,0,4)];
+    const auto& options=table[static_cast<int>(stage->biome)];
     float total=0;
     for (const auto& o:options) total+=o.weight;
     float roll=ambientRandom()*total;
@@ -40,10 +40,10 @@ void Game::spawnAmbient(int forcedKind,int forcedVariant) {
         if (a.variant==1) { a.p.y=330+R()*70; a.size=std::max(a.size,.9f); }
         break;
     case AmbientKind::flyer: {
-        a.depth=a.variant==1?.3f:.12f; a.size=a.variant==0?(index==4?1.5f:.9f):.8f+R()*.4f;
+        a.depth=a.variant==1?.3f:.12f; a.size=a.variant==0?(stage->biome==Biome::orbital?1.5f:.9f):.8f+R()*.4f;
         const float speed=a.variant==0?44+R()*30:a.variant==1?120+R()*60:38+R()*22;
         a.v={dir*speed,0};
-        a.p={camera*a.depth+(dir>0?-240.f:1440.f),a.variant==2?545+R()*35:a.variant==1?80+R()*200:(index==4?60+R()*130:80+R()*120)};
+        a.p={camera*a.depth+(dir>0?-240.f:1440.f),a.variant==2?545+R()*35:a.variant==1?80+R()*200:(stage->biome==Biome::orbital?60+R()*130:80+R()*120)};
         a.life=a.maxLife=1700/speed;
         break;
     }

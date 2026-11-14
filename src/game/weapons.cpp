@@ -32,14 +32,18 @@ void Game::shoot(float dt) {
     const GunSound& sound=gunSounds[gun];
     --g.ammo; p.fireDelay=g.interval; p.muzzle=.069f;
     const Vec exit=muzzle();
-    if (blocked(weaponPivot(),exit)) {
+    const Vec pivot=weaponPivot();
+    float crateDistance=1;
+    const bool crateBeforeMuzzle=crateOnSegment(pivot,exit-pivot,crateDistance)>=0;
+    const Vec origin=crateBeforeMuzzle?pivot:exit;
+    if (!crateBeforeMuzzle && blocked(pivot,exit)) {
         burst(exit,hex(0x9ba8ba),5,96); audio.event(sound.name,.62f*sound.gain,0,sound.rate); return;
     }
     const bool longShot=gun==2 || gun==6;
     for (int i=0;i<w.pellets;++i) {
         const float spread=w.pellets==1?random()-.5f:float(i)/(w.pellets-1)-.5f;
         const bool crit=random()<g.crit;
-        Shot shot{exit,ray(p.aim+spread*g.spread)*w.speed,g.range/w.speed,float(g.damage)*(crit?2.f:1.f),hex(w.color),w.pierce,0,longShot,false};
+        Shot shot{origin,ray(p.aim+spread*g.spread)*w.speed,g.range/w.speed,float(g.damage)*(crit?2.f:1.f),hex(w.color),w.pierce,{},longShot,false};
         shot.gravity=w.gravity; shot.blast=w.blast; shot.crit=crit; shot.weapon=gun;
         shots.push_back(shot);
     }

@@ -37,7 +37,7 @@ Game::Landing Game::moveVertical(float dt,float oldX) {
     if (attached<0 && impact>185) {
         result.strength=clamp((impact-105)/525,.16f,1);
         p.landed=result.strength;
-        const char* surfaceSound=surface.ground?footSounds[index]:"step-grate";
+        const char* surfaceSound=surface.ground?footSounds[static_cast<int>(stage->biome)]:"step-grate";
         audio.event("land",.30f+result.strength*.66f,0,1.05f-result.strength*.15f+random()*.06f);
         audio.event(surfaceSound,.26f+result.strength*.37f,0,.75f+random()*.11f);
         burst({p.box.center().x,s.y},hex(stage->cold),5+int(result.strength*9),62+result.strength*54,ParticleKind::smoke);

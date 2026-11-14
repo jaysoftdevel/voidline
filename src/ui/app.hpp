@@ -2,10 +2,11 @@
 #include "input/input.hpp"
 #include "render/renderer.hpp"
 #include "services/services.hpp"
+#include "net/world.hpp"
 #include <functional>
 
 namespace vl {
-class App {
+class App : private AudioSink {
 public:
     App(SDL_Window* window,Renderer& renderer,Audio& audio,Storage& storage);
     void event(const SDL_Event& event);
@@ -18,7 +19,7 @@ public:
     Rect followCrop(bool enabled) const;
     bool active() const { return running; }
 private:
-    enum class View { menu,create,load,campaign,armory,settings,controls,credits,intro,play,pause,failed,cleared,confirm };
+    enum class View { menu,multiplayer,create,load,campaign,armory,settings,controls,credits,intro,play,pause,failed,cleared,confirm };
     struct Button { Rect box; std::function<void()> action; };
     SDL_Window* window;
     Renderer& r;
@@ -32,7 +33,30 @@ private:
     int rebinding=-1;
     int slot=0,newSlot=1,newCharacter=0,newDifficulty=1,sector=0,weapon=0,focus=-1;
     float clock=0,film=0,accumulator=0,previousCamera=0,notice=0;
-    Player previousPlayer;
+    Player previousPlayer,previousPartner;
+    net::Session network;
+    std::string advertisedAddress,joinKey;
+    enum class Lobby {menu,host,join};
+    Lobby lobby=Lobby::menu;
+    int coopSector=0,coopDifficulty=1;
+    uint32_t mission=0;
+    float netFrame=0,netInterpolation=1;
+    bool coopStarted=false,coopPaused=false,coopMouse=false,snapshot=false;
+    Controls pendingControls{};
+    std::vector<net::Sound> netSounds;
+    void event(std::string_view name,float gain,float pan,float rate) override;
+    bool lobbyInput(const SDL_Event& event);
+    void multiplayer();
+    void openMultiplayer();
+    void leaveCoop(const std::string& message={});
+    void pollCoop(float dt);
+    void advanceCoop(float dt);
+    void startCoop(int index,bool retry=false);
+    void prepareCoop();
+    void receiveCoop(std::span<const uint8_t> data);
+    void sendWorld();
+    Controls readCoopControls() const;
+    void coopOverlay();
     Vec mouse{-100,-100};
     std::array<std::optional<Save>,3> slots;
     std::vector<Button> buttons;

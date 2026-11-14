@@ -102,6 +102,6 @@ void Game::hurt(float damage,bool force) {
     shake=std::max(shake,8.7f); audio.event("hurt");
     hitStop=std::max(hitStop,.07f); punch=std::max(punch,.6f); pain=1; combo=0; comboTimer=0;
     ring({p.box.center().x,p.box.y+20},hex(0xff795d),52,.36f);
-    if (!p.hp) { release(); mode=Mode::failed; }
+    if (!p.hp) { releaseBoth(); mode=Mode::failed; }
 }
 } // namespace vl

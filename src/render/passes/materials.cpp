@@ -7,7 +7,7 @@ void Renderer::material(const Game& g) {
     for (const auto& surface:g.platforms) {
         const auto& b=surface.box;
         if (!visible(b.x,b.w)) continue;
-        const Color tint=hex(g.index==3?0x69524a:g.index==1?0x4c686b:g.index==2?0x525e4f:g.index==4?0x4c5772:0x515d64);
+        const Color tint=hex(g.stage->biome==Biome::forge?0x69524a:g.stage->biome==Biome::water?0x4c686b:g.stage->biome==Biome::biodome?0x525e4f:g.stage->biome==Biome::orbital?0x4c5772:0x515d64);
         const Rect r{b.x+offset.x,b.y+offset.y,b.w,b.h};
         const float bevel=surface.ground?16.f:5.f;
         const float depth=surface.ground?.58f:.68f;
@@ -24,7 +24,7 @@ void Renderer::material(const Game& g) {
     }
     gl.UseProgram(materialProgram);
     gl.Uniform1f(materialCamera,g.camera);
-    gl.Uniform1i(materialSector,g.index);
+    gl.Uniform1i(materialSector,static_cast<int>(g.stage->biome));
     gl.BindVertexArray(vao); gl.BindBuffer(GL_ARRAY_BUFFER,buffer);
     gl.BufferData(GL_ARRAY_BUFFER,vertices.size()*sizeof(Vertex),vertices.data(),GL_STREAM_DRAW);
     gl.DrawArrays(GL_TRIANGLES,0,static_cast<GLsizei>(vertices.size()));

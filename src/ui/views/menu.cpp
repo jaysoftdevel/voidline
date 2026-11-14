@@ -16,11 +16,12 @@ void App::menu() {
     r.text({49,179},"VOIDLINE",96,white,true);
     r.rect({54,204,65,3},amber);
     copy({54,241},"A dead colony. One operative. Fight your way to the orbital uplink.",360,20,pale);
-    button({54,310,339,42},"NEW GAME",[this]{newGame();},true,true);
-    button({54,360,339,42},"LOAD GAME",[this]{refresh(); show(View::load);});
-    button({54,410,339,42},"SETTINGS",[this]{settingsReturn=View::menu; show(View::settings);});
-    button({54,460,339,42},"CREDITS",[this]{show(View::credits);});
-    button({54,510,339,42},"QUIT",[this]{running=false;});
+    button({54,282,339,39},"NEW GAME",[this]{newGame();},true,true);
+    button({54,330,339,39},"LOAD GAME",[this]{refresh(); show(View::load);});
+    button({54,378,339,39},"MULTIPLAYER",[this]{openMultiplayer();});
+    button({54,426,339,39},"SETTINGS",[this]{settingsReturn=View::menu; show(View::settings);});
+    button({54,474,339,39},"CREDITS",[this]{show(View::credits);});
+    button({54,522,339,39},"QUIT",[this]{running=false;});
     label({1003,566},std::string("NATIVE EDITION  /  ")+version,pale);
 }
 } // namespace vl

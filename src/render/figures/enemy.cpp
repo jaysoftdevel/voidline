@@ -3,10 +3,11 @@
 namespace vl {
 // Draws one enemy or one corpse. The look of each type is in enemy_*.cpp. This file builds the shared view and
 // adds what every enemy has in common: bullet wounds and the health bar.
-void Renderer::drawEnemy(const Enemy& e,Color accent,int sector,float time,Vec target) {
+void Renderer::drawEnemy(const Enemy& e,Color accent,Biome biome,float time,Vec target) {
     EnemyView v(e);
+    if (e.elite) { accent=hex(0xffcb68); v.alert=accent; }
     v.accent=accent;
-    v.sector=sector; v.facing=e.facing; v.time=time; v.turn=e.turn; v.target=target;
+    v.biome=biome; v.facing=e.facing; v.time=time; v.turn=e.turn; v.target=target;
     v.pace=clamp(std::abs(e.vx)/96);
     v.breath=std::sin(time*2.1f+e.phase);
     v.dead=e.alive?0.f:e.deathAge;
@@ -39,6 +40,11 @@ void Renderer::drawEnemy(const Enemy& e,Color accent,int sector,float time,Vec t
     case EnemyKind::stalker: drawStalker(v); break;
     case EnemyKind::ranger: drawSoldier(v); break;
     case EnemyKind::boss: drawGuardian(v); break;
+    }
+    if (e.elite && e.alive) {
+        const Vec at{v.x,v.y-e.box.h*.5f-18};
+        line(at+Vec{-6,0},at+Vec{0,-4},1.7f,v.alert);
+        line(at+Vec{0,-4},at+Vec{6,0},1.7f,v.alert);
     }
     drawWounds(v);
     if (e.warning>0 && e.alive) {

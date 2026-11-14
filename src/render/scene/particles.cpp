@@ -13,7 +13,7 @@ void Renderer::drawParticles(const Game& g) {
         const float y=120+hash(i+80)*475+std::sin(g.time*(.5f+depth)+i)*15;
         const float glow=.16f+depth*.26f;
         const Vec p{x-60,y};
-        const Color tint=g.index==3?accent:cold;
+        const Color tint=g.stage->biome==Biome::forge?accent:cold;
         if (i%4==0) halo(p,3+depth*4,tint.alpha(glow));
         rect({p.x,p.y,.6f+depth*1.9f,.7f+depth*1.6f},tint.energy(1.23f).alpha(glow));
     }
@@ -67,14 +67,14 @@ void Renderer::drawRings(const Game& g) {
     }
 }
 
-void Renderer::drawTrails(const Game& g,Vec ground) {
-    const auto& p=g.player;
+void Renderer::drawTrails(const Game& g,const Operative& op,Vec ground) {
+    const auto& p=op.player;
     const float speed=std::abs(p.velocity.x);
     const float slow=clamp((1-g.timeScale)/.72f);
     const bool flipping=p.flip>0;
     const float intensity=std::max(clamp((speed-300)/220),flipping?1.f:0.f);
     if (intensity<=.02f && slow<.1f) return;
-    const Color tint=hex(g.character->color);
+    const Color tint=hex(op.character->color);
     const Vec travel=length(p.velocity)>1?normal(p.velocity):Vec{float(p.facing),0};
     const Vec center=ground-Vec{0,26};
     const Vec perpendicular{-travel.y,travel.x};

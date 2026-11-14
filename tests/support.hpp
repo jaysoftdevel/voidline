@@ -51,3 +51,5 @@ void runCombatTests();
 void runHitTests();
 void runProgressionTests();
 void runWorldTests();
+
+void runCoopTests();

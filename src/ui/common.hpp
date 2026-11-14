@@ -12,7 +12,7 @@ inline std::string timeText(float secs) {
     const int total=std::max(0,int(secs));
     return std::to_string(total/60)+":"+digits(total%60);
 }
-inline std::string sectorTrack(int index) { return "sector-"+std::to_string(index+1); }
+inline std::string sectorTrack(int index) { return "sector-"+std::to_string(static_cast<int>(stages[index].biome)+1); }
 inline int total(int current,int earned) { return current+std::min(earned,std::numeric_limits<int>::max()-current); }
 inline constexpr Rect screen{0,0,width,height};
 }

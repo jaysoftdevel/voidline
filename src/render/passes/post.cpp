@@ -10,7 +10,7 @@ void Renderer::post(const Game& g,bool high,bool motionFx) {
     gl.Uniform3f(uniform(atmosphereProgram,"haze"),tint.r,tint.g,tint.b);
     gl.Uniform1f(uniform(atmosphereProgram,"camera"),g.camera);
     gl.Uniform1f(uniform(atmosphereProgram,"time"),g.time);
-    gl.Uniform1f(uniform(atmosphereProgram,"fogStrength"),g.index==1 || g.index==2?.72f:.55f);
+    gl.Uniform1f(uniform(atmosphereProgram,"fogStrength"),g.stage->biome==Biome::water || g.stage->biome==Biome::biodome?.72f:.55f);
     gl.Uniform2f(uniform(atmosphereProgram,"lightTexel"),1.f/lightMap.texture.w,1.f/lightMap.texture.h);
     gl.Uniform2f(uniform(atmosphereProgram,"worldTexel"),1.f/raw.texture.w,1.f/raw.texture.h);
     gl.Uniform1f(uniform(atmosphereProgram,"relief"),high?7.5f:4.5f);
@@ -44,7 +44,7 @@ void Renderer::post(const Game& g,bool high,bool motionFx) {
         {{.92f,1.00f,1.07f},{1.12f,1.03f,.90f},1.22f}, {{.88f,1.00f,1.05f},{1.00f,1.10f,1.07f},1.24f},
         {{1.03f,.92f,1.09f},{1.06f,1.10f,.94f},1.28f}, {{1.00f,.90f,.88f},{1.16f,1.02f,.86f},1.26f},
         {{.92f,.93f,1.12f},{1.06f,1.02f,1.12f},1.24f}};
-    const auto& look=grades[g.index];
+    const auto& look=grades[static_cast<int>(g.stage->biome)];
     const auto& p=g.player.box;
     gl.Uniform1f(uniform(presentProgram,"strength"),high?.89f:.64f);
     gl.Uniform1f(uniform(presentProgram,"exposure"),.82f);

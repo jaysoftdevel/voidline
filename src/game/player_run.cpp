@@ -33,7 +33,7 @@ void Game::collideWalls(float oldX,bool grounded) {
     for (const auto& surface:platforms) {
         const auto& s=surface.box;
         const bool lowCeiling=grounded && p.box.bottom()>=s.bottom()-.5f;
-        if ((!surface.ground && !lowCeiling) || p.box.bottom()<=s.y+.5f || p.box.y>=s.bottom()) continue;
+        if ((!surface.ground && !surface.cover && !lowCeiling) || p.box.bottom()<=s.y+.5f || p.box.y>=s.bottom()) continue;
         if (oldX+playerW<=s.x && p.box.right()>s.x) {
             p.box.x=s.x-playerW; p.velocity.x=0;
         } else if (oldX>=s.right() && p.box.x<s.right()) {

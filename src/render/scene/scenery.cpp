@@ -7,7 +7,7 @@ namespace vl {
 void Renderer::depthScenery(const Game& g) {
     const Color cold=hex(g.stage->cold), accent=hex(g.stage->accent);
     const float travel=offset.x*.48f;
-    for (int i=0;i<21;++i) {
+    for (int i=0;140+i*154<g.stage->worldWidth*.48f+width;++i) {
         const float x=140+i*154+hash(i+111)*57+travel;
         if (x<-128 || x>width+128) continue;
         const float y=356+hash(i+231)*79+offset.y*.65f;
@@ -34,9 +34,9 @@ void Renderer::depthScenery(const Game& g) {
 
 void Renderer::foreground(const Game& g) {
     // Sparse foreground steel at the upper edge reads as a nearer plane.
-    const Color tone=metal(g.index), cold=hex(g.stage->cold);
+    const Color tone=metal(g.stage->biome), cold=hex(g.stage->cold);
     const float travel=offset.x*1.29f;
-    for (int i=0;i<11;++i) {
+    for (int i=0;85+i*492<g.stage->worldWidth*1.29f+width;++i) {
         const float x=85+i*492+hash(i+941)*160+travel;
         if (x<-230 || x>width+180) continue;
         const float length=100+hash(i+604)*83, y=14+hash(i+619)*26;
@@ -56,8 +56,8 @@ void Renderer::foreground(const Game& g) {
 }
 
 void Renderer::scenery(const Game& g) {
-    const Color tone=metal(g.index), accent=hex(g.stage->accent), cold=hex(g.stage->cold);
-    for (int i=0;i<17;++i) {
+    const Color tone=metal(g.stage->biome), accent=hex(g.stage->accent), cold=hex(g.stage->cold);
+    for (int i=0;140+i*273<g.stage->worldWidth+215;++i) {
         const float x=140+i*273+hash(i+g.index*32)*90;
         const float y=253+hash(i+54)*126;
         const float w=13+hash(i+17)*27;
@@ -79,13 +79,13 @@ void Renderer::scenery(const Game& g) {
             line(p+Vec{0,17},p+Vec{0,63},2,cold.energy(1.38f));
         }
     }
-    for (int i=0;i<13;++i) {
+    for (int i=0;265+i*329<g.stage->worldWidth+215;++i) {
         const float x=265+i*329+hash(i+761)*112;
         if (!visible(x,87)) continue;
         const float y=333+hash(i+73)*81+offset.y;
         const Vec p{x+offset.x,y};
         const Color dark=hex(0x101922);
-        if (g.index==1) {
+        if (g.stage->biome==Biome::water) {
             // Condensate on the Tideworks' vertical pipes.
             line(p-Vec{0,49},p+Vec{0,106},9,tone.energy(.46f));
             line(p-Vec{2.1f,49},p+Vec{-2.1f,106},1.25f,cold.energy(.74f).alpha(.67f));
@@ -97,7 +97,7 @@ void Renderer::scenery(const Game& g) {
             const float fall=std::fmod(g.time*.83f+hash(i+73),1.f);
             const Vec drop=p+Vec{7.f,fall*150-12};
             line(drop-Vec{0,7},drop,1.2f,cold.energy(1.33f).alpha(.63f*(1-fall)));
-        } else if (g.index==2) {
+        } else if (g.stage->biome==Biome::biodome) {
             // Tendrils split and collect pale bioluminescent buds.
             for (int vine=0;vine<3;++vine) {
                 Vec from=p+Vec{vine*13.f,-64.f};
@@ -114,7 +114,7 @@ void Renderer::scenery(const Game& g) {
                     from=to;
                 }
             }
-        } else if (g.index==3) {
+        } else if (g.stage->biome==Biome::forge) {
             // Hot seams, oil staining and low-speed embers beside the forge ducts.
             gradient({p.x-9,p.y-38,18,108},tone.energy(.53f),dark);
             line(p-Vec{5.f,36},p+Vec{-5.f,47},1.35f,accent.energy(.64f));
@@ -125,8 +125,8 @@ void Renderer::scenery(const Game& g) {
                 line(spark,spark+Vec{1.5f,-4.5f},1.35f,accent.energy(1.62f).alpha((1-t)*.80f));
             }
         } else {
-            const float half=g.index==4?14.f:9.f;
-            const Color paint=g.index==4?cold:accent;
+            const float half=g.stage->biome==Biome::orbital?14.f:9.f;
+            const Color paint=g.stage->biome==Biome::orbital?cold:accent;
             gradient({p.x-half,p.y-15,half*2,33},tone.energy(.76f),dark);
             outline({p.x-half,p.y-15,half*2,33},dark,1);
             line({p.x-half+2,p.y-13},{p.x+half-2,p.y-13},1,paint.energy(.47f));
@@ -134,7 +134,7 @@ void Renderer::scenery(const Game& g) {
                 rect({p.x-half+3+slot*4.2f,p.y-6,2.3f,1.3f},paint.energy(.90f+hash(i+slot)*.79f));
         }
     }
-    for (int i=0;i<9;++i) {
+    for (int i=0;167+511*i<g.stage->worldWidth+215;++i) {
         const float x=167+511*i;
         if (!visible(x,242)) continue;
         const Vec p{x+offset.x,142+hash(i+43)*102+offset.y};

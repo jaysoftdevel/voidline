@@ -6,7 +6,7 @@ using namespace vl::scene;
 namespace vl {
 void Renderer::terrain(const Game& g) {
     material(g);
-    const Color tone=metal(g.index), accent=hex(g.stage->accent), cold=hex(g.stage->cold);
+    const Color tone=metal(g.stage->biome), accent=hex(g.stage->accent), cold=hex(g.stage->cold);
     for (const auto& surface:g.platforms) {
         if (!surface.ground || !visible(surface.box.x,surface.box.w)) continue;
         const auto& b=surface.box;
@@ -38,6 +38,17 @@ void Renderer::terrain(const Game& g) {
         const Rect src=surface.box;
         if (!visible(src.x,src.w)) continue;
         Rect box{src.x+offset.x,src.y+offset.y,src.w,src.h};
+        if (surface.cover) {
+            gradient(box,tone.energy(1.12f),hex(0x15232c));
+            outline(box,hex(0x101820),2);
+            rect({box.x+2,box.y+2,box.w-4,3},cold.energy(1.15f));
+            rect({box.x+5,box.y+12,box.w-10,box.h-18},tone.energy(.68f));
+            for (int stripe=0;stripe<4;++stripe) {
+                const float x=box.x+8+stripe*8;
+                line({x,box.y+30},{x+6,box.y+20},3,hex(0xe7ba64).alpha(.82f));
+            }
+            continue;
+        }
         const float lip=surface.ground?19.f:6.f;
         gradient(box,tone.energy(.55f).alpha(.04f),hex(0x0b141e).alpha(.48f));
         rect({box.x,box.y,box.w,1.2f},cold.energy(.84f).alpha(.91f));

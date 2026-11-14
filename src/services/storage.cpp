@@ -100,7 +100,7 @@ std::optional<Save> Storage::get(int slot) const {
     Save s;
     auto* cleared=json_object_object_get(obj,"cleared");
     if (json_object_get_type(cleared)==jsonArray) {
-        for (int candidate=0;candidate<5;++candidate) {
+        for (int candidate=0;candidate<sectorCount;++candidate) {
             bool found=false;
             for (size_t i=0;i<json_object_array_length(cleared);++i) {
                 auto* item=json_object_array_get_idx(cleared,i);

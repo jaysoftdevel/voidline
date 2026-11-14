@@ -5,13 +5,13 @@
 using namespace vl::figures;
 
 namespace vl {
-void Renderer::drawPlayer(const Game& g) {
+void Renderer::drawPlayer(const Game& g,const Operative& op) {
     using Look=Humanoid::Look;
-    const auto& p=g.player;
+    const auto& p=op.player;
     const Vec shift=offset+playerShift;
     const Vec ground{p.box.center().x+shift.x,p.box.bottom()+shift.y};
-    const int index=int(g.character-characters.data());
-    const Color trim=hex(g.character->color);
+    const int index=int(op.character-characters.data());
+    const Color trim=hex(op.character->color);
     const bool hurtBlink=p.flash>0 && std::sin(p.flash*80)>0;
 
     struct Palette { uint32_t suit,shell,skin,hair,leather,glove; };
@@ -40,7 +40,7 @@ void Renderer::drawPlayer(const Game& g) {
     h.ink=hex(0x06080d); h.skin=hex(pal.skin); h.hair=hex(pal.hair);
     h.leather=hex(pal.leather); h.glove=hex(pal.glove); h.visor=trim;
 
-    drawTrails(g,ground);
+    drawTrails(g,op,ground);
 
     // Weapon geometry in screen space.
     const float forwardFacing=p.facing>0?1.f:-1.f;
@@ -55,19 +55,19 @@ void Renderer::drawPlayer(const Game& g) {
     const Vec up=forwardFacing>0?Vec{aim.y,-aim.x}:Vec{-aim.y,aim.x};
     const float recoil=p.muzzle>0?3.7f*p.muzzle/.069f:0;
     const float sway=std::sin(g.time*1.7f)*.35f*(1-pose.weight);
-    const Vec mount=g.weaponPivot()+shift+Vec{-lowered*5.f*p.facing,(pose.crouch-p.gait.crouch)*12+lowered*7.f+pose.pelvis*.5f+sway};
-    const Vec carried=mount+aim*muzzleReach[g.gun];
-    const Vec raised=g.muzzle()+shift+Vec{0,pose.pelvis*.5f+sway};
+    const Vec mount=g.weaponPivot(p)+shift+Vec{-lowered*5.f*p.facing,(pose.crouch-p.gait.crouch)*12+lowered*7.f+pose.pelvis*.5f+sway};
+    const Vec carried=mount+aim*muzzleReach[op.gun];
+    const Vec raised=g.muzzle(op)+shift+Vec{0,pose.pelvis*.5f+sway};
     Vec muzzle=mix(raised,carried,lowered)-aim*(recoil*.45f);
-    const bool art=g.gun<3;
-    const GunArt& model=gunArt[art?g.gun:0];
+    const bool art=op.gun<3;
+    const GunArt& model=gunArt[art?op.gun:0];
     const float gunLength=model.length,gunHeight=model.length*model.aspect;
     const Vec axisU=aim*gunLength,axisV=up*(-gunHeight);
     h.aim=aim; h.recoil=recoil/3.7f; h.relax=lowered;
     // Hand positions for the drawn weapons, in the gun's own coordinates: forward along the barrel, then up.
     struct Grip { float nearU,nearV,farU,farV; };
     static constexpr Grip grips[]{{-9.5f,-3.f,-6.f,-2.6f},{-16.f,-5.5f,-9.f,-5.5f},{-17.f,-5.5f,-10.f,-6.f},{-22.5f,-6.f,-45.f,-1.f}};
-    const Grip* grip=art?nullptr:&grips[g.gun-3];
+    const Grip* grip=art?nullptr:&grips[op.gun-3];
     auto layout=[&] {
         h.nearHand=art?muzzle+axisU*(model.gripU-1)+axisV*(model.gripV-model.muzzleV):muzzle+aim*grip->nearU+up*grip->nearV;
         h.farHand=art?muzzle+axisU*(model.foreU-1)+axisV*(model.foreV-model.muzzleV):muzzle+aim*grip->farU+up*grip->farV;
@@ -81,10 +81,10 @@ void Renderer::drawPlayer(const Game& g) {
         constexpr float comfortable=19.f;
         if (reach>comfortable) { muzzle=muzzle-aim*std::min(10.f,reach-comfortable); layout(); }
     }
-    const Color gunColor=hex(weapons[g.gun].color);
+    const Color gunColor=hex(weapons[op.gun].color);
     h.weapon=[&](Vec,Vec) {
         if (art) sprite(model.name,muzzle,axisU,axisV,{1.f,model.muzzleV});
-        else gunModel(g.gun,muzzle,aim,up,1.f,gunColor);
+        else gunModel(op.gun,muzzle,aim,up,1.f,gunColor);
     };
     humanoid(h);
 

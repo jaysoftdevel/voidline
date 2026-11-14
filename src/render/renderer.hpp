@@ -18,7 +18,7 @@ public:
     float renderScale() const { return resolution; }
     void begin();
     void end();
-    void drawWorld(const Game& game,bool high,bool motion,float interpolation,const Player& previous,float previousCamera);
+    void drawWorld(const Game& game,bool high,bool motion,float interpolation,const Player& previous,float previousCamera,const Player* previousPartner=nullptr);
     void cover(std::string_view name,Rect box,float zoom=1,Vec bias={.5f,.5f},Color tint={});
     void image(std::string_view name,Rect box,Color tint={});
     void rect(Rect r,Color color);
@@ -124,8 +124,11 @@ private:
     void scenery(const Game& game);
     void objects(const Game& game);
     void actors(const Game& game);
-    void drawPlayer(const Game& game);
-    void drawEnemy(const Enemy& enemy,Color accent,int sector,float time,Vec target);
+    void drawPlayer(const Game& game,const Operative& op);
+    void operativePose(const Player& player,const Player& previous,float alpha);
+    const Player* priorPartner=nullptr;
+    float partnerBlend=1;
+    void drawEnemy(const Enemy& enemy,Color accent,Biome biome,float time,Vec target);
     // Enemy drawing (render/figures/enemy_*.cpp), one function per type.
     struct EnemyView;
     void drawDrone(const EnemyView& view);
@@ -161,7 +164,7 @@ private:
     void ambient(const Game& game);
     void shafts(const Game& game);
     void gunModel(int gun,Vec muzzle,Vec aim,Vec up,float scale,Color glow);
-    void drawTrails(const Game& game,Vec ground);
+    void drawTrails(const Game& game,const Operative& op,Vec ground);
     void collectLights(const Game& game);
     void drawLights(bool high);
     void water(const Game& game,bool high);

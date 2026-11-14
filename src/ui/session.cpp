@@ -22,7 +22,7 @@ void App::beginCampaign() {
 
 void App::loadCampaign(int target) {
     if (!slots[target-1]) return;
-    save=*slots[target-1]; slot=target; sector=std::min(save.cleared,4);
+    save=*slots[target-1]; slot=target; sector=std::min(save.cleared,sectorCount-1);
     showMap();
 }
 
@@ -63,7 +63,7 @@ void App::finishMission() {
             record={game.time,game.score};
         if (persist(next,slot)) save=next;
     }
-    sector=std::min(game.index+1,4);
+    sector=std::min(game.index+1,sectorCount-1);
     audio.event("complete"); show(View::cleared);
 }
 

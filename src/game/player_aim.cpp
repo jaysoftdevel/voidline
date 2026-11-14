@@ -26,19 +26,51 @@ void Game::aimPlayer(int direction) {
         p.aim=std::atan2(d.y,d.x); return;
     }
     if (direction) p.facing=direction;
+    const bool peeking=!p.crouched && nearCover();
     float best=900;
     p.aim=p.facing>0?-.025f:pi+.025f;
     for (const auto& enemy:enemies) {
         if (!enemy.alive) continue;
-        const Vec target{enemy.box.center().x,enemy.box.y+enemy.box.h*.48f}, d=target-origin;
+        Vec target{enemy.box.center().x,enemy.box.y+enemy.box.h*.48f};
+        if (blocked(origin,target)) {
+            if (!peeking) continue;
+            target.y=enemy.box.y+5;
+            if (blocked(origin,target)) continue;
+        }
+        const Vec d=target-origin;
         const float distance=std::hypot(d.x,d.y*1.35f)*(sign(d.x)==p.facing?1.f:1.45f);
-        if (distance>=best || blocked(origin,target)) continue;
+        if (distance>=best) continue;
         best=distance; p.aim=std::atan2(d.y,d.x);
+    }
+    if (best==900 && held(Key::automatic) && !p.crouched) {
+        float nearest=470;
+        for (const auto& crate:crates) {
+            const Vec d=crate.box.center()-origin;
+            const float distance=length(d);
+            if (crate.spent || sign(d.x)!=p.facing || distance>=nearest
+                || distance<=crateSpec(crate.kind).radius+18 || blocked(origin,crate.box.center())) continue;
+            p.aim=std::atan2(d.y,d.x);
+            nearest=distance;
+        }
     }
     p.facing=std::cos(p.aim)<0?-1:1;
 }
 
-Vec Game::weaponPivot() const { return {player.box.center().x,player.box.bottom()-mix(29.f,17.f,player.gait.crouch)}; }
+bool Game::nearCover(const Player& body) const {
+    const auto& p=body.box;
+    if (body.support<0) return false;
+    return std::any_of(platforms.begin(),platforms.end(),[&](const Platform& surface) {
+        const auto& b=surface.box;
+        return surface.cover && std::abs(p.bottom()-b.bottom())<2
+            && p.right()+40>b.x && p.x-40<b.right();
+    });
+}
 
-Vec Game::muzzle() const { return weaponPivot()+ray(player.aim)*muzzleReach[gun]; }
+Vec Game::weaponPivot(const Player& p) const {
+    const float reach=nearCover(p)?(p.crouched?17.f:47.f):mix(29.f,17.f,p.gait.crouch);
+    return {p.box.center().x,p.box.bottom()-reach};
+}
+Vec Game::weaponPivot() const { return weaponPivot(player); }
+Vec Game::muzzle(const Operative& op) const { return weaponPivot(op.player)+ray(op.player.aim)*muzzleReach[op.gun]; }
+Vec Game::muzzle() const { return muzzle(operative); }
 } // namespace vl

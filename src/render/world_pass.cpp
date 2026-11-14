@@ -1,26 +1,31 @@
 #include "render/renderer.hpp"
 
 namespace vl {
-void Renderer::drawWorld(const Game& g,bool high,bool motion,float alpha,const Player& previous,float previousCamera) {
-    const float shake=motion?g.shake:0.f;
-    offset={-mix(previousCamera,g.camera,alpha)+std::cos(g.time*119)*shake*.55f,std::sin(g.time*97)*shake*.38f};
-    const Vec position{g.player.box.x,g.player.box.y};
+void Renderer::operativePose(const Player& player,const Player& previous,float alpha) {
+    const Vec position{player.box.x,player.box.y};
     const Vec prior{previous.box.x,previous.box.y};
     const float blend=length(prior-position)>30.f?1.f:alpha;
     playerShift=(prior-position)*(1-blend);
     for (int i=0;i<2;++i) {
-        drawHeels[i]=mix(previous.gait.feet[i].heel,g.player.gait.feet[i].heel,blend);
-        drawFootAngles[i]=mix(previous.gait.feet[i].angle,g.player.gait.feet[i].angle,blend);
+        drawHeels[i]=mix(previous.gait.feet[i].heel,player.gait.feet[i].heel,blend);
+        drawFootAngles[i]=mix(previous.gait.feet[i].angle,player.gait.feet[i].angle,blend);
     }
-    pose=g.player.gait;
+    pose=player.gait;
     const auto lowReady=[](const Player& p) { return p.sprinting && !p.aiming ? p.gait.run : 0.f; };
-    carry=mix(lowReady(previous),lowReady(g.player),blend);
+    carry=mix(lowReady(previous),lowReady(player),blend);
     pose.lean=mix(previous.gait.lean,pose.lean,blend);
     pose.crouch=mix(previous.gait.crouch,pose.crouch,blend);
     pose.pelvis=mix(previous.gait.pelvis,pose.pelvis,blend);
     pose.compression=mix(previous.gait.compression,pose.compression,blend);
     pose.tuck=mix(previous.gait.tuck,pose.tuck,blend);
     pose.reach=mix(previous.gait.reach,pose.reach,blend);
+}
+
+void Renderer::drawWorld(const Game& g,bool high,bool motion,float alpha,const Player& previous,float previousCamera,const Player* previousPartner) {
+    const float shake=motion?g.shake:0.f;
+    offset={-mix(previousCamera,g.camera,alpha)+std::cos(g.time*119)*shake*.55f,std::sin(g.time*97)*shake*.38f};
+    operativePose(g.player,previous,alpha);
+    priorPartner=previousPartner; partnerBlend=alpha;
     const int targetW=high?std::clamp(int(viewW*resolution),960,1920)/16*16:1200;
     const int targetH=targetW/2;
     if (raw.texture.w!=targetW) {

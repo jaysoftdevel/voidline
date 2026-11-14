@@ -16,10 +16,11 @@ void Game::moveShots(float dt) {
             float first=infinity;
             int hit=-1;
             for (const auto& surface:platforms) first=std::min(first,segment(s.p,change,surface.box));
-            for (size_t i=0;i<enemies.size();++i) {
-                if (!enemies[i].alive || (s.passed&(1u<<i))) continue;
+            const int crate=crateOnSegment(s.p,change,first);
+            for (int i=0;i<static_cast<int>(enemies.size());++i) {
+                if (!enemies[i].alive || std::find(s.passed.begin(),s.passed.end(),i)!=s.passed.end()) continue;
                 const float t=segment(s.p,change,enemies[i].box);
-                if (t<first) { first=t; hit=static_cast<int>(i); }
+                if (t<first) { first=t; hit=i; }
             }
             if (first>1) { s.p+=change; break; }
             s.p+=change*first;
@@ -27,15 +28,15 @@ void Game::moveShots(float dt) {
             burst(s.p,hex(hit>=0?0xffe5ae:0x9ba8ba),hit>=0?6:3,108);
             if (hit>=0) ring(s.p,s.color,16,.2f);
             if (hit<0) {
+                if (crate>=0) strikeCrate(crates[crate],s.p);
                 if (s.blast>0) explode(s.p,s.blast,s.damage,s.color);
                 s.life=0; break;
             }
             auto& e=enemies[hit];
             if (s.blast>0) { explode(s.p,s.blast,s.damage,s.color); s.life=0; break; }
             if (e.hit<=0) audio.event("hit-metal",.3f,(s.p.x-player.box.x)/590,.92f+random()*.23f);
-            s.passed|=1u<<hit;
             damageEnemy(e,s.damage,s.p,normal(s.v),s.crit);
-            if (s.pierce>0) --s.pierce;
+            if (s.pierce>0) { s.passed.push_back(hit); --s.pierce; }
             else s.life=0;
         }
     }
@@ -45,10 +46,23 @@ void Game::moveShots(float dt) {
         const Vec change=s.v*dt;
         float cover=infinity;
         for (const auto& surface:platforms) cover=std::min(cover,segment(s.p,change,surface.box));
-        const auto& p=player.box;
-        const float hit=segment(s.p,change,{p.x+4,p.y+3,p.w-8,p.h-7});
-        if (hit<cover) { hurt(s.damage); s.life=0; }
-        else if (cover<=1) { burst(s.p+change*cover,s.color,3,77); s.life=0; }
+        const int crate=crateOnSegment(s.p,change,cover);
+        const auto hitBody=[&](const Player& body) {
+            const auto& p=body.box;
+            return segment(s.p,change,{p.x+4,p.y+3,p.w-8,p.h-7});
+        };
+        const float hit=hitBody(player);
+        const float guestHit=coop?hitBody(partner.player):infinity;
+        if (guestHit<=1 && guestHit<hit && guestHit<cover) {
+            swapOperatives(); hurt(s.damage); swapOperatives();
+            s.life=0;
+        } else if (hit<=1 && hit<cover) { hurt(s.damage); s.life=0; }
+        else if (cover<=1) {
+            const Vec at=s.p+change*cover;
+            if (crate>=0) strikeCrate(crates[crate],at);
+            else burst(at,s.color,3,77);
+            s.life=0;
+        }
         s.p+=change;
         if (mode!=Mode::active) break;
     }
@@ -56,7 +70,7 @@ void Game::moveShots(float dt) {
     std::erase_if(hostile,[](const Shot& s){return s.life<=0;});
 }
 
-void Game::explode(Vec at,float radius,float damage,Color color) {
+void Game::blastEffects(Vec at,float radius,Color color) {
     burst(at,color,26,330);
     burst(at,hex(0xfff0c2),12,420);
     burst(at,hex(0xc9ced4),6,120,ParticleKind::puff);
@@ -66,6 +80,10 @@ void Game::explode(Vec at,float radius,float damage,Color color) {
     ring(at,color,radius*.6f,.35f);
     shake=std::max(shake,8.f); punch=std::max(punch,.6f); flash=std::max(flash,.3f);
     audio.event("destroy",.8f,(at.x-player.box.x)/width,.78f+random()*.1f);
+}
+
+void Game::explode(Vec at,float radius,float damage,Color color) {
+    blastEffects(at,radius,color);
     for (auto& e:enemies) {
         if (!e.alive) continue;
         const Vec c=e.box.center();

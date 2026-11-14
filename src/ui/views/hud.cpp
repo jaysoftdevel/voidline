@@ -48,10 +48,10 @@ void App::hud() {
         r.rect({921,77,246,4},hex(0x3e4f5b));
         r.rect({921,77,246*(1-g.reload/g.duration),4},ammo);
     }
-    const std::string objective=game.bossDead?"Reach the extraction gate":game.bossActive?"Defeat "+std::string(game.stage->boss):"Find the sector guardian";
+    const std::string objective=game.bossDead?(game.coop?"Extract together":"Reach the extraction gate"):game.bossActive?"Defeat "+std::string(game.stage->boss):"Find the sector guardian";
     panel({413,16,374,47},accent);
-    label({425,35},"SECTOR "+digits(game.index+1),accent);
-    r.text({526,37},objective,14,white,true);
+    label({425,35},"SECTOR "+digits(game.index+1)+"/"+digits(sectorCount),accent);
+    r.text({540,37},objective,14,white,true);
     r.rect({425,48,350,3},hex(0x465966));
     r.rect({425,48,350*clamp(p.box.center().x/game.stage->worldWidth),3},accent);
     if (game.bossActive) {
@@ -62,8 +62,9 @@ void App::hud() {
         r.rect({402,100,396*clamp(float(boss.hp)/boss.maxHp),6},hex(0xff8066));
     }
     panel({19,548,282,34},muted);
-    label({31,570},p.crouched?"CROUCH":p.sprinting?"SPRINT":p.flip>0?"FLIP":game.checkpoint?"CHECKPOINT ONLINE":"FIELD COMMS  /  ACTIVE",
-        p.crouched||p.sprinting||p.flip>0?trim:game.checkpoint?teal:muted);
+    const bool covered=p.crouched && game.nearCover();
+    label({31,570},covered?"IN COVER":p.crouched?"CROUCH":p.sprinting?"SPRINT":p.flip>0?"FLIP":game.activeBeacon>=0?"CHECKPOINT ONLINE":"FIELD COMMS  /  ACTIVE",
+        covered?teal:p.crouched||p.sprinting||p.flip>0?trim:game.activeBeacon>=0?teal:muted);
     r.text({243,570},timeText(game.time),13,white,true);
     panel({649,547,532,36},ammo);
     for (int i=0;i<static_cast<int>(weaponCount);++i) {
@@ -71,6 +72,15 @@ void App::hud() {
         if (i==game.gun) r.slab({x-5,553,72,24},5,hex(0x29404b),hex(0x1c2d37));
         r.text({x,569},std::to_string(i+1)+" "+weapons[i].shortName,11.5f,
                !game.guns[i].available?hex(0x647382):i==game.gun?ammo:white,true);
+    }
+    if (game.coop) {
+        const auto& partner=game.teammate();
+        const Color tag=hex(partner.character->color);
+        const Rect tile{19,116,260,30};
+        panel(tile,tag);
+        label({31,136},"PARTNER  /  "+std::to_string(partner.player.hp)+" SUIT",tag);
+        const float distance=partner.player.box.center().x-p.box.center().x;
+        label({185,136},std::abs(distance)<50?"NEARBY":(distance<0?"< ":" > ")+std::to_string(int(std::abs(distance)))+" PX",pale);
     }
     // Combo counter and style call-outs.
     if (game.combo>=2 && game.comboTimer>0) {
@@ -95,10 +105,10 @@ void App::hud() {
         label({55,157},game.stage->location,accent.alpha(a));
         r.outlinedText({51,213},game.stage->name,52,white.alpha(a));
         if (game.index==0) {
-            r.text({55,243},"SHIFT SPRINT   /   C CROUCH   /   JUMP TWICE TO FLIP   /   Q OR RIGHT CLICK FOR BULLET TIME",12,pale.alpha(a),true);
+            r.text({55,243},"SHIFT SPRINT   /   C CROUCH BEHIND BARRICADES   /   JUMP TWICE TO FLIP   /   Q FOR BULLET TIME",12,pale.alpha(a),true);
         }
     }
-    if (view==View::play && Rect{0,0,width,height}.contains(mouse) && !input.aimStickActive()) {
+    if (view==View::play && !coopPaused && Rect{0,0,width,height}.contains(mouse) && !input.aimStickActive()) {
         const Color mark=mix(white,ammo,.45f).alpha(.95f);
         const float spin=clock*(game.slowMotion()?2.4f:.6f);
         const float radius=game.slowMotion()?13.f:9.f;

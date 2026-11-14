@@ -7,7 +7,7 @@ using namespace vl::ui;
 
 namespace vl {
 App::App(SDL_Window* win,Renderer& renderer,Audio& mixer,Storage& storage)
-    :window(win),r(renderer),audio(mixer),store(storage),game(audio) {
+    :window(win),r(renderer),audio(mixer),store(storage),game(*this) {
     settings=store.settings();
     input.configure(settings);
     audio.configure(settings);
@@ -19,6 +19,7 @@ void App::refresh() { for (int i=0;i<3;++i) slots[i]=store.get(i+1); }
 
 void App::show(View v) {
     view=v; focus=-1; buttons.clear();
+    if (v!=View::multiplayer) SDL_StopTextInput();
     SDL_ShowCursor(v==View::play?0:1);
     if (v!=View::play && v!=View::pause && v!=View::intro && v!=View::failed) audio.track("menu");
 }
@@ -51,7 +52,19 @@ void App::ask(View previous,std::string title,std::string text,std::function<voi
 }
 
 void App::closeAction() {
+    if (coopStarted) {
+        if (view==View::play) {
+            coopPaused=!coopPaused; input.reset(); coopMouse=false;
+            SDL_ShowCursor(coopPaused?1:0);
+        }
+        else if (view==View::failed || view==View::cleared) leaveCoop();
+        return;
+    }
     switch (view) {
+    case View::multiplayer:
+        if (lobby==Lobby::menu) show(View::menu);
+        else leaveCoop();
+        break;
     case View::menu: running=false; break;
     case View::settings: show(settingsReturn); break;
     case View::controls: rebinding=-1; show(View::settings); break;
@@ -83,18 +96,22 @@ void App::event(const SDL_Event& e) {
     input.event(e);
     if (e.type==sdl::quit) { running=false; return; }
     if (e.type==sdl::window && e.window.event==sdl::focusLost) {
-        if (view==View::play) closeAction();
+        if (view==View::play && !coopStarted) closeAction();
+        if (coopStarted) { coopMouse=false; pendingControls={}; }
         return;
     }
+    if (view==View::multiplayer && lobbyInput(e)) return;
     if (e.type==sdl::mouseMotion) {
         mouse=r.mousePosition(e.motion.x,e.motion.y); focus=-1;
-        if (view==View::play) game.pointer(mouse);
+        if (view==View::play && !coopStarted) game.pointer(mouse);
+        if (coopStarted && view==View::play && !coopPaused) coopMouse=true;
     } else if (e.type==sdl::mouseDown && e.button.button==1) {
         mouse=r.mousePosition(e.button.x,e.button.y);
-        if (view==View::play) game.pointer(mouse);
+        if (view==View::play && !coopStarted) game.pointer(mouse);
+        else if (coopStarted && view==View::play && !coopPaused) coopMouse=true;
         else for (const auto& b:buttons) if (b.box.contains(mouse)) { auto action=b.action; action(); break; }
     }
-    if (e.type==sdl::controllerButton && e.cbutton.state && view!=View::play) {
+    if (e.type==sdl::controllerButton && e.cbutton.state && (view!=View::play || coopPaused)) {
         using namespace sdl::pad;
         const int button=e.cbutton.button;
         if (button==down || button==right) navigate(1);
@@ -110,7 +127,7 @@ void App::event(const SDL_Event& e) {
     if (view==View::controls && rebinding>=0) { captureKey(key); return; }
     // Esc is reserved, so it always works. P and the gamepad's Start button pause through the polled action.
     if (key==sdl::key::esc) { closeAction(); return; }
-    if (view==View::play) return;
+    if (view==View::play && !coopPaused) return;
     if (view==View::intro && (key==sdl::key::space || key==sdl::key::enter)) { launch(0); return; }
     if (key==sdl::key::down || key==sdl::key::right || key==sdl::key::tab) navigate(1);
     else if (key==sdl::key::up || key==sdl::key::left) navigate(-1);
@@ -121,6 +138,14 @@ void App::update(float dt) {
     clock+=dt; notice=std::max(0.f,notice-dt);
     if (script) script(scriptFrame++);
     input.poll();
+    if (view==View::multiplayer || coopStarted) {
+        pollCoop(dt);
+        if (coopStarted) {
+            if (view==View::play && input.pressed(Act::pause)) closeAction();
+            advanceCoop(dt);
+        } else audio.pace(1);
+        return;
+    }
     if (view==View::intro) {
         film+=dt;
         if (film>=15.35f) launch(0);
@@ -144,6 +169,7 @@ void App::draw() {
     buttons.clear();
     switch (view) {
     case View::menu: menu(); break;
+    case View::multiplayer: multiplayer(); break;
     case View::create: create(); break;
     case View::load: load(); break;
     case View::campaign: campaign(); break;
@@ -156,10 +182,13 @@ void App::draw() {
     case View::pause:
     case View::failed:
     case View::cleared: {
-        const float alpha=view==View::play?clamp(accumulator/step):1.f;
-        r.drawWorld(game,settings.high,settings.motion,alpha,previousPlayer,previousCamera);
+        const float alpha=coopStarted && !network.hosting()?netInterpolation:
+            view==View::play?clamp(accumulator/step):1.f;
+        r.drawWorld(game,settings.high,settings.motion,alpha,previousPlayer,previousCamera,
+                    game.coop?&previousPartner:nullptr);
         hud();
-        if (view!=View::play) overlay();
+        if (coopStarted && (coopPaused || view!=View::play)) coopOverlay();
+        else if (view!=View::play) overlay();
         break;
     }
     case View::confirm:

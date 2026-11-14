@@ -11,9 +11,13 @@ void Game::moveLifts(float dt) {
         const Vec offset{l.x+std::sin(phase)*l.dx-p.box.x,l.y+std::sin(phase)*l.dy-p.box.y};
         p.velocity={std::cos(phase)*l.dx*2*pi/l.period,std::cos(phase)*l.dy*2*pi/l.period};
         p.box.x+=offset.x; p.box.y+=offset.y;
-        if (dt>0 && player.support==static_cast<int>(i)) {
-            player.box.x+=offset.x; player.box.y+=offset.y;
-        }
+        if (dt<=0) continue;
+        auto carry=[&](Player& body) {
+            if (body.support!=static_cast<int>(i)) return;
+            body.box.x+=offset.x; body.box.y+=offset.y;
+        };
+        carry(player);
+        if (coop) carry(partner.player);
     }
 }
 

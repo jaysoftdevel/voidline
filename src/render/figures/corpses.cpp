@@ -15,7 +15,7 @@ void Renderer::drawCorpses(const Game& g) {
         // Soldiers topple about their feet, everything else tumbles about its center.
         const Vec pivot=c.pivotFeet?Vec{center.x,c.body.box.bottom()+offset.y}:center;
         beginSpin(pivot,c.angle);
-        drawEnemy(c.body,accent,g.index,g.time,center);
+        drawEnemy(c.body,accent,g.stage->biome,g.time,center);
         endSpin();
     }
 }

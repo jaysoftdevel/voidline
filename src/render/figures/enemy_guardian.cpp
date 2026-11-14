@@ -6,16 +6,16 @@ namespace vl {
 void Renderer::drawGuardian(const EnemyView& v) {
     const Enemy& e=v.e;
     const Color black=v.black,hull=v.hull,rim=v.rim,plate=v.plate,alert=v.alert,accent=v.accent;
-    const int sector=v.sector;
+    const Biome biome=v.biome;
     const float time=v.time,x=v.x,y=v.y;
     const Vec center=v.center;
     const float flicker=e.alive?1.f:(1-v.burnt*.8f)*(std::sin(time*29.f)>-.1f?1.f:.2f);
-    const Color core=(sector==4?hex(0xa6c8ff):accent).energy(flicker);
+    const Color core=(biome==Biome::orbital?hex(0xa6c8ff):accent).energy(flicker);
     const Rect b=e.box;
     const Vec base{x,y+b.h*.5f};
     const float stomp=std::sin(e.distance*.084f)*v.pace;
     const float breathe=1+v.breath*.05f;
-    if (sector!=4) for (float side:{-1.f,1.f}) {
+    if (biome!=Biome::orbital) for (float side:{-1.f,1.f}) {
         const float gait=side*stomp*9.f;
         const float lift=std::max(0.f,-side*stomp)*7.f;
         const Vec hipJoint{x+side*24.f,y+11.f};
@@ -30,8 +30,8 @@ void Renderer::drawGuardian(const EnemyView& v) {
         polygon(foot+Vec{-10.f,-3.f},foot+Vec{11.f,-3.f},foot+Vec{12.f,1.5f},foot+Vec{-11.f,1.5f},hull.energy(.9f));
         for (int t=-1;t<=1;++t) line(foot+Vec{t*5.f,-3.f},foot+Vec{t*5.f,2.f},.9f,black.alpha(.7f));
     }
-    switch (sector) {
-    case 0:
+    switch (biome) {
+    case Biome::mine:
         gradient({x-37,y-32,74,63},hull.energy(1.3f),hull.energy(.54f));
         outline({x-37,y-32,74,63},black,2.5f);
         for (float side:{-1.f,1.f}) {
@@ -44,7 +44,7 @@ void Renderer::drawGuardian(const EnemyView& v) {
         for (int i=0;i<6;++i) line({x-35.f+i*12.f,y+27.f},{x-27.f+i*12.f,y+16.f},3.f,accent.energy(.9f*(1-v.burnt)));
         line({x-37.f,y+2.f},{x+37.f,y+2.f},1.1f,black.alpha(.8f));
         break;
-    case 1:
+    case Biome::water:
         ellipse(center,{49,34},black);
         ellipse(center-Vec{0,2},{45,29},hull);
         for (int i=-1;i<=1;++i) {
@@ -56,7 +56,7 @@ void Renderer::drawGuardian(const EnemyView& v) {
         for (int i=-3;i<=3;++i) ellipse({x+i*12.f,y+19.f},{1.5f,1.5f},black);
         for (int i=-2;i<=2;++i) line({x+i*14.f,y-10.f},{x+i*14.f+4.f,y+8.f},1.f,black.alpha(.6f));
         break;
-    case 2:
+    case Biome::biodome:
         ellipse(center,{39,37},black);
         for (int i=0;i<9;++i) {
             const Vec d=ray(i*2*pi/9+std::sin(time*.8f+i)*.04f*(e.alive?1.f:0.f)), side{-d.y,d.x};
@@ -66,7 +66,7 @@ void Renderer::drawGuardian(const EnemyView& v) {
         ellipse(center,{32,30},hull.energy(.87f));
         ellipse(center,{24,23},black);
         break;
-    case 3:
+    case Biome::forge:
         triangle(center-Vec{46,27},center+Vec{46,-27},center+Vec{0,43},hull);
         gradient({x-36,y-34,72,35},hull.energy(1.38f),hull.energy(.62f));
         for (float side:{-1.f,1.f}) {
@@ -75,7 +75,7 @@ void Renderer::drawGuardian(const EnemyView& v) {
         }
         for (int i=0;i<5;++i) line({x-30.f+i*15.f,y-30.f},{x-30.f+i*15.f,y-6.f},1.f,black.alpha(.55f));
         break;
-    case 4:
+    case Biome::orbital:
         ellipse(center,{55,34},black);
         ellipse(center-Vec{0,3},{51,30},hull);
         line({x-63,y-4},{x+63,y-4},4,rim);
@@ -87,7 +87,7 @@ void Renderer::drawGuardian(const EnemyView& v) {
     const float kick=e.recoil*8.f;
     // The cannon droops as the frame loses power.
     const Vec aimDir=e.alive?dir:normal(dir+Vec{0,1.f}*smooth(v.dead/1.2f)*1.4f);
-    limb(center+Vec{v.facing*29.f,-4},center+aimDir*(56-kick)+Vec{0,-4},sector==3?14.f:9.f,hull,rim);
+    limb(center+Vec{v.facing*29.f,-4},center+aimDir*(56-kick)+Vec{0,-4},biome==Biome::forge?14.f:9.f,hull,rim);
     ellipse(center+aimDir*(58-kick)+Vec{0,-4},{5.f,5.f},black);
     ellipse(center,{18,18},black);
     ellipse(center,{13*breathe,13*breathe},core.energy(.58f));

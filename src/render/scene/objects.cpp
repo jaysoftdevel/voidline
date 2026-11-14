@@ -5,12 +5,12 @@ using namespace vl::scene;
 
 namespace vl {
 void Renderer::objects(const Game& g) {
-    const Color cold=hex(g.stage->cold),tone=metal(g.index);
+    const Color cold=hex(g.stage->cold),tone=metal(g.stage->biome);
     for (const auto& vent:g.stage->vents) {
         if (!visible(vent.x)) continue;
         const Vec p{vent.x+offset.x,vent.y+offset.y};
         const int state=g.ventState(vent.phase);
-        const Color hazard=hex(g.index==2?0xbfff92:g.index==4?0xbd9aff:0xff9b62);
+        const Color hazard=hex(g.stage->biome==Biome::biodome?0xbfff92:g.stage->biome==Biome::orbital?0xbd9aff:0xff9b62);
         rect({p.x-21,p.y-4,42,4},tone.energy(.68f));
         for (int i=0;i<7;++i) rect({p.x-17+i*5,p.y-5,2,3},hazard.energy(state?1.8f:.51f));
         if (state) halo(p-Vec{0,14},42,hazard.alpha(state==2?.48f:.29f));
@@ -21,9 +21,11 @@ void Renderer::objects(const Game& g) {
             line(start,start+Vec{std::sin(i*4.f)*8,-8-t*14},2.2f,c);
         }
     }
-    const auto beacon=g.stage->beacon+offset;
-    if (visible(g.stage->beacon.x)) {
-        const Color status=g.checkpoint?hex(0x92ffbe):cold;
+    for (int i=0;i<static_cast<int>(g.stage->beacons.size());++i) {
+        const auto& at=g.stage->beacons[i];
+        if (!visible(at.x)) continue;
+        const Vec beacon=at+offset;
+        const Color status=i==g.activeBeacon?hex(0x92ffbe):cold;
         rect({beacon.x-22,beacon.y-4,44,4},tone.energy(.80f));
         rect({beacon.x-11,beacon.y-46,22,44},hex(0x16232b));
         outline({beacon.x-11,beacon.y-46,22,44},tone.energy(.94f));
@@ -65,6 +67,31 @@ void Renderer::objects(const Game& g) {
         } else {
             ellipse(p,{4,4},c.energy(1.64f));
         }
+    }
+    for (const auto& crate:g.crates) {
+        if (!visible(crate.box.x,crate.box.w)) continue;
+        const auto& spec=crateSpec(crate.kind);
+        const Color tint=hex(spec.color);
+        const Vec p=crate.box.center()+offset;
+        const Rect b{crate.box.x+offset.x,crate.box.y+offset.y,crate.box.w,crate.box.h};
+        if (crate.spent) {
+            line({b.x+2,b.bottom()-3},{b.right()-2,b.bottom()-3},4,hex(0x242428));
+            continue;
+        }
+        gradient(b,mix(tone,tint,.32f),hex(0x1d222c));
+        outline(b,hex(0x111820),2);
+        rect({b.x+3,b.y+3,b.w-6,4},tint.energy(1.45f));
+        rect({b.x+4,b.y+8,3,b.h-13},tint.alpha(.68f));
+        rect({b.right()-7,b.y+8,3,b.h-13},tint.alpha(.68f));
+        const float pip=(b.w-12)/spec.hits;
+        for (int i=0;i<spec.hits;++i)
+            rect({b.x+6+i*pip,b.bottom()-7,pip-1,2},tint.alpha(i<crate.hits?.95f:.20f));
+        const int marks=static_cast<int>(crate.kind)+1;
+        for (int i=0;i<marks;++i) {
+            const float x=p.x+(i-(marks-1)*.5f)*7;
+            line({x-2,p.y+3},{x+2,p.y-4},2,tint.energy(1.45f));
+        }
+        halo(p,27,tint.alpha(crate.hits<spec.hits?.27f+.14f*std::sin(g.time*13):.22f));
     }
     auto projectile=[&](const Shot& s,bool friendly) {
         if (!visible(s.p.x)) return;

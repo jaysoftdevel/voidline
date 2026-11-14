@@ -12,7 +12,7 @@ void App::overlay() {
     r.rect({panel.x,panel.y,5,panel.h},amber);
     const bool pause=view==View::pause, fail=view==View::failed;
     label({323,181},"SECTOR "+digits(game.index+1)+"  /  "+game.stage->name,amber);
-    const std::string title=pause?"Paused":fail?"Suit integrity lost":game.index==4?"Campaign complete":"Sector cleared";
+    const std::string title=pause?"Paused":fail?"Suit integrity lost":game.index==sectorCount-1?"Campaign complete":"Sector cleared";
     r.text({321,240},title,48,white,true);
     if (pause) {
         r.text({325,277},"A / D  Move     SPACE  Jump (twice to flip)     SHIFT  Sprint     C  Crouch",15,pale);
@@ -23,8 +23,8 @@ void App::overlay() {
             ask(View::pause,"Leave this mission?","Returning to the sector map ends the current attempt.",[this]{showMap();});
         });
     } else {
-        copy({325,274},fail?(game.checkpoint?"Retry from the active checkpoint.":"Retry the sector from its insertion point."):
-            game.index==4?"The orbital uplink is online. Vega-9 can call for help again.":"Spend your earned score on upgrades in the armory.",534,17);
+        copy({325,274},fail?(game.activeBeacon>=0?"Retry from the active checkpoint.":"Retry the sector from its insertion point."):
+            game.index==sectorCount-1?"The orbital uplink is online. Vega-9 can call for help again.":"Spend your earned score on upgrades in the armory.",534,17);
         if (!fail) label({325,321},std::to_string(game.score)+" SCORE   /   "+std::to_string(game.kills)+" TARGETS   /   "+timeText(game.time),teal);
         button({325,348,246,42},fail?"RETRY":"ARMORY",[this,fail]{if (fail) retry(); else showArmory();},true,true);
         button({624,348,251,42},"SECTOR MAP",[this]{showMap();});

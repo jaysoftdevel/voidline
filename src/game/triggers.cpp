@@ -32,14 +32,24 @@ void Game::triggers() {
         item.used=true; message(item.p-Vec{0,16},text,tint); burst(item.p,tint,10,105);
         audio.event("pickup",1,0,.95f+random()*.10f);
     }
-    if (!checkpoint && std::abs(p.box.center().x-stage->beacon.x)<44 && std::abs(p.box.bottom()-stage->beacon.y)<155) {
-        checkpoint=true; p.hp=maxHealth;
-        backup={time,score,kills,gun,bossActive,bossDead,guns,enemies,supplies};
-        message(stage->beacon-Vec{0,70},"CHECKPOINT ONLINE",hex(0xb9ffcf),1.75f);
-        audio.event("checkpoint");
-    }
     for (const auto& v:stage->vents) {
-        if (ventState(v.phase)==2 && p.box.overlaps({v.x-19,v.y-75,38,75})) hurt(12+index*2);
+        if (ventState(v.phase)==2 && p.box.overlaps({v.x-19,v.y-75,38,75})) hurt(12+std::min(index,4)*2+std::max(0,index-4));
+    }
+}
+
+void Game::checkpoints() {
+    auto near=[](const Player& p,Vec beacon) {
+        return std::abs(p.box.center().x-beacon.x)<44 && std::abs(p.box.bottom()-beacon.y)<155;
+    };
+    for (int i=activeBeacon+1;i<static_cast<int>(stage->beacons.size());++i) {
+        const Vec beacon=stage->beacons[i];
+        if (!near(player,beacon) && (!coop || !near(partner.player,beacon))) continue;
+        activeBeacon=i; player.hp=maxHealth;
+        if (coop) partner.player.hp=partner.maxHealth;
+        backup={time,score,kills,gun,bossActive,bossDead,guns,enemies,supplies,crates,partner};
+        message(beacon-Vec{0,70},"CHECKPOINT ONLINE",hex(0xb9ffcf),1.75f);
+        audio.event("checkpoint");
+        break;
     }
 }
 } // namespace vl

@@ -41,6 +41,7 @@ struct Platform {
     Vec velocity;
     bool ground=false;
     const Lift* lift=nullptr;
+    bool cover=false;
 };
 struct Player {
     Rect box;
@@ -83,6 +84,13 @@ struct Enemy {
     bool pendingCrit=false;
     // Death animation. deathAge counts up while the body is a corpse. fallDir is the side it topples toward.
     float deathAge=0,fallDir=1;
+    bool elite=false;
+};
+struct Explosive {
+    CrateKind kind;
+    Rect box;
+    int hits;
+    bool spent=false;
 };
 struct Supply { SupplyKind kind; Vec p; bool used=false; };
 struct Shot {
@@ -90,7 +98,7 @@ struct Shot {
     float life,damage;
     Color color;
     int pierce=0;
-    uint32_t passed=0;
+    std::vector<int> passed{};
     bool longShot=false,wave=false;
     float gravity=0,blast=0;
     bool crit=false;
