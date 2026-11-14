@@ -1,7 +1,7 @@
 #pragma once
 #include "content/types.hpp"
 namespace vl {
-inline const std::array<Character, 6> characters{{
+inline std::array<Character, 6> characters{{
     {"Mara Voss", "Vanguard", "voss", "#ffa25e", "125 suit integrity", "Heavy armor for taking the fight up close.", 125, 350, 655, 1},
     {"Iona Rook", "Scout", "rook", "#76e5d7", "Faster movement and higher jumps", "A lighter suit built for quick traversal.", 100, 395, 708, 1},
     {"Kade Vale", "Engineer", "vale", "#b9adff", "+30% reserve ammo", "An expanded supply rig for sustained fire.", 110, 365, 670, 1.3},

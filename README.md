@@ -1,4 +1,4 @@
-# VOIDLINE 2.10.4
+# VOIDLINE 2.10.7
 
 VOIDLINE is a native C++ 2D shooter for Linux and Windows 11 with 20 sectors, six operatives, difficulty levels and an armory. Destroy the guardian in each sector and reach extraction to turn mission score into upgrade points and see the next part of the Vega-9 rescue story.
 
@@ -228,3 +228,26 @@ All options modify the local renderer only; multiplayer protocol and gameplay st
 ## Visible crosshair, safe enemy footing and shouldered weapons (v2.10.4)
 
 The aiming reticle now uses high-contrast luminous lime with a dark five-pixel outline for visibility over any biome and muzzle flash. Grounded enemies must keep their leading foot supported by real ground or a ledge, and cannot walk across gaps or skip a pit at high speeds. Flying enemies retain their aerial behavior. Operatives and armed enemies now use smoother two-handed weapon shoulder presentation; raising the rifle transitions from low carry while firing immediately brings it up. The rendered rifle muzzle remains aligned with projectile origin once shouldered.
+
+
+## Staircases and external Level & Model Editor (v2.10.5)
+
+Campaign and cooperative maps contain walkable staircases; both operatives and ground enemies follow the surface. The separate native editor lets you load any of the 20 built-in campaign and 6 co-op missions, modify stairs/platforms/lifts/cover/relays, position enemies and adjust patrol widths, and set the operative spawn point. Use the companion editor source archive to build a standalone editor executable.
+
+Use **Export All** in the editor to create individual `levels/sector-NN.vllevel.json`, `levels/coop-NN.vllevel.json`, `models/characters/N.vlcharacter.json` and `models/enemies/N.vlenemy.json` files. The game loads levels beside the executable for each mission and model definitions on startup. Editable character data includes health, speed, jump, ammo reserve, suit color and articulated rig. Editable enemy models include dimensions, speeds, HP and attack data. Both multiplayer peers must have identical level/model definitions; the VL12 session handshake verifies their combined level/model fingerprints.
+
+The Windows and Linux runtime staging scripts preserve existing edited JSON files when rebuilding a tester folder; imported definitions remain outside `game.vpak`.
+
+Character model update v2.10.6: clients must use matching VLRM profiles packed into game.vpak; multiplayer level/model hashes are checked at deployment.
+
+## Baked character models (game v2.10.6; editor project v0.0.8)
+
+The Linux-only standalone Model Studio edits `voidline-character-v3` JSON with individual skeleton pose vectors, body dimensions and movement timing. **Export Project** generates `assets/models/characters.vlrm` (2,372 bytes), a versioned, checksummed little-endian binary with six validated character rigs.
+
+Manually copy this file to the game **source** `assets/models/characters.vlrm` and rebuild. The existing asset packer puts it in `game.vpak`; the game decodes it **once at startup** and caches pose vectors/geometry for the procedural renderer. It does not load loose character JSON or the editor at runtime. Missing binary falls back to built-in profiles; invalid binary is rejected.
+
+Edited acceleration, braking, gait cadence, stride and aim speed affect gameplay; body height/width, head size, limb length, hand placement and pose offsets affect the articulated visuals. The core fixed collision capsule is not changed by visual dimensions. Both multiplayer computers must use the same packed models.
+
+## VLRM v2 compatibility (2.10.7)
+
+The Linux-only Model Studio 0.0.9 writes version-4 character JSON with XYZ joint offsets and a baked VLRM v2. The game accepts both v1 and v2 packs, caches the model once on startup, and uses the existing 2D procedural animation for active gameplay. Edited Z coordinates are retained for future 3D visual rendering but do not currently reposition sprites in-game. As before, manually copy the exported `.vlrm` to `assets/models/characters.vlrm` in the game source and rebuild. Rebuild on both platforms when changing shared multiplayer models.

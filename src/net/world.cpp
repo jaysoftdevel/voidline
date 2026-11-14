@@ -152,16 +152,18 @@ bool decodeControls(std::span<const uint8_t> bytes,Controls& c,uint32_t& mission
         c.weapon<static_cast<int>(weaponCount) && c.cycle>=-1 && c.cycle<=1 && c.aimMode<=AimMode::stick &&
         (c.aimMode!=AimMode::stick || (std::abs(c.aim.x)<=1.01f && std::abs(c.aim.y)<=1.01f));
 }
-Bytes encodeMission(int sector,int difficulty,uint32_t mission,CoopMode mode) {
+Bytes encodeMission(int sector,int difficulty,uint32_t mission,CoopMode mode,uint32_t layout) {
     Writer io;
-    io(sector,difficulty,mission,mode);
+    io(sector,difficulty,mission,mode,layout);
     return std::move(io.bytes);
 }
-bool decodeMission(std::span<const uint8_t> bytes,int& sector,int& difficulty,uint32_t& mission,CoopMode* mode) {
+bool decodeMission(std::span<const uint8_t> bytes,int& sector,int& difficulty,uint32_t& mission,CoopMode* mode,uint32_t* layout) {
     Reader io(bytes);
     CoopMode received{};
-    io(sector,difficulty,mission,received);
+    uint32_t receivedLayout=0;
+    io(sector,difficulty,mission,received,receivedLayout);
     if (mode) *mode=received;
+    if (layout) *layout=receivedLayout;
     return io.done() && mission>0 && received>=CoopMode::campaign && received<=CoopMode::cooperative &&
         sector>=0 && sector<(received==CoopMode::cooperative?cooperativeSectorCount:sectorCount) && difficulty>=0 &&
         difficulty<static_cast<int>(difficulties.size());

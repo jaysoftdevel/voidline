@@ -2,6 +2,8 @@
 #include "ui/common.hpp"
 #include "ui/coop_story.hpp"
 #include "ui/sector_story.hpp"
+#include "content/level_io.hpp"
+#include "content/model_io.hpp"
 #include <exception>
 
 using namespace vl::ui;
@@ -118,7 +120,8 @@ void App::startCoop(int index,bool retry) {
         loadout.character=coopCharacter;
         game.startCoop(index,loadout,remoteCharacter,coopMode==CoopMode::cooperative);
     }
-    if (!network.send(net::Packet::prepare,net::encodeMission(game.index,coopDifficulty,mission,coopMode))) return;
+    const uint32_t layoutHash=levelFingerprint(*game.stage)^modelFingerprint();
+    if (!network.send(net::Packet::prepare,net::encodeMission(game.index,coopDifficulty,mission,coopMode,layoutHash))) return;
     prepareCoop();
 }
 
@@ -231,8 +234,8 @@ void App::receiveCoop(std::span<const uint8_t> data) {
         if (kind==Packet::prepare) {
             int index=0,level=0;
             CoopMode selectedMode=CoopMode::campaign;
-            uint32_t generation=0;
-            valid=net::decodeMission(body,index,level,generation,&selectedMode) && generation==mission+1 &&
+            uint32_t generation=0,hostLayout=0;
+            valid=net::decodeMission(body,index,level,generation,&selectedMode,&hostLayout) && generation==mission+1 &&
                 (mission==0?index==0:
                  (view==View::failed && index==game.index && selectedMode==coopMode) ||
                  (view==View::cleared && index==game.index+1 && selectedMode==coopMode));
@@ -245,6 +248,10 @@ void App::receiveCoop(std::span<const uint8_t> data) {
                 valid=characterLocked && remoteLocked && remoteCharacter>=0;
                 if (!valid) { network.fail("Missing operative lock-in before deployment."); return; }
                 game.startCoop(index,loadout,coopCharacter,coopMode==CoopMode::cooperative);
+                if ((levelFingerprint(*game.stage)^modelFingerprint())!=hostLayout) {
+                    network.fail("Level or character model data differ. Install matching game.vpak on both computers.");
+                    return;
+                }
                 prepareCoop();
                 probeHost();
             }

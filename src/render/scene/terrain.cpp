@@ -1,5 +1,6 @@
 #include "render/renderer.hpp"
 #include "render/scene/scene_util.hpp"
+#include "game/stairs.hpp"
 
 using namespace vl::scene;
 
@@ -7,6 +8,30 @@ namespace vl {
 void Renderer::terrain(const Game& g) {
     material(g);
     const Color tone=metal(g.stage->biome), accent=hex(g.stage->accent), cold=hex(g.stage->cold);
+    for (const auto& stair:g.stage->stairs) {
+        if (!visible(stair.from.x,stair.to.x-stair.from.x)) continue;
+        const auto side=Vec{stair.to.x-stair.from.x,stair.to.y-stair.from.y};
+        const Vec a=stair.from+offset,b=stair.to+offset;
+        const Vec rise=normal(Vec{-side.y,side.x})*4.f;
+        // Steel stringers under grating; amber nosings make the walkable route
+        // distinguishable from decorative pipes and distant background ramps.
+        line(a+Vec{0,9},b+Vec{0,9},9.f,hex(0x101820));
+        line(a+Vec{0,6},b+Vec{0,6},5.f,tone.energy(.62f));
+        line(a,b,3.1f,cold.energy(.98f));
+        const int count=std::max(2,int(side.x/19.f));
+        for (int i=0;i<=count;++i) {
+            const float x=mix(stair.from.x,stair.to.x,float(i)/count);
+            const float y=mix(stair.from.y,stair.to.y,float(i)/count);
+            const Vec at=Vec{x,y}+offset;
+            line(at+rise-Vec{0,2},at-rise+Vec{0,9},3.f,tone.energy(.9f));
+            line(at-Vec{5,0},at+Vec{7,0},1.5f,accent.energy(1.1f));
+        }
+        for (int i=0;i<4;++i) {
+            const float t=(i+.5f)/4;
+            const Vec foot=mix(a,b,t);
+            line(foot,foot+Vec{0,31},2.f,tone.energy(.4f));
+        }
+    }
     for (const auto& surface:g.platforms) {
         if (!surface.ground || !visible(surface.box.x,surface.box.w)) continue;
         const auto& b=surface.box;

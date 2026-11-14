@@ -1,5 +1,8 @@
 #include "game/game.hpp"
 #include "game/detail.hpp"
+#include "content/level_io.hpp"
+#include "platform/paths.hpp"
+#include <iostream>
 
 namespace vl {
 float Game::random() { return std::generate_canonical<float,22>(rng); }
@@ -17,6 +20,12 @@ void Game::start(int sector,const Save& save,bool cooperative) {
     puzzleMode=cooperative;
     index=sector;
     stage=cooperative?&cooperativeStages[index]:&stages[index]; campaign=save;
+    const auto path=levelFile(executableDirectory()/"levels",index,cooperative);
+    if (std::filesystem::exists(path)) {
+        std::string why;
+        if (readLevel(path,*stage,editedStage,index,cooperative,&why)) stage=&editedStage;
+        else std::cerr<<"VOIDLINE: ignoring invalid custom level "<<utf8Path(path)<<": "<<why<<'\n';
+    }
     relayStates.assign(stage->relays.size(),{});
     setpieceMask=0; bossPhase=0;
     difficulty=&difficulties[save.difficulty];
@@ -37,7 +46,7 @@ void Game::start(int sector,const Save& save,bool cooperative) {
         crates.push_back({placement.kind,{base.x-spec.w*.5f,base.y-spec.h,spec.w,spec.h},spec.hits});
     }
     enemies.clear(); supplies.clear();
-    const float safeSpawnX=100.f;
+    const float safeSpawnX=stage->insertion.x>0?stage->insertion.x:100.f;
     const float safeRadius=330.f+std::min(index,8)*18.f;
     const int later=std::max(0,index-4);
     for (const auto& item:stage->enemies) {
@@ -71,7 +80,7 @@ void Game::start(int sector,const Save& save,bool cooperative) {
     activeBeacon=-1; bossActive=bossDead=false;
     // Cooperative players share the same ground insertion bay; neither is
     // teleported straight to the upper puzzle route.
-    spawn({100,stage->ground.front().y});
+    spawn({safeSpawnX,stage->insertion.y==0?stage->ground.front().y:stage->insertion.y});
     moveLifts(0);
     mode=Mode::active;
 }

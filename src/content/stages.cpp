@@ -71,6 +71,11 @@ void layCrossing(Stage& stage,Crossing crossing,float edge,float from,float to,i
     auto platform=[&](float x,float y,float w,float dx,float dy,float period) {
         stage.lifts.push_back({edge+x,y,w,dx,dy,period,phase});
     };
+    if (crossing==stairs) {
+        // Physical crossing, not merely a decorative staircase icon. Both
+        // ends overlap the adjacent ground by 20 units for a safe transition.
+        stage.stairs.push_back({{edge-20.f,from},{edge+crossingWidth(crossing)+20.f,to}});
+    }
     switch (crossing) {
     case span:
         ledge(53,upper-44,86);
@@ -151,6 +156,9 @@ void detailBay(Stage& stage,float x,float w,float floor,int rank,int number) {
         if (rank>=3) stage.lifts.push_back({b+137.f,floor-139.f,99.f,42.f,-66.f,3.3f,number*.28f});
         break;
     }
+    // Dedicated stairway to the first elevated catwalk, traversable in both
+    // directions without requiring a jump or a lift cycle.
+    stage.stairs.push_back({{a-112.f,floor},{a+34.f,floor-(motif==0?68.f:motif==1?76.f:motif==2?92.f:motif==3?69.f:motif==4?86.f:motif==5?63.f:77.f)}});
     if (rank>=2 && number%2==0) {
         const float top=floor-(motif%2==0?210.f:184.f);
         stage.supplies.push_back({number%3?SupplyKind::salvage:SupplyKind::ammo,c+23.f,top});
@@ -253,7 +261,7 @@ Stage makeMission(const Mission& mission,int rank) {
     Stage stage{mission.name,art[static_cast<int>(mission.biome)],mission.location,
         rank<4?"HIGH":rank<8?"SEVERE":rank<12?"EXTREME":"CRITICAL",
         mission.accent,mission.cold,mission.briefing,mission.guardian,mission.biome,
-        length,{length-105,mission.arenaFloor},{},{},{},{},{},{},{}};
+        length,{length-105,mission.arenaFloor},{},{},{},{},{},{},{},{}};
     float x=0;
     stage.cover.push_back({72,stage.ground.empty()?mission.bays.front().floor-43:mission.bays.front().floor-43,48,43});
     stage.cover.push_back({154,mission.bays.front().floor-43,40,43});
@@ -326,6 +334,7 @@ void extendOpening(Stage& stage,int sector) {
         const float groundWidth=sectionWidth-112.f;
         stage.ground.insert(stage.ground.end()-1,{x,floor,groundWidth,110});
         stage.ledges.push_back({x+122,floor-94,137,17});
+        stage.stairs.push_back({{x+15.f,floor},{x+158.f,floor-94.f}});
         stage.ledges.push_back({x+336,floor-115,131,17});
         stage.ledges.push_back({x+groundWidth-40,floor-67,108,17});
         stage.ledges.push_back({x+sectionWidth-64,floor-83,96,17});
@@ -365,6 +374,13 @@ const std::array<Stage,sectorCount> stages=[] {
         stage.cover.insert(stage.cover.end(),{{first.right()-95,first.y-43,44,43},
                      {middle.x+75,middle.y-43,46,43},
                      {arena.x+116,arena.y-43,46,43}});
+        // Every opening stage also has a walkable climb to its raised cover.
+        const auto climb=std::find_if(stage.ledges.begin(),stage.ledges.end(),[&](const Rect& ledge) {
+            return ledge.x>first.x+140 && ledge.x<first.right()-35 &&
+                   ledge.y<first.y-50 && ledge.y>first.y-175;
+        });
+        if (climb!=stage.ledges.end())
+            stage.stairs.push_back({{climb->x-135.f,first.y},{climb->x+16.f,climb->y}});
         stage.crates.insert(stage.crates.end(),{{CrateKind::charge,{first.right()-28,first.y}},
                       {i>=1?CrateKind::fuel:CrateKind::charge,{middle.x+320,middle.y}},
                       {i>=3?CrateKind::reactor:CrateKind::fuel,{stage.exit.x-235,arena.y}}});

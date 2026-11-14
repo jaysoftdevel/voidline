@@ -11,6 +11,7 @@ enum class SupplyKind {ammo,salvage,health};
 struct Character {
     const char *name,*role,*art,*color,*trait,*description;
     int health; float speed,jump,ammo;
+    int rig=-1; // 0..5 selects the original articulated armor silhouettes; -1 uses the default.
 };
 struct Difficulty { const char* name; float hp,damage,pace,score; };
 inline constexpr size_t weaponCount = 7, upgradeCount = 8, perkCount = 6;
@@ -23,6 +24,9 @@ struct Weapon {
 struct Upgrade { const char *key,*name,*description; int base; };
 // Operative upgrades apply to every weapon and persist with the campaign.
 struct Perk { const char *key,*name,*description; int base,maxRank; };
+// A sloped, walkable staircase between two footholds, left endpoint first.
+// Characters and ground enemies travel on its surface using normal left/right controls.
+struct Stair { Vec from,to; };
 struct Lift { float x,y,w,dx,dy,period,phase; };
 struct Vent { float x,y,phase; };
 struct EnemyPlacement { EnemyKind kind; float x,y,patrol; bool elite=false; };
@@ -55,6 +59,8 @@ struct Stage {
     std::vector<Rect> cover{};
     std::vector<CratePlacement> crates{};
     std::vector<RelayGate> relays{};
+    std::vector<Stair> stairs{};
+    Vec insertion{}; // Zero y: initial floor elevation. Editable per-level operative spawn.
 };
 struct Record { float time=0; int score=0; };
 struct Save {

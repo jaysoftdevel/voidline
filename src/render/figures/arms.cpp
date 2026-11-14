@@ -1,4 +1,5 @@
 #include "render/figures/humanoid.hpp"
+#include "content/skeleton.hpp"
 
 namespace vl {
 namespace {
@@ -18,8 +19,10 @@ float bendBetween(Vec shoulder,Vec elbow,Vec wrist) {
 // The forearm only ever folds toward the front of the body.
 Renderer::ArmPose Renderer::freeArm(const Humanoid& h,const Rig& g,Vec s,bool near) const {
     const int facing=g.tf<0?-1:1;
+    const float armScale=h.model?h.model->armLength:1.f;
     const float travel=float(g.dir*facing);
-    const float phase=(near?1.f:-1.f)*g.counter*travel;
+    const float authoredSwing=h.model?h.model->armSwing:1.f;
+    const float phase=(near?1.f:-1.f)*g.counter*travel*authoredSwing;
     const float sway=std::sin(h.time*1.3f+(near?0.f:1.7f))*.07f*(1-h.weight);
     const float swing=clamp(phase+sway,-1.f,1.f);
     // Humans swing the arm further forward than back: about 40 degrees forward and 30 back at a run.
@@ -35,22 +38,34 @@ Renderer::ArmPose Renderer::freeArm(const Humanoid& h,const Rig& g,Vec s,bool ne
     s=s+Vec{facing*swing*1.1f,-std::abs(swing)*.3f};
     ArmPose arm;
     arm.shoulder=s;
-    arm.elbow=s+bone(upper,facing)*upperLength;
-    arm.wrist=arm.elbow+bone(upper+flex,facing)*foreLength;
+    arm.elbow=s+bone(upper,facing)*(upperLength*armScale);
+    arm.wrist=arm.elbow+bone(upper+flex,facing)*(foreLength*armScale);
     arm.hand=arm.wrist+bone(upper+flex+.12f,facing)*3.f;
     arm.flexion=flex;
+    if(h.model){
+        const auto& profile=*h.model;
+        const auto shift=[&](SkeletonJoint joint){
+            const Vec d=skeletonOffset(profile,joint,h.shoulder*profile.aimRaise,h.run);
+            return Vec{d.x*facing,d.y};
+        };
+        arm.elbow+=shift(near?SkeletonJoint::nearElbow:SkeletonJoint::farElbow);
+        arm.wrist+=shift(near?SkeletonJoint::nearHand:SkeletonJoint::farHand);
+        arm.hand+=shift(near?SkeletonJoint::nearHand:SkeletonJoint::farHand);
+    }
     return arm;
 }
 
 // An arm reaching for a point, such as a rifle grip. The point is pulled back inside the arm's reach so the
 // arm never stretches, and the elbow hangs below and behind the line from shoulder to hand.
-Renderer::ArmPose Renderer::gripArm(const Humanoid& h,Vec s,Vec hand,bool) const {
+Renderer::ArmPose Renderer::gripArm(const Humanoid& h,Vec s,Vec hand,bool near) const {
     const int facing=h.turn<0?-1:1;
+    const float armScale=h.model?h.model->armLength:1.f;
+    const float upper=upperLength*armScale,fore=foreLength*armScale;
     const Vec delta=hand-s;
     const float distance=length(delta);
-    const float reach=clamp(distance,std::abs(upperLength-foreLength)+1.f,(upperLength+foreLength)*.985f);
+    const float reach=clamp(distance,std::abs(upper-fore)+1.f,(upper+fore)*.985f);
     const Vec target=distance>.001f?s+delta*(reach/distance):s+Vec{0,reach};
-    const Vec a=solveKnee(s,target,upperLength,foreLength,1),b=solveKnee(s,target,upperLength,foreLength,-1);
+    const Vec a=solveKnee(s,target,upper,fore,1),b=solveKnee(s,target,upper,fore,-1);
     auto score=[&](Vec e) { return e.y-facing*e.x*.8f; };
     ArmPose arm;
     arm.shoulder=s;
@@ -58,15 +73,24 @@ Renderer::ArmPose Renderer::gripArm(const Humanoid& h,Vec s,Vec hand,bool) const
     arm.hand=target;
     arm.wrist=arm.elbow+normal(target-arm.elbow)*std::max(4.f,length(target-arm.elbow)-2.8f);
     arm.flexion=bendBetween(s,arm.elbow,arm.wrist);
+    if(h.model){
+        const auto& profile=*h.model;
+        const auto shift=[&](SkeletonJoint joint){
+            const Vec d=skeletonOffset(profile,joint,h.shoulder*profile.aimRaise,h.run);
+            return Vec{d.x*facing,d.y};
+        };
+        arm.elbow+=shift(near?SkeletonJoint::nearElbow:SkeletonJoint::farElbow);
+        arm.wrist+=shift(near?SkeletonJoint::nearHand:SkeletonJoint::farHand)*.6f;
+    }
     return arm;
 }
 
 // Joint-wise blend that keeps both bones at their real length.
-Renderer::ArmPose Renderer::blendArms(const ArmPose& a,const ArmPose& b,float t) {
+Renderer::ArmPose Renderer::blendArms(const ArmPose& a,const ArmPose& b,float t,float armScale) {
     ArmPose arm;
     arm.shoulder=a.shoulder;
-    arm.elbow=a.shoulder+normal(mix(a.elbow,b.elbow,t)-a.shoulder)*upperLength;
-    arm.wrist=arm.elbow+normal(mix(a.wrist,b.wrist,t)-arm.elbow)*foreLength;
+    arm.elbow=a.shoulder+normal(mix(a.elbow,b.elbow,t)-a.shoulder)*(upperLength*armScale);
+    arm.wrist=arm.elbow+normal(mix(a.wrist,b.wrist,t)-arm.elbow)*(foreLength*armScale);
     arm.hand=mix(a.hand,b.hand,t);
     arm.flexion=mix(a.flexion,b.flexion,t);
     return arm;
@@ -74,19 +98,27 @@ Renderer::ArmPose Renderer::blendArms(const ArmPose& a,const ArmPose& b,float t)
 
 void Renderer::drawArms(const Humanoid& h,const Rig& g) {
     Vec nearHand=h.nearHand,farHand=h.farHand;
+    const float armScale=h.model?h.model->armLength:1.f;
     if (h.gripFromChest) {
         const Vec mount=g.shoulder+Vec{-g.tf*3.f*h.shoulder,5.f-4.f*h.shoulder};
         nearHand=mount+h.aim*(h.gripNear-h.recoil*3.f);
         farHand=mount+h.aim*(h.gripFar-h.recoil*3.f);
     }
+    if(h.model){
+        const auto& profile=*h.model;
+        const float faced=h.turn<0?-1.f:1.f;
+        const Vec n=skeletonOffset(profile,SkeletonJoint::nearHand,h.shoulder*profile.aimRaise,h.run);
+        const Vec f=skeletonOffset(profile,SkeletonJoint::farHand,h.shoulder*profile.aimRaise,h.run);
+        nearHand+=Vec{n.x*faced,n.y};farHand+=Vec{f.x*faced,f.y};
+    }
     // A collapsed figure drops the weapon and both arms go free.
     const bool dropped=h.fall>.12f;
     const float relax=h.farFree||dropped?1.f:h.relax;
     ArmPose far=gripArm(h,g.farShoulder,farHand,false);
-    if (relax>0) far=blendArms(far,freeArm(h,g,g.farShoulder,false),relax);
+    if (relax>0) far=blendArms(far,freeArm(h,g,g.farShoulder,false),relax,armScale);
     const float nearRelax=dropped?1.f:h.nearRelax;
     ArmPose near=gripArm(h,g.shoulder,nearHand,true);
-    if (nearRelax>0) near=blendArms(near,freeArm(h,g,g.shoulder,true),nearRelax);
+    if (nearRelax>0) near=blendArms(near,freeArm(h,g,g.shoulder,true),nearRelax,armScale);
     drawArm(h,far,false,relax<.5f);
     if (h.weapon && !dropped) h.weapon(h.cinematic?near.hand:nearHand,h.cinematic?far.hand:farHand);
     drawArm(h,near,true,nearRelax<.5f);

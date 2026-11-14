@@ -70,6 +70,16 @@ fi
 exec "$root/voidline" "$@"
 LAUNCH
 chmod 755 "$stage/run.sh"
+# Preserve previously exported editor data when replacing a staged runtime.
+# User edits take priority over newly staged defaults.
+for category in levels models; do
+  for source in "$destination/$category" "$(dirname -- "$binary")/$category" "$root/$category"; do
+    [[ -d "$source" ]] || continue
+    mkdir -p -- "$stage/$category"
+    cp -a -n -- "$source/." "$stage/$category/"
+  done
+done
+
 cat > "$stage/README.txt" <<'README'
 Run ./run.sh from this folder. Use ./run.sh --windowed for a window.
 Keep the executable, game.vpak and lib directories together; no loose artwork or audio is shipped.

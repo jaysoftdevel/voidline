@@ -1,10 +1,12 @@
 #include "game/game.hpp"
 #include "game/detail.hpp"
+#include "content/skeleton.hpp"
 
 namespace vl {
 // Acceleration toward the wanted speed, then the world edges.
 void Game::runHorizontal(float dt,int direction,bool grounded) {
     auto& p=player;
+    const auto& model=characterSkeletons[static_cast<size_t>(character-characters.data())];
     const float baseSpeed=character->speed*speedScale;
     const bool reversing=direction && p.velocity.x*direction<0;
     const float pace=clamp(std::abs(p.velocity.x)/baseSpeed);
@@ -19,7 +21,7 @@ void Game::runHorizontal(float dt,int direction,bool grounded) {
         : (direction?1320.f:105.f);
     float targetSpeed=direction*speed;
     if (!grounded && p.sprinting && direction!=p.sprintDirection) targetSpeed=direction*baseSpeed;
-    p.velocity.x=approach(p.velocity.x,targetSpeed,acceleration*dt);
+    p.velocity.x=approach(p.velocity.x,targetSpeed,acceleration*dt*(direction?model.acceleration:model.braking));
     const float edge=bossDead?stage->worldWidth-playerW:stage->exit.x-106;
     const float nextX=p.box.x+p.velocity.x*dt;
     p.box.x=clamp(nextX,12,edge);

@@ -1,0 +1,13 @@
+{
+  "schema":"voidline-enemy-v1",
+  "id":8,
+  "name":"interceptor",
+  "width":56.0,
+  "height":33.0,
+  "speed":108.0,
+  "reach":440.0,
+  "attackDelay":0.95999997854232788,
+  "health":116,
+  "damage":17,
+  "score":52
+}

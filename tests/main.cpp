@@ -1,5 +1,6 @@
 #include "support.hpp"
 #include <cstdlib>
+void runEditorTests();
 
 int main() {
     runInputTests();
@@ -12,6 +13,7 @@ int main() {
     runCinematicTests();
     runWeaponArtTests();
     runAssetPackTests();
+    runEditorTests();
     if (test::failures) { std::cerr << test::failures << " check(s) failed\n"; return EXIT_FAILURE; }
     std::cout << "All checks passed\n";
     return EXIT_SUCCESS;

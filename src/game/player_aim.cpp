@@ -1,5 +1,6 @@
 #include "game/game.hpp"
 #include "game/detail.hpp"
+#include "content/skeleton.hpp"
 
 namespace vl {
 bool Game::blocked(Vec a,Vec b) const {
@@ -71,6 +72,10 @@ Vec Game::weaponPivot(const Player& p) const {
     return {p.box.center().x,p.box.bottom()-reach};
 }
 Vec Game::weaponPivot() const { return weaponPivot(player); }
-Vec Game::muzzle(const Operative& op) const { return weaponPivot(op.player)+ray(op.player.aim)*muzzleReach[op.gun]; }
+Vec Game::muzzle(const Operative& op) const {
+    const auto operativeIndex=static_cast<size_t>(op.character-characters.data());
+    const float seat=operativeIndex<characterSkeletons.size()?characterSkeletons[operativeIndex].weaponSeat:0.f;
+    return weaponPivot(op.player)+ray(op.player.aim)*muzzleReach[op.gun]+Vec{seat*float(op.player.facing),0};
+}
 Vec Game::muzzle() const { return muzzle(operative); }
 } // namespace vl

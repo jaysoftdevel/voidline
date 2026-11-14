@@ -1,0 +1,12 @@
+{
+  "schema":"voidline-character-v1",
+  "id":4,
+  "name":"Darius Cole",
+  "role":"Ranger",
+  "color":"#91c6ff",
+  "rig":-1,
+  "health":105,
+  "speed":408.0,
+  "jump":723.0,
+  "ammo":1.0
+}

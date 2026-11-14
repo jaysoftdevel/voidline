@@ -1,5 +1,7 @@
 #include "engine/engine.hpp"
 #include "platform/paths.hpp"
+#include "content/model_io.hpp"
+#include "content/runtime_model_catalog.hpp"
 #include <algorithm>
 #include <chrono>
 #include <iomanip>
@@ -62,6 +64,7 @@ struct Engine::Platform {
 Engine::Engine(const Options& options):config(options) {
     const auto root=executableDirectory();
     const auto media=root/"assets";
+    loadBakedCharacterModels(media);
 #ifdef _WIN32
     const auto mesa=config.mesa.empty()?root/"mesa":config.mesa;
     const bool automatic=config.graphics==GraphicsMode::automatic;

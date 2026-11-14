@@ -1,0 +1,12 @@
+{
+  "schema":"voidline-character-v1",
+  "id":1,
+  "name":"Iona Rook",
+  "role":"Scout",
+  "color":"#76e5d7",
+  "rig":-1,
+  "health":100,
+  "speed":395.0,
+  "jump":708.0,
+  "ammo":1.0
+}

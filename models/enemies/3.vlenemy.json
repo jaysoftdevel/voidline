@@ -1,0 +1,13 @@
+{
+  "schema":"voidline-enemy-v1",
+  "id":3,
+  "name":"stalker",
+  "width":54.0,
+  "height":37.0,
+  "speed":176.0,
+  "reach":330.0,
+  "attackDelay":1.6499999761581421,
+  "health":93,
+  "damage":17,
+  "score":25
+}

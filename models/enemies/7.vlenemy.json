@@ -1,0 +1,13 @@
+{
+  "schema":"voidline-enemy-v1",
+  "id":7,
+  "name":"bulwark",
+  "width":49.0,
+  "height":62.0,
+  "speed":48.0,
+  "reach":390.0,
+  "attackDelay":1.8600000143051147,
+  "health":250,
+  "damage":22,
+  "score":65
+}

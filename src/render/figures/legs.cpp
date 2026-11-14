@@ -1,4 +1,5 @@
 #include "render/figures/humanoid.hpp"
+#include "content/skeleton.hpp"
 
 namespace vl {
 
@@ -9,15 +10,30 @@ void Renderer::drawLegs(const Humanoid& h,const Rig& g) {
     const Color ink=h.ink;
     const int dir=g.dir;
     auto leg=[&](int i,bool far) {
-        const Vec contact=h.heels[i];
+        Vec contact=h.heels[i];
+        if(h.model){
+            const auto& profile=*h.model;
+            contact.x=h.ground.x+(contact.x-h.ground.x)*(1.f+(profile.stride-1.f)*h.weight);
+        }
         const Vec toeRay=ray(h.footAngle[i]);
         const Vec forward{toeRay.x*dir,-toeRay.y};
         const float lift=h.grounded?std::max(0.f,std::max(contact.y,(contact+forward*8).y)-h.ground.y):0.f;
         const Vec heel=contact-Vec{0,2.4f+lift};
         const Vec toe=contact+forward*8-Vec{0,2.4f+lift};
-        const Vec ankle=heel-Vec{0,2.1f};
+        Vec ankle=heel-Vec{0,2.1f};
         const Vec socket=g.hip+Vec{i==0?-2.f:2.f,i==0?-1.f:.5f};
-        const Vec knee=solveKnee(socket,ankle,15.6f,14.6f,dir);
+        const float scale=h.model?h.model->legLength*h.model->bodyHeight:1.f;
+        Vec knee=solveKnee(socket,ankle,15.6f*scale,14.6f*scale,dir);
+        if(h.model){
+            const auto& profile=*h.model;
+            const auto shift=[&](SkeletonJoint joint){
+                const Vec d=skeletonOffset(profile,joint,h.shoulder*profile.aimRaise,h.run);
+                return Vec{d.x*(h.turn<0?-1.f:1.f),d.y};
+            };
+            const bool near=i==1;
+            ankle+=shift(near?SkeletonJoint::nearAnkle:SkeletonJoint::farAnkle);
+            knee+=shift(near?SkeletonJoint::nearKnee:SkeletonJoint::farKnee);
+        }
         const Color cloth=far?h.shadow:h.suit;
         const Color plate=far?h.shadow.energy(1.4f):h.shell;
         const Color boot=far?h.leather.energy(.6f):h.leather;

@@ -1,5 +1,6 @@
 #pragma once
 #include "render/renderer.hpp"
+#include "content/skeleton_types.hpp"
 #include <functional>
 
 namespace vl {
@@ -7,6 +8,7 @@ namespace vl {
 struct Renderer::Humanoid {
     enum class Look { voss, rook, vale, mercer, cole, nyx, soldier };
     Look look=Look::soldier;
+    const SkeletonProfile* model=nullptr; // validated, cached model from bundled VLRM
     Vec ground;
     int facing=1,stride=1;
     float turn=1;

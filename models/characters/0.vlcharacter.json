@@ -1,0 +1,12 @@
+{
+  "schema":"voidline-character-v1",
+  "id":0,
+  "name":"Mara Voss",
+  "role":"Vanguard",
+  "color":"#ffa25e",
+  "rig":-1,
+  "health":125,
+  "speed":350.0,
+  "jump":655.0,
+  "ammo":1.0
+}

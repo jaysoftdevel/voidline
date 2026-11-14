@@ -202,7 +202,7 @@ private:
     void drawColeHead(const Humanoid& figure,const Face& face);
     void drawNyxHead(const Humanoid& figure,const Face& face);
     void drawArms(const Humanoid& figure,const Rig& rig);
-    static ArmPose blendArms(const ArmPose& a,const ArmPose& b,float t);
+    static ArmPose blendArms(const ArmPose& a,const ArmPose& b,float t,float armScale=1.f);
     ArmPose freeArm(const Humanoid& figure,const Rig& rig,Vec shoulder,bool near) const;
     ArmPose gripArm(const Humanoid& figure,Vec shoulder,Vec hand,bool near) const;
     void drawArm(const Humanoid& figure,const ArmPose& arm,bool near,bool gripping);

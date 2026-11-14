@@ -13,7 +13,8 @@ void Game::startCoop(int sector,const Save& loadout,int guestCharacter,bool coop
     swapOperatives();
     // A shared deployment point, two side-by-side spawn pads. They must choose
     // their own routes once they reach the signposted fork.
-    spawnPartner({puzzleMode?148.f:59.f,stage->ground.front().y});
+    spawnPartner({(stage->insertion.x>0?stage->insertion.x:100.f)+(puzzleMode?48.f:-41.f),
+                  stage->insertion.y==0?stage->ground.front().y:stage->insertion.y});
     for (auto& enemy:enemies) {
         enemy.hp=enemy.maxHp=static_cast<int>(std::lround(enemy.maxHp*1.45f));
     }

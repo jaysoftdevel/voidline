@@ -1,5 +1,6 @@
 #include "game/game.hpp"
 #include "game/detail.hpp"
+#include "content/skeleton.hpp"
 
 namespace vl {
 // Crouching, and standing back up. Jumping from a crouch stands up and jumps in one motion, so the
@@ -31,7 +32,8 @@ void Game::tickPlayerTimers(float dt,bool grounded) {
     p.landed=std::max(0.f,p.landed-dt*4.f);
     const bool aimingNow=p.aiming || guns[gun].reload>0 || stickActive;
     p.readyTimer=aimingNow?readyHold:std::max(0.f,p.readyTimer-dt);
-    p.ready=approach(p.ready,p.readyTimer>0?1.f:0.f,dt*(p.readyTimer>0?9.f:2.4f));
+    const auto& model=characterSkeletons[static_cast<size_t>(character-characters.data())];
+    p.ready=approach(p.ready,p.readyTimer>0?1.f:0.f,dt*(p.readyTimer>0?9.f*model.aimRaise:2.4f*model.braking));
     // Without room to stand a jump is not possible, and a stale request must not fire later.
     if (p.crouched) { p.windup=0; p.jumpBuffer=0; }
 }

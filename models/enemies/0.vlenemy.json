@@ -1,0 +1,13 @@
+{
+  "schema":"voidline-enemy-v1",
+  "id":0,
+  "name":"drone",
+  "width":48.0,
+  "height":30.0,
+  "speed":78.0,
+  "reach":390.0,
+  "attackDelay":1.6499999761581421,
+  "health":57,
+  "damage":10,
+  "score":14
+}

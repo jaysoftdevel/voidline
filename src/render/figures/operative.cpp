@@ -1,6 +1,7 @@
 #include "render/renderer.hpp"
 #include "render/figures/gun_art.hpp"
 #include "render/figures/humanoid.hpp"
+#include "content/skeleton.hpp"
 
 using namespace vl::figures;
 
@@ -22,7 +23,8 @@ Renderer::Humanoid Renderer::operativeFigure(const Character& character) const {
     Humanoid h;
     // Six independent silhouette identities: the last three are original rigs, not mirrored originals.
     constexpr Look rigs[]{Look::voss,Look::rook,Look::vale,Look::mercer,Look::cole,Look::nyx};
-    h.look=rigs[std::clamp(index,0,5)];
+    h.look=rigs[std::clamp(character.rig<0?index:character.rig,0,5)];
+    h.model=&characterSkeletons[static_cast<size_t>(std::clamp(index,0,5))];
     h.suit=hex(pal.suit); h.shell=hex(pal.shell);
     h.trim=trim; h.edge=mix(trim,hex(0xffffff),.7f); h.shadow=hex(0x1d2430).energy(1.1f);
     h.ink=hex(0x06080d); h.skin=hex(pal.skin); h.hair=hex(pal.hair);
@@ -68,9 +70,9 @@ void Renderer::drawPlayer(const Game& g,const Operative& op) {
     const Vec aim{std::cos(barrel)*forwardFacing,std::sin(barrel)};
     const Vec side{-aim.y,aim.x};
     const Vec up=forwardFacing>0?Vec{aim.y,-aim.x}:Vec{-aim.y,aim.x};
-    const float recoil=p.muzzle>0?3.7f*p.muzzle/.069f:0;
+    const float recoil=p.muzzle>0?3.7f*p.muzzle/.069f*h.model->recoil:0;
     const float sway=std::sin(g.time*1.7f)*.35f*(1-pose.weight);
-    const Vec mount=g.weaponPivot(p)+shift+Vec{-lowered*5.f*p.facing,(pose.crouch-p.gait.crouch)*12+lowered*8.f+pose.pelvis*.5f+sway};
+    const Vec mount=g.weaponPivot(p)+shift+Vec{-lowered*5.f*p.facing+h.model->weaponSeat*p.facing,(pose.crouch-p.gait.crouch)*12+lowered*8.f+pose.pelvis*.5f+sway};
     const Vec carried=mount+aim*muzzleReach[op.gun];
     const Vec raised=g.muzzle(op)+shift+Vec{0,pose.pelvis*.5f+sway};
     Vec muzzle=mix(raised,carried,lowered)-aim*(recoil*.45f);

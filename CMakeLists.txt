@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(voidline VERSION 2.10.4 LANGUAGES CXX)
+project(voidline VERSION 2.10.7 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -107,6 +107,9 @@ if(WIN32)
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${VOIDLINE_ASSET_PACK} $<TARGET_FILE_DIR:voidline>/assets/game.vpak
     VERBATIM)
 endif()
+
+# Editable JSON stays in the offline Model Studio project. Only game.vpak
+# (including the baked VLRM) is needed by deployed game clients.
 
 if(VOIDLINE_LTO AND VOIDLINE_IPO)
   set_property(TARGET voidline ${VOIDLINE_MODULES} PROPERTY INTERPROCEDURAL_OPTIMIZATION ON)

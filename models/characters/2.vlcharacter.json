@@ -1,0 +1,12 @@
+{
+  "schema":"voidline-character-v1",
+  "id":2,
+  "name":"Kade Vale",
+  "role":"Engineer",
+  "color":"#b9adff",
+  "rig":-1,
+  "health":110,
+  "speed":365.0,
+  "jump":670.0,
+  "ammo":1.2999999523162842
+}

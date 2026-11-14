@@ -55,6 +55,21 @@ To include Direct3D 12 support, add the Mesa runtime with install-mesa.bat in th
 Windows supplies Direct3D and the display driver.
 '@ | Set-Content -LiteralPath (Join-Path $stage 'README.txt') -Encoding Ascii
 
+    # Preserve edited JSON files across the atomic runtime-folder replacement.
+    foreach ($category in @('levels', 'models')) {
+        foreach ($source in @((Join-Path $Destination $category), (Join-Path $BinaryDirectory $category), (Join-Path $root $category))) {
+            if (!(Test-Path -LiteralPath $source -PathType Container)) { continue }
+            $base = [IO.Path]::GetFullPath($source).TrimEnd('\')
+            foreach ($file in (Get-ChildItem -LiteralPath $source -File -Recurse -Filter '*.json')) {
+                $relative = $file.FullName.Substring($base.Length).TrimStart('\')
+                $target = Join-Path (Join-Path $stage $category) $relative
+                if (Test-Path -LiteralPath $target) { continue }
+                New-Item -ItemType Directory -Force -Path (Split-Path -Parent $target) | Out-Null
+                Copy-Item -LiteralPath $file.FullName -Destination $target
+            }
+        }
+    }
+
     $exe = Join-Path $stage 'voidline.exe'
     $version = & $exe --version
     if ($LASTEXITCODE -ne 0) { throw 'The staged executable could not start.' }

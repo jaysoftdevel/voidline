@@ -44,6 +44,9 @@ const std::array<Stage,cooperativeSectorCount> cooperativeStages=[] {
         // nearby moving elevator is at the far end of its travel cycle.
         s.ledges.push_back({196,bottom-61.f,103,17});
         s.ledges.push_back({292,bottom-119.f,107,17});
+        s.stairs.push_back({{107.f,bottom},{225.f,bottom-61.f}});
+        s.stairs.push_back({{245.f,bottom-61.f},{324.f,bottom-119.f}});
+        s.stairs.push_back({{351.f,bottom-119.f},{429.f,upper}});
         // Keep the overhead course separate from the shared ground start.
         // Short seams along the upper gantry reward jumps and teamwork.
         for (float x=fork;x<s.worldWidth-400.f;x+=600.f) {

@@ -1,0 +1,13 @@
+{
+  "schema":"voidline-enemy-v1",
+  "id":1,
+  "name":"ranger",
+  "width":35.0,
+  "height":54.0,
+  "speed":72.0,
+  "reach":435.0,
+  "attackDelay":1.3400000333786011,
+  "health":82,
+  "damage":13,
+  "score":20
+}

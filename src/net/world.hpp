@@ -10,8 +10,8 @@ struct Sound {
 };
 Bytes encodeControls(const Controls& controls,uint32_t mission);
 bool decodeControls(std::span<const uint8_t> bytes,Controls& controls,uint32_t& mission);
-Bytes encodeMission(int sector,int difficulty,uint32_t mission,CoopMode mode=CoopMode::campaign);
-bool decodeMission(std::span<const uint8_t> bytes,int& sector,int& difficulty,uint32_t& mission,CoopMode* mode=nullptr);
+Bytes encodeMission(int sector,int difficulty,uint32_t mission,CoopMode mode=CoopMode::campaign,uint32_t layout=0);
+bool decodeMission(std::span<const uint8_t> bytes,int& sector,int& difficulty,uint32_t& mission,CoopMode* mode=nullptr,uint32_t* layout=nullptr);
 struct Timing {
     uint32_t mission=0;
     Millis first=0,second=0;

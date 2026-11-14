@@ -87,6 +87,15 @@ void Game::moveEnemies(float dt) {
             const float desired=clamp(e.box.x+e.vx*dt,e.origin.x-e.patrol,e.origin.x+e.patrol);
             const float footing=groundedEnemyX(*stage,e,oldX,desired);
             e.box.x=footing;
+            // Feet follow the actual stair elevation. Patrol range still caps
+            // horizontal travel, and a raised stair never bridges empty air
+            // unless the level author provided a continuous staircase.
+            if (e.kind!=EnemyKind::stalker || e.vertical==0) {
+                if (const auto y=stairFooting(*stage,e.box.center().x,e.base,19.f)) {
+                    e.base=*y;
+                    e.box.y=e.base-e.box.h;
+                }
+            }
             if (std::abs(footing-desired)>.02f) {
                 // Turn at a ledge, rather than walking across a non-existent floor.
                 e.facing=desired>oldX?-1:1;

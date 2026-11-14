@@ -1,10 +1,12 @@
 #include "game/game.hpp"
 #include "game/detail.hpp"
+#include "content/skeleton.hpp"
 
 namespace vl {
 void Game::updateGait(float dt,float travel,float accel,int priorSupport,float landing) {
     auto& p=player;
     auto& g=p.gait;
+    const auto& model=characterSkeletons[static_cast<size_t>(character-characters.data())];
     const float speed=std::abs(p.velocity.x), pace=clamp(speed/(character->speed*speedScale),0,1.28f);
     const bool onGround=p.support>=0;
     const float center=p.box.center().x, floor=p.box.bottom();
@@ -36,7 +38,7 @@ void Game::updateGait(float dt,float travel,float accel,int priorSupport,float l
         g.cycle=lead==0?.18f:.68f;
     }
     const float stance=mix(mix(.62f,.39f,g.run),.69f,g.crouch);
-    const float cycleLength=mix(mix(47.f,118.f,g.run),42.f,g.crouch);
+    const float cycleLength=mix(mix(47.f,118.f,g.run),42.f,g.crouch)*model.stride/model.walkCycle;
     if (onGround) g.cycle=std::fmod(g.cycle+std::abs(travel)/cycleLength,1.f);
 
     for (int i=0;i<2;++i) {

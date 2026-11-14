@@ -1,5 +1,6 @@
 #pragma once
 #include "game/entities.hpp"
+#include "game/stairs.hpp"
 #include <algorithm>
 #include <cmath>
 
@@ -15,7 +16,7 @@ inline bool enemyHasFooting(const Stage& stage,const Enemy& enemy,float x,int di
         };
         for (const auto& surface:stage.ground) if (on(surface)) return true;
         for (const auto& surface:stage.ledges) if (on(surface)) return true;
-        return false;
+        return stairFooting(stage,at,enemy.base,17.f).has_value();
     };
     const float middle=x+enemy.box.w*.5f;
     const float leading=middle+float(direction)*std::min(enemy.box.w*.32f,13.f);

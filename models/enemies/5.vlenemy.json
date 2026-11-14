@@ -1,0 +1,13 @@
+{
+  "schema":"voidline-enemy-v1",
+  "id":5,
+  "name":"scavenger",
+  "width":32.0,
+  "height":32.0,
+  "speed":225.0,
+  "reach":82.0,
+  "attackDelay":0.0,
+  "health":42,
+  "damage":9,
+  "score":14
+}

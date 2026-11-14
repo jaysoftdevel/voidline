@@ -113,6 +113,7 @@ private:
     } backup;
     AudioSink& audio;
     Save campaign;
+    Stage editedStage; // Optional level file loaded at mission start; editor stays a separate executable.
     Operative partner;
     OperativeInput partnerInput;
     std::array<bool,static_cast<size_t>(Key::count)>& keys=localInput.keys;

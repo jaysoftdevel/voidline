@@ -96,3 +96,14 @@ Both Windows and Linux builds use the same quality controls. No multiplayer pack
 ### 2.10.4 aiming and enemy footing
 
 Includes high-contrast crosshair, safe grounded-enemy edge checks and updated shoulder-animation rendering. The network protocol stays VL10. Windows must be rebuilt after installing the source patch; Linux runtime binary is included.
+
+
+### 2.10.5 editor and staircase changes
+
+A native standalone SDL2 editor can export individual mission layouts (`levels/`) and operative/enemy model files (`models/`) beside the game executable. Build the editor separately using its own source package with CMake and vcpkg. Runtime media remains in `assets/game.vpak`. Both co-op peers need matching editable model/level folders; session-key protocol is VL12.
+
+Character model update v2.10.6: clients must use matching VLRM profiles packed into game.vpak; multiplayer level/model hashes are checked at deployment.
+
+### 2.10.7 model format compatibility
+
+VOIDLINE Model Studio v0.0.9 is Linux-only, but exports `.vlrm` v2 models that the shared Windows/Linux game loader can decode. Older `.vlrm` v1 files remain readable. Rebuild the game to pack the exported file into `game.vpak`. The current gameplay render remains 2D; authored Z offsets are preserved for future 3D rigs. A Windows compile is not verified in this environment.
