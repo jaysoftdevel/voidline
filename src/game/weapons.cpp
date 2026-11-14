@@ -45,6 +45,7 @@ void Game::shoot(float dt) {
         const bool crit=random()<g.crit;
         Shot shot{origin,ray(p.aim+spread*g.spread)*w.speed,g.range/w.speed,float(g.damage)*(crit?2.f:1.f),hex(w.color),w.pierce,{},longShot,false};
         shot.gravity=w.gravity; shot.blast=w.blast; shot.crit=crit; shot.weapon=gun;
+        shot.id=++nextShot;
         shots.push_back(shot);
     }
     const bool heavy=gun==1 || gun==5 || gun==6;

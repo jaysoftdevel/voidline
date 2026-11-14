@@ -103,6 +103,7 @@ struct Shot {
     float gravity=0,blast=0;
     bool crit=false;
     int weapon=-1;
+    uint32_t id=0;
 };
 struct Particle {
     Vec p,v;

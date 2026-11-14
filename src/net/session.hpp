@@ -9,7 +9,7 @@
 
 namespace vl::net {
 using Bytes=std::vector<uint8_t>;
-enum class Packet : uint8_t {hello=1,welcome,ready,start,controls,world};
+enum class Packet : uint8_t {hello=1,welcome,ready,prepare,controls,world,clockProbe,clockReply,loaded,schedule,scheduled};
 
 class Session {
 public:
@@ -25,6 +25,8 @@ public:
     void fail(std::string message);
     bool send(Packet packet,std::span<const uint8_t> data={});
     std::vector<Bytes> receive();
+    void flush();
+    bool pendingOutput() const { return sentBytes<outgoing.size(); }
     const std::string& key() const { return code; }
     const std::string& error() const { return issue; }
     State state() const { return status; }
@@ -46,6 +48,5 @@ private:
     void dropCandidate();
     bool process(std::span<const uint8_t> data);
     void readySocket();
-    void flush();
 };
 }

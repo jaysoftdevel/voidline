@@ -5,7 +5,7 @@
 
 namespace vl::net {
 namespace {
-constexpr std::string_view prefix="VL1-";
+constexpr std::string_view prefix="VL2-";
 constexpr uint8_t heartbeat=0;
 using namespace std::chrono_literals;
 
@@ -62,6 +62,7 @@ bool Session::host(const std::string& address,uint16_t port) {
 bool Session::join(const std::string& key) {
     close();
     if (!socketRuntime()) { fail("Could not initialize networking."); return false; }
+    if (key.starts_with("VL1-")) { fail("This session requires both players to use VOIDLINE 2.6 or later."); return false; }
     if (!key.starts_with(prefix) || key.size()!=prefix.size()+2*(6+token.size())) {
         fail("Enter the complete session key from the host."); return false;
     }
@@ -137,7 +138,7 @@ bool Session::process(std::span<const uint8_t> data) {
         return true;
     }
     if (data.size()==1 && data[0]==heartbeat) return true;
-    if (data[0]<static_cast<uint8_t>(Packet::ready) || data[0]>static_cast<uint8_t>(Packet::world) || packets.size()>=128) {
+    if (data[0]<static_cast<uint8_t>(Packet::ready) || data[0]>static_cast<uint8_t>(Packet::scheduled) || packets.size()>=128) {
         fail("Received an invalid multiplayer message."); return false;
     }
     packets.emplace_back(data.begin(),data.end());

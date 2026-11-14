@@ -7,7 +7,7 @@ float Game::random() { return std::generate_canonical<float,22>(rng); }
 void Game::resetTransient() {
     releaseBoth();
     ambient.clear(); skyFlash=0; ambientTimer=1.2f;
-    shots.clear(); hostile.clear(); particles.clear(); messages.clear(); rings.clear(); corpses.clear();
+    nextShot=0; shots.clear(); hostile.clear(); particles.clear(); messages.clear(); rings.clear(); corpses.clear();
     style={}; combo=0; comboTimer=0; flash=0; pain=0; punch=0; hitStop=0; timeScale=1; slowing=slowLocked=false;
     shake=0; entry=2.65f;
 }

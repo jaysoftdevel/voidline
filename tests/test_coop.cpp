@@ -26,8 +26,10 @@ void handshake() {
         return;
     }
     const auto key=host.key();
-    CHECK(key.size()==40 && host.state()==State::waiting && host.receive().empty());
+    CHECK(key.starts_with("VL2-") && key.size()==40 && host.state()==State::waiting && host.receive().empty());
     CHECK(!wrong.join("not-a-session-key"));
+    CHECK(!wrong.join("VL1-"+key.substr(4)));
+    CHECK(wrong.error().find("2.6")!=std::string::npos);
     auto wrongKey=key; wrongKey.back()=wrongKey.back()=='0'?'1':'0';
     CHECK(wrong.join(wrongKey));
     CHECK(until(host,wrong,[&] { return host.state()==State::waiting && wrong.state()==State::idle; }));
@@ -98,9 +100,11 @@ void sharedSimulation() {
     CHECK(host.player.hp==hostHP && host.teammate().player.hp<partner.player.hp);
     CHECK(host.teammate().camera>host.camera+100);
 
-    const auto world=net::encodeWorld(host,{{"jump",1,0,1}});
+    const auto world=net::encodeWorld(host,{{"jump",1,0,1}},{2,47});
+    net::WorldFrame frame;
     std::vector<net::Sound> sounds;
-    CHECK(net::decodeWorld(world,guest,sounds));
+    CHECK(net::decodeWorld(world,guest,sounds,&frame));
+    CHECK(frame.mission==2 && frame.tick==47);
     CHECK(guest.player.box.x==host.teammate().player.box.x && guest.teammate().player.box.x==host.player.box.x);
     CHECK(guest.camera==host.teammate().camera && guest.player.hp==host.teammate().player.hp);
     CHECK(guest.gun==host.teammate().gun && guest.enemies.size()==host.enemies.size() && sounds.size()==1);
@@ -136,7 +140,24 @@ void sharedSimulation() {
     CHECK(host.mode==Mode::complete);
 }
 }
+void synchronizedClock() {
+    net::HostClock clock;
+    CHECK(!clock.ready());
+    CHECK(clock.sample(1000,1040,9020));
+    CHECK(clock.ready() && clock.estimate(1250)==9250);
+    CHECK(clock.sample(2000,2190,10020));
+    CHECK(clock.estimate(1250)==9250);
+    CHECK(clock.sample(3000,3008,11006));
+    CHECK(clock.estimate(1250)==9252 && clock.lead()>=350);
+    CHECK(!clock.sample(4000,3999,12000));
+    net::Timing timing;
+    const auto plan=net::encodeTiming({1,9300,9300+net::openingDuration});
+    CHECK(net::decodeTiming(plan,timing));
+    CHECK(timing.mission==1 && timing.first==9300 && timing.second==9300+net::openingDuration);
+    CHECK(!net::decodeTiming(std::span(plan).first(plan.size()-1),timing));
+}
 void runCoopTests() {
+    synchronizedClock();
     handshake();
     sharedSimulation();
 }

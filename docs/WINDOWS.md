@@ -1,6 +1,6 @@
 # Windows 11 compatibility
 
-This update adds a Windows x64 build. Multiplayer keeps the VOIDLINE 2.4.0 wire format for cross-platform LAN sessions.
+This update adds a Windows x64 build. For cross-platform LAN sessions, update both Windows and Linux clients to VOIDLINE 2.6.0. The synchronized deployment protocol uses VL2 session keys.
 
 ## Build
 

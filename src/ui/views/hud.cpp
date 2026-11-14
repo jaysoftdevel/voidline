@@ -6,6 +6,7 @@ using namespace vl::ui;
 namespace vl {
 void App::hud() {
     const auto& p=game.player;
+    const bool slow=game.slowMotion() || (game.coop && game.timeScale<.88f);
     const auto& g=game.guns[game.gun];
     const auto& w=weapons[game.gun];
     const Color trim=hex(game.character->color);
@@ -31,7 +32,7 @@ void App::hud() {
     // Slow-motion reserve.
     {
         const Rect track{22,98,190,9};
-        const bool active=game.slowMotion();
+        const bool active=slow;
         const Color tint=game.slowEnergy<.22f?hex(0xff8a6a):hex(0x7ff2ff);
         r.slab(track,6,ink.alpha(.8f),ink.alpha(.8f));
         r.slab({track.x,track.y,track.w*game.slowEnergy,track.h},6,tint.energy(active?1.4f:1.f),tint.energy(.7f));
@@ -110,8 +111,8 @@ void App::hud() {
     }
     if (view==View::play && !coopPaused && Rect{0,0,width,height}.contains(mouse) && !input.aimStickActive()) {
         const Color mark=mix(white,ammo,.45f).alpha(.95f);
-        const float spin=clock*(game.slowMotion()?2.4f:.6f);
-        const float radius=game.slowMotion()?13.f:9.f;
+        const float spin=clock*(slow?2.4f:.6f);
+        const float radius=slow?13.f:9.f;
         for (int i=0;i<4;++i) {
             const float a=spin+i*pi*.5f;
             r.line(mouse+ray(a)*(radius-2),mouse+ray(a)*(radius+5),2.4f,ink.alpha(.9f));

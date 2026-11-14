@@ -51,17 +51,15 @@ void App::multiplayer() {
 
     if (lobby==Lobby::menu) {
         r.text({81,245},"Host a mission",32,white,true);
-        copy({81,279},"Choose a sector and copy your session key. The mission starts when your partner joins.",439,18);
+        copy({81,279},"Set the difficulty and share your session key. Both players deploy together in Chapter 1.",439,18);
         button({81,359,401,48},"HOST GAME",[this]{lobby=Lobby::host; focus=-1; SDL_StartTextInput();},true,true);
         r.line({591,208},{591,470},1,hex(0x496573));
         r.text({630,245},"Join a mission",32,white,true);
         copy({630,279},"Paste the host's session key to join their mission.",439,18);
         button({630,359,401,48},"JOIN GAME",[this]{lobby=Lobby::join; focus=-1; SDL_StartTextInput();});
     } else if (lobby==Lobby::host && network.state()==State::idle) {
-        label({83,225},"STARTING SECTOR",teal);
-        button({83,240,52,42},"<",[this]{--coopSector;},coopSector>0);
-        button({442,240,52,42},">",[this]{++coopSector;},coopSector+1<sectorCount);
-        r.text({155,266},digits(coopSector+1)+"  "+stages[coopSector].name,20,white,true);
+        label({83,225},"CAMPAIGN START",teal);
+        r.text({83,268},"Chapter 1. The Descent",28,white,true);
         label({83,322},"DIFFICULTY",teal);
         button({83,336,52,42},"<",[this]{--coopDifficulty;},coopDifficulty>0);
         button({442,336,52,42},">",[this]{++coopDifficulty;},coopDifficulty+1<static_cast<int>(difficulties.size()));
@@ -75,9 +73,9 @@ void App::multiplayer() {
             if (network.host(advertisedAddress)) { focus=-1; SDL_StopTextInput(); }
         },true,true);
     } else if (lobby==Lobby::host) {
-        label({83,226},digits(coopSector+1)+"  "+stages[coopSector].name,teal);
+        label({83,226},"CHAPTER 1  /  THE DESCENT",teal);
         r.text({81,284},"Waiting for player 2",37,white,true);
-        copy({83,322},"Send the session key to your partner. The mission starts when they connect.",880,17);
+        copy({83,322},"Send the session key to your partner. The opening begins once both players are ready.",880,17);
         r.rect({83,353,730,58},hex(0x091722));
         r.outline({83,353,730,58},hex(0x547582));
         r.text({99,389},network.key(),22,white,true);

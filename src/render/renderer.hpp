@@ -7,6 +7,11 @@
 #include <unordered_map>
 
 namespace vl {
+struct WorldMotion {
+    std::vector<Rect> enemies,platforms;
+    std::vector<std::pair<uint32_t,Vec>> shots,hostile;
+    void capture(const Game& game);
+};
 class Renderer {
 public:
     Renderer(SDL_Window* window,std::filesystem::path assets,bool software=false);
@@ -18,7 +23,9 @@ public:
     float renderScale() const { return resolution; }
     void begin();
     void end();
-    void drawWorld(const Game& game,bool high,bool motion,float interpolation,const Player& previous,float previousCamera,const Player* previousPartner=nullptr);
+    void drawWorld(const Game& game,bool high,bool motion,float interpolation,const Player& previous,float previousCamera,const Player* previousPartner=nullptr,
+                   const WorldMotion* previousWorld=nullptr);
+    void preload(std::string_view name) { (void)asset(name); }
     void cover(std::string_view name,Rect box,float zoom=1,Vec bias={.5f,.5f},Color tint={});
     void image(std::string_view name,Rect box,Color tint={});
     void rect(Rect r,Color color);
@@ -84,6 +91,11 @@ private:
     Color litBy(Vec p,const Game& game) const;
     std::array<Target,4> bloom{};
     Vec offset,playerShift;
+    const WorldMotion* priorWorld=nullptr;
+    float worldBlend=1;
+    Rect platformBox(const Game& game,size_t index) const;
+    Rect enemyBox(const Game& game,size_t index) const;
+    Vec shotPosition(const Shot& shot,bool friendly) const;
     // Optional rotation applied to every vertex while drawing a spinning actor.
     bool spinning=false;
     Vec spinPivot;

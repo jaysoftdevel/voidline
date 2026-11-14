@@ -94,8 +94,9 @@ void Renderer::objects(const Game& g) {
         halo(p,27,tint.alpha(crate.hits<spec.hits?.27f+.14f*std::sin(g.time*13):.22f));
     }
     auto projectile=[&](const Shot& s,bool friendly) {
-        if (!visible(s.p.x)) return;
-        const Vec p=s.p+offset, dir=normal(s.v);
+        const Vec at=shotPosition(s,friendly);
+        if (!visible(at.x)) return;
+        const Vec p=at+offset, dir=normal(s.v);
         const float tail=s.longShot?34.f:s.wave?23.f:friendly?16.f:11.f;
         halo(p,s.longShot?22:14,s.color.energy(1.40f).alpha(.48f));
         line(p-dir*tail,p+dir*3,s.wave?6.3f:3.9f,s.color.energy(s.longShot?2.6f:1.91f).alpha(.78f));

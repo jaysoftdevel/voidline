@@ -1,4 +1,4 @@
-# VOIDLINE 2.5.0
+# VOIDLINE 2.6.0
 
 VOIDLINE is a native C++ 2D shooter for Linux and Windows 11 with 20 sectors, three operatives, difficulty levels, an armory and a skippable opening cinematic. Destroy the guardian in each sector and reach extraction to turn mission score into upgrade points.
 
@@ -23,15 +23,15 @@ Progress lives in `${XDG_DATA_HOME:-$HOME/.local/share}/voidline/campaign.json`.
 
 ## Two-player co-op
 
-1. Both players launch VOIDLINE 2.4.0 or later and open **Multiplayer**.
-2. On the host, choose **Host Game**, select a starting sector and difficulty, and select **Generate Session Key**. The lobby waits for player 2. Copy the key and share it with your partner.
-3. On the other computer, choose **Join Game**, paste the key, and select **Connect**. The mission starts on both computers after the connection is accepted.
+1. Both players launch VOIDLINE 2.6.0 and open **Multiplayer**.
+2. On the host, choose **Host Game**, select a difficulty, and select **Generate Session Key**. The lobby waits for player 2. Copy the key and share it with your partner.
+3. On the other computer, choose **Join Game**, paste the key, and select **Connect**. Once both computers load the mission, they play the shared opening cinematic and deploy together in **Chapter 1, The Descent**.
 
 Use a local network or an IPv4 VPN. The host menu fills in a local IPv4 address. Edit it before generating the key if your partner reaches you through a different interface. The key contains that address and a random session identifier. The connection goes directly to the host on TCP port 38274. A key alone cannot connect through an unreachable address, and the game has no relay or matchmaking server.
 
-Each player controls a separate operative and camera. The host simulates enemies, projectiles, pickups, checkpoints and explosive crates for both players. Bullet time slows the shared mission. Clear the guardian and bring both operatives to the extraction gate. Either operative going down ends the attempt, and the host can retry from the team's latest checkpoint. The host can advance the same session through the remaining sectors.
+Each player controls a separate operative and camera. The host simulates enemies, projectiles, pickups, checkpoints and explosive crates for both players at 120 fixed steps per simulation second. It sends up to 60 world snapshots per real second. The guest interpolates motion for operatives, enemies, lifts and projectiles. When the connection falls behind, the host sends its latest available state once the send queue clears. Mission transitions and retries use the same loading and deployment handshake. Bullet time slows the shared mission. Clear the guardian and bring both operatives to the extraction gate. Either operative going down ends the attempt, and the host can retry from the team's latest checkpoint. The host can advance the same session through the remaining sectors.
 
-The co-op menu leaves the mission running for your partner. Closing the session or disconnecting returns the other player to Multiplayer. Co-op progress lasts for the session and uses a separate loadout based on the starting sector. Solo save slots remain independent.
+The co-op menu leaves the mission running for your partner. Closing the session or disconnecting returns the other player to Multiplayer. Co-op progress lasts for the session and unlocks equipment as the team clears sectors. Solo save slots remain independent.
 
 ## Controls
 

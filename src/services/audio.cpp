@@ -77,13 +77,18 @@ void Audio::pace(float value) {
     SDL_UnlockAudioDevice(device);
 }
 
-void Audio::track(std::string_view name,bool loop) {
+void Audio::preload(std::string_view name) {
+    if (device) (void)load(name);
+}
+void Audio::track(std::string_view name,bool loop,float position) {
     if (!device) return;
     const Sample* sample=name.empty()?nullptr:load(name);
     SDL_LockAudioDevice(device);
     if (music.sample!=sample) {
         if (music.sample) previous=music;
-        music={sample,0,0,loop};
+        const double frames=sample?double(sample->frames.size()/sample->channels):0;
+        const double start=sample?std::clamp(double(position)*sample->hz,0.0,std::max(0.0,frames-1)):0;
+        music={sample,start,0,loop};
     }
     SDL_UnlockAudioDevice(device);
 }

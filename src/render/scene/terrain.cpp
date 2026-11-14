@@ -34,8 +34,9 @@ void Renderer::terrain(const Game& g) {
             rect({p,cy-3,3.2f,6},tone.energy(.56f));
         }
     }
-    for (const auto& surface:g.platforms) {
-        const Rect src=surface.box;
+    for (size_t index=0;index<g.platforms.size();++index) {
+        const auto& surface=g.platforms[index];
+        const Rect src=platformBox(g,index);
         if (!visible(src.x,src.w)) continue;
         Rect box{src.x+offset.x,src.y+offset.y,src.w,src.h};
         if (surface.cover) {

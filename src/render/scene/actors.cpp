@@ -11,10 +11,17 @@ void Renderer::actors(const Game& g) {
     tinting=true;
     actorLight=litBy(target,g);
     drawCorpses(g);
-    for (const auto& e:g.enemies) {
-        if (!e.alive || !visible(e.box.x,e.box.w)) continue;
-        actorLight=litBy(e.box.center()+offset,g);
-        drawEnemy(e,accent,g.stage->biome,g.time,target);
+    for (size_t i=0;i<g.enemies.size();++i) {
+        const auto& e=g.enemies[i];
+        if (!e.alive) continue;
+        const auto box=enemyBox(g,i);
+        if (!visible(box.x,box.w)) continue;
+        actorLight=litBy(box.center()+offset,g);
+        if (priorWorld) {
+            auto posed=e;
+            posed.box=box;
+            drawEnemy(posed,accent,g.stage->biome,g.time,target);
+        } else drawEnemy(e,accent,g.stage->biome,g.time,target);
     }
     if (g.coop) {
         const auto& partner=g.teammate();

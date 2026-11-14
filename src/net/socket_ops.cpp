@@ -82,6 +82,9 @@ bool listenExclusive(Socket socket) {
 void lowLatency(Socket socket) {
     const int yes=1;
     setsockopt(socket,IPPROTO_TCP,TCP_NODELAY,reinterpret_cast<const char*>(&yes),sizeof(yes));
+    // Limit stale snapshots waiting inside the OS when a peer is slow.
+    const int sendBuffer=64*1024;
+    setsockopt(socket,SOL_SOCKET,SO_SNDBUF,reinterpret_cast<const char*>(&sendBuffer),sizeof(sendBuffer));
 }
 
 bool connectPending() {

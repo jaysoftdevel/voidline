@@ -7,11 +7,14 @@ namespace vl {
 void Renderer::collectLights(const Game& g) {
     lights.clear(); blockers.clear();
     const Color cold=hex(g.stage->cold), accent=hex(g.stage->accent);
-    for (const auto& p:g.platforms) if (visible(p.box.x,p.box.w))
-        blockers.push_back({p.box.x+offset.x,p.box.y+offset.y,p.box.w,p.box.h});
-    for (const auto& e:g.enemies) {
-        if (!e.alive || !visible(e.box.x,e.box.w)) continue;
-        const auto b=e.box;
+    for (size_t i=0;i<g.platforms.size();++i) {
+        const auto b=platformBox(g,i);
+        if (visible(b.x,b.w)) blockers.push_back({b.x+offset.x,b.y+offset.y,b.w,b.h});
+    }
+    for (size_t i=0;i<g.enemies.size();++i) {
+        const auto& e=g.enemies[i];
+        const auto b=enemyBox(g,i);
+        if (!e.alive || !visible(b.x,b.w)) continue;
         if (e.kind==EnemyKind::boss || e.kind==EnemyKind::turret)
             blockers.push_back({b.x+offset.x+b.w*.18f,b.y+offset.y+b.h*.20f,b.w*.64f,b.h*.70f});
     }
@@ -30,8 +33,12 @@ void Renderer::collectLights(const Game& g) {
     }
     if (g.player.muzzle>0)
         lights.push_back({g.muzzle()+offset+playerShift,178,4.8f*g.player.muzzle/.069f,hex(weapons[g.gun].color),ray(g.player.aim),-.1f,true});
-    for (const auto& e:g.enemies) if (e.alive && visible(e.box.x,e.box.w) && (e.kind==EnemyKind::boss || e.warning>0))
-        lights.push_back({e.box.center()+offset,110,e.warning>0?2.16f:1.35f,accent});
+    for (size_t i=0;i<g.enemies.size();++i) {
+        const auto& e=g.enemies[i];
+        if (!e.alive || (e.kind!=EnemyKind::boss && e.warning<=0)) continue;
+        const auto b=enemyBox(g,i);
+        if (visible(b.x,b.w)) lights.push_back({b.center()+offset,110,e.warning>0?2.16f:1.35f,accent});
+    }
     lights.push_back({{p.center().x+offset.x,p.y+offset.y+std::min(p.h*.31f,16.f)},128,1.05f,hex(g.character->color),ray(g.player.aim),.45f,false});
     for (int i=0;i<static_cast<int>(g.stage->beacons.size());++i) {
         const auto& at=g.stage->beacons[i];
@@ -51,7 +58,10 @@ void Renderer::collectLights(const Game& g) {
         if (!visible(x)) continue;
         lights.push_back({Vec{x,143+hash(i+43)*102}+offset,301,1.49f,cold,{-.19f,1},.27f});
     }
-    for (const auto& s:g.shots) if ((s.longShot || s.blast>0) && visible(s.p.x)) lights.push_back({s.p+offset,s.blast>0?96.f:58.f,s.blast>0?1.5f:.88f,s.color,{0,1},-1,false});
+    for (const auto& s:g.shots) if (s.longShot || s.blast>0) {
+        const auto at=shotPosition(s,true);
+        if (visible(at.x)) lights.push_back({at+offset,s.blast>0?96.f:58.f,s.blast>0?1.5f:.88f,s.color,{0,1},-1,false});
+    }
     for (const auto& a:g.ambient) {
         const float pulse=a.pulse();
         if (pulse<.05f) continue;
@@ -61,7 +71,10 @@ void Renderer::collectLights(const Game& g) {
     }
     for (const auto& crate:g.crates) if (!crate.spent && visible(crate.box.x,crate.box.w))
         lights.push_back({crate.box.center()+offset,58,.72f,hex(crateSpec(crate.kind).color),{0,1},-1,false});
-    for (const auto& s:g.hostile) if (visible(s.p.x)) lights.push_back({s.p+offset,36,.65f,s.color,{0,1},-1,false});
+    for (const auto& s:g.hostile) {
+        const auto at=shotPosition(s,false);
+        if (visible(at.x)) lights.push_back({at+offset,36,.65f,s.color,{0,1},-1,false});
+    }
 }
 
 // Sums the light that reaches a point, ignoring occlusion, so figures pick up the color of nearby lamps and flashes.

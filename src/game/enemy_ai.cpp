@@ -122,9 +122,12 @@ void Game::enemyFire(Enemy& e,float targetX) {
     for (int i=0;i<volley;++i) {
         const float offset=volley==1?0:(float(i)/(volley-1)-.5f)*spread;
         hostile.push_back({origin,ray(e.aim+offset)*speed,2.7f,e.damage,color,0,{},boss,false});
+        hostile.back().id=++nextShot;
     }
-    if (boss && ++e.volley%(phase && later>=7?2:3)==0 && index>=1)
+    if (boss && ++e.volley%(phase && later>=7?2:3)==0 && index>=1) {
         hostile.push_back({{origin.x,e.base-15},{sign(targetX-e.box.center().x)*speed*1.07f,0},2.4f,e.damage*1.3f,color,0,{},true,true});
+        hostile.back().id=++nextShot;
+    }
     e.recoil=1;
     burst(origin,color,boss?10:4,98);
     audio.event("enemy",boss?.78f:.49f,(origin.x-player.box.x)/width,boss?.73f:.91f+random()*.22f);

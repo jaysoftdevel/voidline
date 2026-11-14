@@ -95,7 +95,7 @@ FIELDS(Enemy,v.kind,v.box,v.phase,v.hp,v.maxHp,v.facing,v.aim,v.warning,v.hit,v.
     v.buckle,v.bar,v.trail,v.deathAge,v.fallDir,v.elite)
 FIELDS(Corpse,v.body,v.angle,v.age,v.life,v.pivotFeet)
 FIELDS(Particle,v.p,v.v,v.color,v.life,v.maxLife,v.size,v.spin,v.angle,v.kind)
-FIELDS(Shot,v.p,v.v,v.color,v.longShot,v.wave,v.blast)
+FIELDS(Shot,v.id,v.p,v.v,v.color,v.longShot,v.wave,v.blast)
 FIELDS(Supply,v.kind,v.p,v.used)
 FIELDS(Explosive,v.kind,v.box,v.hits,v.spent)
 FIELDS(Ambient,v.kind,v.p,v.v,v.depth,v.life,v.maxLife,v.size,v.seed,v.variant)
@@ -161,8 +161,19 @@ bool decodeMission(std::span<const uint8_t> bytes,int& sector,int& difficulty,ui
     return io.done() && mission>0 && sector>=0 && sector<sectorCount && difficulty>=0 &&
         difficulty<static_cast<int>(difficulties.size());
 }
-Bytes encodeWorld(const Game& g,const std::vector<Sound>& sounds) {
+Bytes encodeTiming(Timing timing) {
     Writer io;
+    io(timing.mission,timing.first,timing.second);
+    return std::move(io.bytes);
+}
+bool decodeTiming(std::span<const uint8_t> bytes,Timing& timing) {
+    Reader io(bytes);
+    io(timing.mission,timing.first,timing.second);
+    return io.done() && timing.mission>0 && timing.first<(Millis{1}<<62) && timing.second<(Millis{1}<<62);
+}
+Bytes encodeWorld(const Game& g,const std::vector<Sound>& sounds,WorldFrame frame) {
+    Writer io;
+    io(frame.mission,frame.tick);
     const auto& guest=g.teammate();
     int guestCharacter=static_cast<int>(guest.character-characters.data());
     int hostCharacter=static_cast<int>(g.character-characters.data());
@@ -171,14 +182,17 @@ Bytes encodeWorld(const Game& g,const std::vector<Sound>& sounds) {
     world(io,g,sounds);
     return std::move(io.bytes);
 }
-bool decodeWorld(std::span<const uint8_t> bytes,Game& g,std::vector<Sound>& sounds) {
+bool decodeWorld(std::span<const uint8_t> bytes,Game& g,std::vector<Sound>& sounds,WorldFrame* frame) {
+    if (!g.stage) return false;
     Reader io(bytes);
+    WorldFrame header{};
+    io(header.mission,header.tick);
     Operative guest{},host{};
     int guestCharacter=0,hostCharacter=0;
     operative(io,guest,guestCharacter);
     operative(io,host,hostCharacter);
     world(io,g,sounds);
-    if (!io.done() || !validOperative(g,guest,guestCharacter) || !validOperative(g,host,hostCharacter) ||
+    if (!io.done() || header.mission==0 || !validOperative(g,guest,guestCharacter) || !validOperative(g,host,hostCharacter) ||
         g.enemies.size()!=g.stage->enemies.size() || g.supplies.size()!=g.stage->supplies.size() ||
         g.crates.size()!=g.stage->crates.size() || g.mode<Mode::active || g.mode>Mode::complete ||
         g.activeBeacon<-1 || g.activeBeacon>=static_cast<int>(g.stage->beacons.size()) ||
@@ -201,6 +215,7 @@ bool decodeWorld(std::span<const uint8_t> bytes,Game& g,std::vector<Sound>& soun
     host.character=&characters[hostCharacter];
     g.operative=guest; g.setTeammate(host);
     g.syncLifts();
+    if (frame) *frame=header;
     return true;
 }
 }

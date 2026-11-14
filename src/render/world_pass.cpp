@@ -21,11 +21,13 @@ void Renderer::operativePose(const Player& player,const Player& previous,float a
     pose.reach=mix(previous.gait.reach,pose.reach,blend);
 }
 
-void Renderer::drawWorld(const Game& g,bool high,bool motion,float alpha,const Player& previous,float previousCamera,const Player* previousPartner) {
+void Renderer::drawWorld(const Game& g,bool high,bool motion,float alpha,const Player& previous,float previousCamera,const Player* previousPartner,
+                         const WorldMotion* previousWorld) {
     const float shake=motion?g.shake:0.f;
     offset={-mix(previousCamera,g.camera,alpha)+std::cos(g.time*119)*shake*.55f,std::sin(g.time*97)*shake*.38f};
     operativePose(g.player,previous,alpha);
     priorPartner=previousPartner; partnerBlend=alpha;
+    priorWorld=previousWorld; worldBlend=alpha;
     const int targetW=software?std::clamp(int(viewW*resolution),640,960)/16*16:
         high?std::clamp(int(viewW*resolution),960,1920)/16*16:1200;
     const int targetH=targetW/2;
@@ -52,5 +54,7 @@ void Renderer::drawWorld(const Game& g,bool high,bool motion,float alpha,const P
         const float size=(m.text.size()>11?15.f:20.f)*m.scale*(1+.55f*std::exp(-age*14));
         outlinedText({p.x-measure(m.text,size,true)*.5f,p.y},m.text,size,m.color.alpha(clamp(m.life*4)));
     }
+    priorWorld=nullptr;
+    priorPartner=nullptr;
 }
 } // namespace vl

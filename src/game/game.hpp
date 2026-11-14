@@ -113,6 +113,7 @@ private:
     bool slowing=false,slowLocked=false;
     std::minstd_rand rng{0x2796};
     float random();
+    uint32_t nextShot=0;
     bool held(Key k) const { return keys[static_cast<size_t>(k)]; }
     void spawn(Vec safe);
     void resetTransient();

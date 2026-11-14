@@ -57,7 +57,7 @@ void App::closeAction() {
             coopPaused=!coopPaused; input.reset(); coopMouse=false;
             SDL_ShowCursor(coopPaused?1:0);
         }
-        else if (view==View::failed || view==View::cleared) leaveCoop();
+        else if (view==View::failed || view==View::cleared || view==View::coopLoading) leaveCoop();
         return;
     }
     switch (view) {
@@ -143,6 +143,7 @@ void App::update(float dt) {
         if (coopStarted) {
             if (view==View::play && input.pressed(Act::pause)) closeAction();
             advanceCoop(dt);
+            network.flush();
         } else audio.pace(1);
         return;
     }
@@ -178,6 +179,7 @@ void App::draw() {
     case View::controls: keyBindings(); break;
     case View::credits: credits(); break;
     case View::intro: cinematic(); break;
+    case View::coopLoading: coopCinematic(); break;
     case View::play:
     case View::pause:
     case View::failed:
@@ -185,7 +187,8 @@ void App::draw() {
         const float alpha=coopStarted && !network.hosting()?netInterpolation:
             view==View::play?clamp(accumulator/step):1.f;
         r.drawWorld(game,settings.high,settings.motion,alpha,previousPlayer,previousCamera,
-                    game.coop?&previousPartner:nullptr);
+                    game.coop?&previousPartner:nullptr,
+                    coopStarted && !network.hosting()?&previousWorld:nullptr);
         hud();
         if (coopStarted && (coopPaused || view!=View::play)) coopOverlay();
         else if (view!=View::play) overlay();
@@ -201,7 +204,7 @@ void App::draw() {
         button({648,347,227,43},"CONFIRM",[this]{auto action=std::move(confirmAction); action();},true,true);
         break;
     }
-    if (settings.diagnostics) diagnostics();
+    if (settings.diagnostics && view!=View::coopLoading) diagnostics();
     if (notice>0) {
         const float w=std::min(1150.f,r.measure(notification,15)+32);
         r.rect({(width-w)*.5f,5,w,29},hex(0x142630).alpha(.97f));

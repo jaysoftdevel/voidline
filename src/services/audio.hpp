@@ -15,7 +15,8 @@ public:
     void configure(const Settings& settings);
     // Playback speed for music and effects. Slow motion lowers both together.
     void pace(float speed);
-    void track(std::string_view name,bool loop=true);
+    void preload(std::string_view name);
+    void track(std::string_view name,bool loop=true,float position=0);
     void event(std::string_view name,float gain=1,float pan=0,float rate=1) override;
 private:
     struct Sample { std::vector<float> frames; int channels=0,hz=0; };
