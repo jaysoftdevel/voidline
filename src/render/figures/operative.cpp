@@ -59,20 +59,24 @@ void Renderer::drawPlayer(const Game& g,const Operative& op) {
     const float local=std::atan2(std::sin(p.aim),std::abs(std::cos(p.aim)));
     // The rifle comes up while the operative aims, fires or reloads and drops to a low carry afterwards. While it
     // hangs from the near hand the far arm is free to swing with the stride.
-    const float lowered=std::max(carry,1-p.ready);
-    const float barrel=mix(local,.58f+counter*.13f,lowered);
+    // Smooth, two-handed shoulder presentation: the stock rises from the low
+    // carry as the off-hand comes onto the foregrip; running no longer forces
+    // a rifle back down while the player is actively aiming or shooting.
+    const float shouldered=smooth(clamp(p.ready));
+    const float lowered=clamp((1-shouldered)*(1.f+carry*.18f));
+    const float barrel=mix(.62f+counter*.10f,local,shouldered);
     const Vec aim{std::cos(barrel)*forwardFacing,std::sin(barrel)};
     const Vec side{-aim.y,aim.x};
     const Vec up=forwardFacing>0?Vec{aim.y,-aim.x}:Vec{-aim.y,aim.x};
     const float recoil=p.muzzle>0?3.7f*p.muzzle/.069f:0;
     const float sway=std::sin(g.time*1.7f)*.35f*(1-pose.weight);
-    const Vec mount=g.weaponPivot(p)+shift+Vec{-lowered*5.f*p.facing,(pose.crouch-p.gait.crouch)*12+lowered*7.f+pose.pelvis*.5f+sway};
+    const Vec mount=g.weaponPivot(p)+shift+Vec{-lowered*5.f*p.facing,(pose.crouch-p.gait.crouch)*12+lowered*8.f+pose.pelvis*.5f+sway};
     const Vec carried=mount+aim*muzzleReach[op.gun];
     const Vec raised=g.muzzle(op)+shift+Vec{0,pose.pelvis*.5f+sway};
     Vec muzzle=mix(raised,carried,lowered)-aim*(recoil*.45f);
     const GunArt& model=gunArt[op.gun];
     const Vec axisU=aim*model.length,axisV=up*(-model.length*model.aspect);
-    h.aim=aim; h.recoil=recoil/3.7f; h.relax=lowered;
+    h.aim=aim; h.recoil=recoil/3.7f; h.relax=lowered; h.shoulder=shouldered;
     auto layout=[&] {
         h.nearHand=muzzle+axisU*(model.gripU-1)+axisV*(model.gripV-model.muzzleV);
         h.farHand=muzzle+axisU*(model.foreU-1)+axisV*(model.foreV-model.muzzleV);
@@ -80,11 +84,14 @@ void Renderer::drawPlayer(const Game& g,const Operative& op) {
     layout();
     // The support hand must reach the foregrip with a bent elbow. If the weapon is held too far out, it slides
     // back into the shoulder instead of stretching the arm.
-    if (lowered<.5f) {
+    if (lowered>.04f) {
+        // During the transition the rifle slides inward to keep the elbows
+        // bent. At full shoulder presentation the rendered muzzle MUST match
+        // Game::muzzle(), the actual bullet-spawn point.
         const Rig rig=buildRig(h);
         const float reach=length(h.farHand-spun(h,rig.farShoulder));
         constexpr float comfortable=19.f;
-        if (reach>comfortable) { muzzle=muzzle-aim*std::min(10.f,reach-comfortable); layout(); }
+        if (reach>comfortable) { muzzle=muzzle-aim*(std::min(10.f,reach-comfortable)*lowered); layout(); }
     }
     const Color gunColor=hex(weapons[op.gun].color);
     h.weapon=[&](Vec,Vec) {

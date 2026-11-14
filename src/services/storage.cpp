@@ -158,6 +158,20 @@ Settings Storage::settings() const {
     s.motion=flag(j.get(),"motion",s.motion);
     s.cinematic=flag(j.get(),"cinematic",s.cinematic);
     s.high=flag(j.get(),"high",s.high);
+    // Migrate older HIGH/PERFORMANCE preference when the detailed graphics options are absent.
+    auto* graphics=json_object_object_get(j.get(),"graphics");
+    if (json_object_get_type(graphics)==jsonObject) {
+        auto& q=s.graphics;
+        q.preset=int(integer(graphics,"preset",q.preset,0,4));
+        q.resolution=int(integer(graphics,"resolution",q.resolution,0,4));
+        q.dynamicResolution=flag(graphics,"dynamicResolution",q.dynamicResolution);
+#define GRAPHICS_READ(field) q.field=int(integer(graphics,#field,q.field,0,3))
+        GRAPHICS_READ(lighting); GRAPHICS_READ(shadows); GRAPHICS_READ(bloom);
+        GRAPHICS_READ(glow); GRAPHICS_READ(fog); GRAPHICS_READ(reflections);
+        GRAPHICS_READ(particles); GRAPHICS_READ(scenery); GRAPHICS_READ(materials);
+        GRAPHICS_READ(shafts); GRAPHICS_READ(water); GRAPHICS_READ(antialias); GRAPHICS_READ(grading);
+#undef GRAPHICS_READ
+    } else s.graphics=graphicsPreset(s.high?2:0);
     s.music=clamp(real(j.get(),"music",s.music));
     s.effects=clamp(real(j.get(),"effects",s.effects));
     s.difficulty=integer(j.get(),"difficulty",s.difficulty,0,2);
@@ -279,7 +293,18 @@ void Storage::put(const Settings& s) {
     const Json j(json_object_new_object(),json_object_put);
     auto* obj=j.get();
     addFlag(obj,"audio",s.audio); addFlag(obj,"motion",s.motion);
-    addFlag(obj,"cinematic",s.cinematic); addFlag(obj,"high",s.high);
+    addFlag(obj,"cinematic",s.cinematic); addFlag(obj,"high",s.graphics.lighting>=2);
+    auto* quality=json_object_new_object();
+    add(quality,"preset",std::clamp(s.graphics.preset,0,4));
+    add(quality,"resolution",std::clamp(s.graphics.resolution,0,4));
+    addFlag(quality,"dynamicResolution",s.graphics.dynamicResolution);
+#define GRAPHICS_WRITE(field) add(quality,#field,std::clamp(s.graphics.field,0,3))
+    GRAPHICS_WRITE(lighting); GRAPHICS_WRITE(shadows); GRAPHICS_WRITE(bloom);
+    GRAPHICS_WRITE(glow); GRAPHICS_WRITE(fog); GRAPHICS_WRITE(reflections);
+    GRAPHICS_WRITE(particles); GRAPHICS_WRITE(scenery); GRAPHICS_WRITE(materials);
+    GRAPHICS_WRITE(shafts); GRAPHICS_WRITE(water); GRAPHICS_WRITE(antialias); GRAPHICS_WRITE(grading);
+#undef GRAPHICS_WRITE
+    json_object_object_add(obj,"graphics",quality);
     addReal(obj,"music",s.music); addReal(obj,"effects",s.effects); add(obj,"difficulty",s.difficulty);
     add(obj,"sprintMode",s.sprintMode); addFlag(obj,"crouchToggle",s.crouchToggle); addFlag(obj,"diagnostics",s.diagnostics);
     addFlag(obj,"fpsCounter",s.fpsCounter); add(obj,"fpsCorner",std::clamp(s.fpsCorner,0,3));

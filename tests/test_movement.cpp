@@ -1,5 +1,7 @@
 // Movement, jumping, flipping and determinism.
 #include "support.hpp"
+#include "game/enemy_ground.hpp"
+#include "game/detail.hpp"
 
 using namespace test;
 using namespace vl;
@@ -103,7 +105,46 @@ void chordWithCrouch() {
 }
 }
 
+void testEnemyGapSafety() {
+    Stage stage{};
+    stage.ground={{0,500,220,90},{340,500,310,90}};
+    stage.ledges={{670,360,145,17}};
+    Enemy enemy{};
+    enemy.box={125,446,35,54}; enemy.base=500;
+    CHECK(enemyHasFooting(stage,enemy,125,1));
+    float at=125;
+    for (int i=0;i<160;++i) {
+        const float next=groundedEnemyX(stage,enemy,at,at+12.f);
+        CHECK(next>=at && next<=at+12.001f);
+        CHECK(enemyHasFooting(stage,enemy,next,1));
+        at=next;
+    }
+    CHECK(at<220.f-enemy.box.w*.5f);
+    // Reversing must work, while a fast step may not skip the empty gap.
+    const float reversed=groundedEnemyX(stage,enemy,at,at-20.f);
+    CHECK(reversed<at);
+    CHECK(groundedEnemyX(stage,enemy,140,400)<220.f);
+    // An enemy already stranded outside support never advances through air.
+    CHECK(groundedEnemyX(stage,enemy,264,300)==264.f);
+    // Raised deck support is valid at the enemy's own elevation.
+    enemy.box={690,306,35,54}; enemy.base=360;
+    CHECK(groundedEnemyX(stage,enemy,690,704)>690.f);
+    // All generated grounded enemies must start on valid terrain; the edge
+    // guard should never freeze them because of a misplaced spawn.
+    for (const auto& sector:stages)
+        for (const auto& placement:sector.enemies) {
+            if (placement.kind==EnemyKind::drone || placement.kind==EnemyKind::interceptor ||
+                placement.kind==EnemyKind::turret) continue;
+            enemy.base=placement.y;
+            const float w=spec(placement.kind).w;
+            enemy.box={placement.x-w*.5f,placement.y-spec(placement.kind).h,w,spec(placement.kind).h};
+            CHECK(enemyHasFooting(sector,enemy,enemy.box.x,1) ||
+                  enemyHasFooting(sector,enemy,enemy.box.x,-1));
+        }
+}
+
 void runMovementTests() {
+    testEnemyGapSafety();
     chordsDriveTheGame();
     airFlip();
     deterministic();

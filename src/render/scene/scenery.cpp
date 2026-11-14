@@ -8,6 +8,8 @@ void Renderer::depthScenery(const Game& g) {
     const Color cold=hex(g.stage->cold), accent=hex(g.stage->accent);
     const float travel=offset.x*.48f+cameraView.tilt.x*12;
     for (int i=0;140+i*154<g.stage->worldWidth*.48f+width;++i) {
+        if (graphics.scenery==0 && i%4!=0) continue;
+        if (graphics.scenery==1 && i%2!=0) continue;
         const float x=140+i*154+hash(i+111)*57+travel;
         if (x<-128 || x>width+128) continue;
         const float y=356+hash(i+231)*79+offset.y*.65f+cameraView.tilt.y*4;
@@ -37,6 +39,8 @@ void Renderer::foreground(const Game& g) {
     const Color tone=metal(g.stage->biome), cold=hex(g.stage->cold);
     const float travel=offset.x*1.29f-cameraView.tilt.x*16;
     for (int i=0;85+i*492<g.stage->worldWidth*1.29f+width;++i) {
+        if (graphics.scenery==0 && i%3!=0) continue;
+        if (graphics.scenery==1 && i%2!=0) continue;
         const float x=85+i*492+hash(i+941)*160+travel;
         if (x<-230 || x>width+180) continue;
         const float length=100+hash(i+604)*83, y=14+hash(i+619)*26-cameraView.tilt.y*5;
@@ -58,6 +62,8 @@ void Renderer::foreground(const Game& g) {
 void Renderer::scenery(const Game& g) {
     const Color tone=metal(g.stage->biome), accent=hex(g.stage->accent), cold=hex(g.stage->cold);
     for (int i=0;140+i*273<g.stage->worldWidth+215;++i) {
+        if (graphics.scenery==0 && i%3!=0) continue;
+        if (graphics.scenery==1 && i%2!=0) continue;
         const float x=140+i*273+hash(i+g.index*32)*90;
         const float y=253+hash(i+54)*126;
         const float w=13+hash(i+17)*27;
@@ -80,6 +86,8 @@ void Renderer::scenery(const Game& g) {
         }
     }
     for (int i=0;265+i*329<g.stage->worldWidth+215;++i) {
+        if (graphics.scenery==0 && i%4!=0) continue;
+        if (graphics.scenery==1 && i%2!=0) continue;
         const float x=265+i*329+hash(i+761)*112;
         if (!visible(x,87)) continue;
         const float y=333+hash(i+73)*81+offset.y;

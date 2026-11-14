@@ -73,8 +73,10 @@ out vec4 frag;
 uniform sampler2D image;
 uniform vec2 texel;
 uniform float time;
+uniform int quality;
 float hash(vec2 p) { return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
 void main() {
+    if (quality==0) { frag=vec4(texture(image,uv).rgb,1.0); return; }
     const vec3 lumaWeights=vec3(.299,.587,.114);
     vec3 nw=texture(image,uv+vec2(-1,-1)*texel).rgb, ne=texture(image,uv+vec2(1,-1)*texel).rgb;
     vec3 sw=texture(image,uv+vec2(-1,1)*texel).rgb, se=texture(image,uv+vec2(1,1)*texel).rgb;
@@ -86,10 +88,10 @@ void main() {
     float rcp=1.0/(min(abs(dir.x),abs(dir.y))+reduce);
     dir=clamp(dir*rcp,vec2(-8.0),vec2(8.0))*texel;
     vec3 a=.5*(texture(image,uv+dir*(1.0/3.0-.5)).rgb+texture(image,uv+dir*(2.0/3.0-.5)).rgb);
-    vec3 b=a*.5+.25*(texture(image,uv+dir*-.5).rgb+texture(image,uv+dir*.5).rgb);
+    vec3 b=quality>=2?a*.5+.25*(texture(image,uv+dir*-.5).rgb+texture(image,uv+dir*.5).rgb):a;
     float lb=dot(b,lumaWeights);
     vec3 c=(lb<lmin||lb>lmax)?a:b;
-    c+=hash(gl_FragCoord.xy+fract(time)*61.0)*.016-.008;
+    if (quality>=2) c+=hash(gl_FragCoord.xy+fract(time)*61.0)*.016-.008;
     frag=vec4(c,1.0);
 })GLSL";
 }

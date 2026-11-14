@@ -21,7 +21,7 @@ public:
     Rect followCrop(bool enabled) const;
     bool active() const { return running; }
 private:
-    enum class View { splash,menu,multiplayer,create,load,campaign,armory,settings,controls,credits,intro,coopLoading,play,pause,failed,epilogue,cleared,confirm };
+    enum class View { splash,menu,multiplayer,create,load,campaign,armory,settings,graphics,controls,credits,intro,coopLoading,play,pause,failed,epilogue,cleared,confirm };
     struct Button { Rect box; std::function<void()> action; };
     SDL_Window* window;
     Renderer& r;
@@ -32,7 +32,7 @@ private:
     Save save;
     View view=View::splash,settingsReturn=View::menu,confirmReturn=View::menu;
     bool running=true,finished=false;
-    int rebinding=-1;
+    int rebinding=-1,graphicsPage=0;
     int slot=0,newSlot=1,newCharacter=0,newDifficulty=1,sector=0,weapon=0,focus=-1;
     float clock=0,film=0,accumulator=0,previousCamera=0,notice=0,startup=0;
     Player previousPlayer,previousPartner;
@@ -141,6 +141,7 @@ private:
     void campaign();
     void armory();
     void options();
+    void graphicsOptions();
     void keyBindings();
     void diagnostics();
     void captureKey(int scancode);

@@ -9,6 +9,7 @@ namespace vl {
 App::App(SDL_Window* win,Renderer& renderer,Audio& mixer,Storage& storage)
     :window(win),r(renderer),audio(mixer),store(storage),game(*this) {
     settings=store.settings();
+    r.setGraphics(settings.graphics);
     input.configure(settings);
     audio.configure(settings);
     audio.track("menu");
@@ -53,6 +54,7 @@ bool App::persist(Save& next,int target) {
 }
 
 void App::commitSettings() {
+    r.setGraphics(settings.graphics);
     audio.configure(settings);
     input.configure(settings);
     try { store.put(settings); }
@@ -85,6 +87,7 @@ void App::closeAction() {
         break;
     case View::menu: running=false; break;
     case View::settings: show(settingsReturn); break;
+    case View::graphics: show(View::settings); break;
     case View::controls: rebinding=-1; show(View::settings); break;
     case View::intro: launch(0); break;
     case View::play: game.pause(true); accumulator=0; audio.track(""); show(View::pause); break;
@@ -242,6 +245,7 @@ void App::draw() {
     case View::campaign: campaign(); break;
     case View::armory: armory(); break;
     case View::settings: options(); break;
+    case View::graphics: graphicsOptions(); break;
     case View::controls: keyBindings(); break;
     case View::credits: credits(); break;
     case View::intro: cinematic(); break;
@@ -253,7 +257,7 @@ void App::draw() {
     case View::failed: {
         const float alpha=coopStarted && !network.hosting()?netInterpolation:
             view==View::play?clamp(accumulator/step):1.f;
-        r.drawWorld(game,settings.high,settings.motion,alpha,previousPlayer,previousCamera,
+        r.drawWorld(game,settings.motion,alpha,previousPlayer,previousCamera,
                     game.coop?&previousPartner:nullptr,
                     coopStarted && !network.hosting()?&previousWorld:nullptr,cameraTilt.value());
         worldFrame=true;

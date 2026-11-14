@@ -7,7 +7,9 @@ namespace vl {
 void Renderer::ambient(const Game& g) {
     const Color accent=hex(g.stage->accent),cold=hex(g.stage->cold);
     if (g.skyFlash>.01f) rect({0,0,width,height},g.skyColor.alpha(std::min(1.f,g.skyFlash)*.085f));
-    for (const auto& a:g.ambient) {
+    for (size_t k=0;k<g.ambient.size();++k) {
+        if (graphics.particles==0 || (graphics.particles==1 && k%3!=0)) continue;
+        const auto& a=g.ambient[k];
         const Vec c{a.p.x+offset.x*a.depth,a.p.y+offset.y*a.depth};
         if (c.x<-340 || c.x>width+340) continue;
         const float age=a.maxLife-a.life;

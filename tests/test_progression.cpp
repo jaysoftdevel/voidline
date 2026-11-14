@@ -22,6 +22,20 @@ void fpsSettings() {
     read.fpsCounter=false; read.fpsCorner=0; storage.put(read);
     read=storage.settings();
     CHECK(!read.fpsCounter && read.fpsCorner==0);
+    auto& q=read.graphics;
+    q=graphicsPreset(3);
+    CHECK(q.preset==3 && q.resolution==4 && q.shadows==3 && q.reflections==3 && !q.dynamicResolution);
+    q.preset=4; q.materials=1; q.fog=0; q.antialias=0; q.water=1;
+    storage.put(read);
+    const auto saved=storage.settings().graphics;
+    CHECK(saved.preset==4 && saved.materials==1 && saved.fog==0 && saved.antialias==0 && saved.water==1);
+    CHECK(saved.resolution==4 && saved.shadows==3 && !saved.dynamicResolution);
+    const auto fast=graphicsPreset(0);
+    CHECK(fast.preset==0 && fast.reflections==0 && fast.bloom==0 && fast.particles==0);
+    const auto middle=graphicsPreset(1);
+    CHECK(middle.preset==1 && middle.lighting==1 && middle.resolution==2);
+    const auto ultra=graphicsPreset(3);
+    CHECK(ultra.preset==3 && ultra.lighting==3 && ultra.grading==3);
     std::filesystem::remove(path);
     std::filesystem::remove(path.string()+".lock");
 }

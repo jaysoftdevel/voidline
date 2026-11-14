@@ -21,8 +21,9 @@ void Renderer::operativePose(const Player& player,const Player& previous,float a
     pose.reach=mix(previous.gait.reach,pose.reach,blend);
 }
 
-void Renderer::drawWorld(const Game& g,bool high,bool motion,float alpha,const Player& previous,float previousCamera,const Player* previousPartner,
+void Renderer::drawWorld(const Game& g,bool motion,float alpha,const Player& previous,float previousCamera,const Player* previousPartner,
                          const WorldMotion* previousWorld,Vec tilt) {
+    worldRendering=true;
     const float shake=motion?g.shake:0.f;
     offset={-mix(previousCamera,g.camera,alpha)+std::cos(g.time*119)*shake*.55f,std::sin(g.time*97)*shake*.38f};
     operativePose(g.player,previous,alpha);
@@ -33,25 +34,36 @@ void Renderer::drawWorld(const Game& g,bool high,bool motion,float alpha,const P
     cameraView.zoom=1.f-(motion?g.punch:0.f)*.030f-clamp((1-g.timeScale)/.72f)*.055f;
     priorPartner=previousPartner; partnerBlend=alpha;
     priorWorld=previousWorld; worldBlend=alpha;
-    const int targetW=software?std::clamp(int(viewW*resolution),640,960)/16*16:
-        high?std::clamp(int(viewW*resolution),960,1920)/16*16:1200;
+    constexpr float scale[]{.5f,.67f,.8f,1.f,1.15f};
+    const float effective=scale[std::clamp(graphics.resolution,0,4)]*(graphics.dynamicResolution?resolution:1.f);
+    const int targetW=software?std::clamp(int(viewW*effective),640,960)/16*16:
+        std::clamp(int(viewW*effective),640,2208)/16*16;
     const int targetH=targetW/2;
     if (raw.texture.w!=targetW) {
         destroy(raw); destroy(lit); destroy(mirror); destroy(ldr);
         raw=target(targetW,targetH); lit=target(targetW,targetH); ldr=target(targetW,targetH,GL_RGBA8);
         mirror=target(targetW/2,targetH/2);
     }
-    // The reflection samples its own target, avoiding feedback from the water surface.
-    bind(mirror,true); gl.Enable(GL_BLEND); gl.BlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
-    backdrop(g); depthScenery(g); scenery(g); terrain(g); objects(g); actors(g);
+    // Reflection resolution is independent of the main scene. Zero avoids this pass entirely.
+    const int reflectionDivisor=graphics.reflections>=3?1:graphics.reflections==2?2:4;
+    const int mirrorW=std::max(80,targetW/reflectionDivisor);
+    const int mirrorH=std::max(40,targetH/reflectionDivisor);
+    if (mirror.texture.w!=mirrorW || mirror.texture.h!=mirrorH) {
+        destroy(mirror); mirror=target(mirrorW,mirrorH);
+    }
+    if (graphics.reflections>0) {
+        bind(mirror,true); gl.Enable(GL_BLEND); gl.BlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+        backdrop(g); depthScenery(g); scenery(g); terrain(g); objects(g); actors(g);
+        flush();
+    }
     bind(raw,true);
     backdrop(g); ambient(g); depthScenery(g); scenery(g); shafts(g);
-    water(g,high);
+    water(g);
     terrain(g); objects(g); drawParticles(g); foreground(g);
     flush();
     collectLights(g);
-    drawLights(high);
-    post(g,high,motion);
+    drawLights();
+    post(g,motion);
     gl.Enable(GL_BLEND); gl.BlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
     for (const auto& m:g.messages) {
         const Vec p=screenAt(m.p);
@@ -61,5 +73,6 @@ void Renderer::drawWorld(const Game& g,bool high,bool motion,float alpha,const P
     }
     priorWorld=nullptr;
     priorPartner=nullptr;
+    worldRendering=false;
 }
 } // namespace vl

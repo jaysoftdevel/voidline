@@ -67,12 +67,43 @@ struct Save {
 // Keyboard remapping slots. Every action has keysPerAction slots. A slot holds a scancode, 0 for unassigned or -1 for the default.
 inline constexpr size_t keysPerAction = 3, actionSlots = 24, keymapSize = keysPerAction * actionSlots;
 enum class SprintMode { hold, toggle, automatic };
+// Rendering complexity is local presentation state. It never enters network packets or save-game simulation.
+// Levels: 0 = off/minimal, 1 = low, 2 = high, 3 = ultra.
+struct GraphicsQuality {
+    int preset=2; // 0 performance, 1 balanced, 2 quality, 3 ultra, 4 custom
+    int resolution=3; // 0 50%, 1 67%, 2 80%, 3 100%, 4 115%
+    bool dynamicResolution=true;
+    int lighting=2,shadows=2,bloom=2,glow=2,fog=2,reflections=2;
+    int particles=2,scenery=2,materials=2,shafts=2,water=2,antialias=2,grading=2;
+};
+inline GraphicsQuality graphicsPreset(int preset) {
+    GraphicsQuality q;
+    q.preset=std::clamp(preset,0,3);
+    switch (q.preset) {
+    case 0:
+        q.resolution=1; q.lighting=0; q.shadows=0; q.bloom=0; q.glow=0; q.fog=0;
+        q.reflections=0; q.particles=0; q.scenery=0; q.materials=0; q.shafts=0;
+        q.water=0; q.antialias=0; q.grading=0; break;
+    case 1:
+        q.resolution=2; q.lighting=1; q.shadows=1; q.bloom=1; q.glow=1; q.fog=1;
+        q.reflections=1; q.particles=1; q.scenery=1; q.materials=1; q.shafts=1;
+        q.water=1; q.antialias=1; q.grading=1; break;
+    case 3:
+        q.resolution=4; q.lighting=3; q.shadows=3; q.bloom=3; q.glow=3; q.fog=3;
+        q.reflections=3; q.particles=3; q.scenery=3; q.materials=3; q.shafts=3;
+        q.water=3; q.antialias=2; q.grading=3; q.dynamicResolution=false; break;
+    default: break;
+    }
+    return q;
+}
+
 struct Settings {
     std::array<int,keymapSize> keymap = [] { std::array<int,keymapSize> v{}; v.fill(-1); return v; }();
     int sprintMode = 0;
     bool crouchToggle = false, diagnostics = false;
     bool audio=true,motion=true,cinematic=true,high=true,fpsCounter=false;
     int fpsCorner=1; // 0 top-left, 1 top-right, 2 bottom-left, 3 bottom-right
+    GraphicsQuality graphics{};
     float music=.74f,effects=.68f; int difficulty=1;
 };
 } // namespace vl

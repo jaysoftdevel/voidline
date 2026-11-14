@@ -89,6 +89,11 @@ void Renderer::ellipse(Vec c,Vec r,Color color) {
 }
 
 void Renderer::halo(Vec p,float radius,Color color) {
+    if (worldRendering) {
+        if (graphics.glow==0) return;
+        const float scale=graphics.glow==1?.45f:graphics.glow==2?.90f:1.25f;
+        color.a*=scale;
+    }
     quad({p.x-radius,p.y-radius,radius*2,radius*2},color,color,radial.id);
 }
 

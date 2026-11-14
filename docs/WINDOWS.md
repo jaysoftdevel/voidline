@@ -85,3 +85,14 @@ The v2.10.1 patch also fixes acceptance of the lobby-mode packet on the shared n
 ### 2.10.2 cooperative doors and expanded campaign
 
 Both Linux and Windows use the same C++ pressure plate, lever, synchronized door shutter and extended level generators. Hold **E** when near a lever (or rebind the Interact action); plates trigger by standing on them. The mouse wheel or **V** selects the next weapon. Session keys now start with **VL10-** and LAN advertisements use VLD8. Both peers must run the same version because world packets include door opening and lever-timer state. Build with `build.bat` after applying the update. Windows native multiplayer remains to be tested on Windows hardware.
+
+
+### Graphics settings (v2.10.3)
+
+Open Settings > Graphics complexity and select a preset or customize the individual passes.
+The settings are stored in the user profile's existing campaign.json; no extra DLL or external assets are required.
+Both Windows and Linux builds use the same quality controls. No multiplayer packet changes (VL10).
+
+### 2.10.4 aiming and enemy footing
+
+Includes high-contrast crosshair, safe grounded-enemy edge checks and updated shoulder-animation rendering. The network protocol stays VL10. Windows must be rebuilt after installing the source patch; Linux runtime binary is included.

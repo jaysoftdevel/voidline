@@ -25,7 +25,7 @@ in vec2 vUV;
 in vec4 tint;
 out vec4 frag;
 uniform float camera;
-uniform int sector;
+uniform int sector,detail;
 float hash21(vec2 p) {
     vec3 q=fract(p.xyx*vec3(.1031,.1030,.0973));
     q+=dot(q,q.yzx+33.33);
@@ -38,6 +38,7 @@ float grain(vec2 p) {
 }
 void main() {
     vec2 p=vUV;
+    if (detail==0) { frag=vec4(tint.rgb*.90,1.0); return; }
     float gauge=tint.a;
     float scale=max(fwidth(p.x),.72);
     float grit=grain(p*.41)-.5;
@@ -53,9 +54,10 @@ void main() {
     float corrosion=smoothstep(.49,.77,slow)*mix(.35,.73,dent);
     base=mix(base,oxide*(.74+flakes*.56),corrosion*.73);
     float scar=grain(vec2(p.x*.047+p.y*.12,p.y*.60));
-    float scratches=smoothstep(.83,.99,scar)*(.14+edge*.31)*min(1.0,1.30/scale);
+    float scratches=detail>=2?smoothstep(.83,.99,scar)*(.14+edge*.31)*min(1.0,1.30/scale):0.0;
     float gleam=(.20+.16*sin((p.x+camera*.16)*.040))*edge;
     base+=vec3(.38,.48,.54)*(scratches+gleam)*gauge;
+    if (detail==3) base+=vec3(.024,.03,.036)*sin(p.x*.33+p.y*.15);
     frag=vec4(max(vec3(.009),base),1.0);
 })GLSL";
 

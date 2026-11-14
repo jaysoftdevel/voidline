@@ -78,6 +78,11 @@ void main() {
     float transmittance=exp(-density);
     // Relief: the painted backplate's luminance acts as a height field and the gradient of the light map
     // points toward the light, so lit faces catch light while cavities and far sides stay dark.
+    if (relief<.01) {
+        vec3 base=raw*.84+light*(raw*.92+.047);
+        frag=vec4(base*transmittance+haze*(.2+scatter*.44)*(1.0-transmittance),1.0);
+        return;
+    }
     vec2 tx=worldTexel*1.5, lt=lightTexel*2.0;
     vec2 slope=vec2(luma(texture(world,uv+vec2(tx.x,0)).rgb)-luma(texture(world,uv-vec2(tx.x,0)).rgb),
                     luma(texture(world,uv+vec2(0,tx.y)).rgb)-luma(texture(world,uv-vec2(0,tx.y)).rgb));

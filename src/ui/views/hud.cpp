@@ -118,15 +118,21 @@ void App::hud() {
         }
     }
     if (view==View::play && !coopPaused && Rect{0,0,width,height}.contains(mouse) && !input.aimStickActive()) {
-        const Color mark=mix(white,ammo,.45f).alpha(.95f);
-        const float spin=clock*(slow?2.4f:.6f);
-        const float radius=slow?13.f:9.f;
+        // The luminous lime reticle has a dark silhouette even over white
+        // flashes, sky, vegetation and highly saturated enemy projectiles.
+        const Color mark=hex(0xeaff46);
+        const Color border=hex(0x061018);
+        const float spin=clock*(slow?1.3f:.23f);
+        const float radius=slow?14.f:10.f;
+        r.ellipse(mouse,{4.8f,4.8f},border.alpha(.94f));
         for (int i=0;i<4;++i) {
             const float a=spin+i*pi*.5f;
-            r.line(mouse+ray(a)*(radius-2),mouse+ray(a)*(radius+5),2.4f,ink.alpha(.9f));
-            r.line(mouse+ray(a)*(radius-1),mouse+ray(a)*(radius+4),1.2f,mark);
+            const Vec a0=mouse+ray(a)*(radius-2.3f);
+            const Vec a1=mouse+ray(a)*(radius+6.4f);
+            r.line(a0,a1,5.0f,border.alpha(.96f));
+            r.line(a0,a1,2.4f,mark.energy(1.16f));
         }
-        r.ellipse(mouse,{2.4f,2.4f},ink); r.ellipse(mouse,{1.4f,1.4f},mark);
+        r.ellipse(mouse,{2.3f,2.3f},mark.energy(1.3f));
         // Hit marker: four short ticks that open outward on a hit and turn gold and larger on a kill.
         const float kill=clamp(game.killMarker/.45f), hit=clamp(game.hitMarker/.2f);
         const float strength=std::max(kill,hit);

@@ -23,7 +23,7 @@ void App::options() {
     setting(215,"Screen shake and camera motion",settings.motion?"ON":"OFF",[this]{settings.motion=!settings.motion; commitSettings();});
     setting(271,"Opening cinematic",settings.cinematic?"ON":"OFF",[this]{settings.cinematic=!settings.cinematic; commitSettings();});
     setting(327,"New campaign difficulty",difficulties[settings.difficulty].name,[this]{settings.difficulty=(settings.difficulty+1)%3; commitSettings();});
-    setting(383,"Lighting and bloom",settings.high?"HIGH":"PERFORMANCE",[this]{settings.high=!settings.high; commitSettings();});
+    setting(383,"Graphics complexity", "CONFIGURE", [this]{graphicsPage=0; show(View::graphics);});
     setting(439,"Show FPS counter",settings.fpsCounter?"ON":"OFF",[this]{settings.fpsCounter=!settings.fpsCounter; commitSettings();});
     volume(159,"Music",settings.music);
     volume(215,"Effects",settings.effects);

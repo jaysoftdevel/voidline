@@ -75,7 +75,7 @@ Renderer::ArmPose Renderer::blendArms(const ArmPose& a,const ArmPose& b,float t)
 void Renderer::drawArms(const Humanoid& h,const Rig& g) {
     Vec nearHand=h.nearHand,farHand=h.farHand;
     if (h.gripFromChest) {
-        const Vec mount=g.shoulder+Vec{0,5.f};
+        const Vec mount=g.shoulder+Vec{-g.tf*3.f*h.shoulder,5.f-4.f*h.shoulder};
         nearHand=mount+h.aim*(h.gripNear-h.recoil*3.f);
         farHand=mount+h.aim*(h.gripFar-h.recoil*3.f);
     }

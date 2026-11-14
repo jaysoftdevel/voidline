@@ -31,6 +31,7 @@ void Game::shoot(float dt) {
     const auto& w=weapons[gun];
     const GunSound& sound=gunSounds[gun];
     --g.ammo; p.fireDelay=g.interval; p.muzzle=.069f;
+    p.readyTimer=readyHold; p.ready=std::max(p.ready,.65f);
     const Vec exit=muzzle();
     const Vec pivot=weaponPivot();
     float crateDistance=1;

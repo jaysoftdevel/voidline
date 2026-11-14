@@ -1,5 +1,6 @@
 #include "game/game.hpp"
 #include "game/detail.hpp"
+#include "game/enemy_ground.hpp"
 
 namespace vl {
 void Game::moveEnemies(float dt) {
@@ -38,7 +39,8 @@ void Game::moveEnemies(float dt) {
         const bool inRange=std::abs(d.x)<e.reach && std::abs(d.y)<240;
         const bool boss=e.kind==EnemyKind::boss;
         // The weapon comes up when the target is in range and drops back after a moment.
-        e.raise=approach(e.raise,inRange||e.warning>0?1.f:0.f,dt*(inRange?5.5f:1.6f));
+        const bool canAim=(inRange && !blocked(origin,target)) || e.warning>0;
+        e.raise=approach(e.raise,canAim?1.f:0.f,dt*(canAim?7.2f:3.0f));
         if (boss && std::abs(d.x)<555 && !bossActive) {
             bossActive=true; message({origin.x,e.box.y-18},stage->boss,hex(stage->accent),1.7f);
             shake=8; audio.event("launch",.76f);
@@ -82,7 +84,14 @@ void Game::moveEnemies(float dt) {
             if (heavy) targetSpeed*=.65f;
             if (e.flinch>0) targetSpeed*=.3f;
             e.vx=approach(e.vx,targetSpeed,dt*(stalker || scavenger?670.f:420.f));
-            e.box.x=clamp(e.box.x+e.vx*dt,e.origin.x-e.patrol,e.origin.x+e.patrol);
+            const float desired=clamp(e.box.x+e.vx*dt,e.origin.x-e.patrol,e.origin.x+e.patrol);
+            const float footing=groundedEnemyX(*stage,e,oldX,desired);
+            e.box.x=footing;
+            if (std::abs(footing-desired)>.02f) {
+                // Turn at a ledge, rather than walking across a non-existent floor.
+                e.facing=desired>oldX?-1:1;
+                e.vx=0;
+            }
             if (e.box.x==e.origin.x-e.patrol || e.box.x==e.origin.x+e.patrol) {
                 if (!inRange && !boss && e.patrol>0) e.facing=e.box.x<e.origin.x?1:-1;
                 e.vx=0;

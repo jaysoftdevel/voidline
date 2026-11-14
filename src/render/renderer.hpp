@@ -30,10 +30,11 @@ public:
     Renderer& operator=(const Renderer&)=delete;
     // Feeds the measured frame time so the world resolution can follow the available GPU time.
     void adapt(float frameMs);
+    void setGraphics(const GraphicsQuality& value);
     float renderScale() const { return resolution; }
     void begin();
     void end();
-    void drawWorld(const Game& game,bool high,bool motion,float interpolation,const Player& previous,float previousCamera,const Player* previousPartner=nullptr,
+    void drawWorld(const Game& game,bool motion,float interpolation,const Player& previous,float previousCamera,const Player* previousPartner=nullptr,
                    const WorldMotion* previousWorld=nullptr,Vec tilt={});
     Vec worldAt(Vec screen) const { return cameraView.sample(screen)-offset; }
     Vec screenAt(Vec world) const { return cameraView.display(world+offset); }
@@ -90,6 +91,8 @@ private:
     AssetPack assets;
     GL gl;
     bool software=false;
+    GraphicsQuality graphics{};
+    bool worldRendering=false;
     GLenum hdrFormat=GL_R11F_G11F_B10F;
     GLuint vao=0,buffer=0,drawProgram=0,lightProgram=0,waterProgram=0,
         atmosphereProgram=0,downProgram=0,upProgram=0,presentProgram=0,materialProgram=0,fxaaProgram=0,cinematicProgram=0;
@@ -106,7 +109,7 @@ private:
     Target filmFrames[2];
     int filmWidth=0;
     int pixelW=0,pixelH=0,viewX=0,viewY=0,viewW=0,viewH=0;
-    GLint materialCamera=-1,materialSector=-1;
+    GLint materialCamera=-1,materialSector=-1,materialDetail=-1;
     Target raw,mirror,lightMap,lit,ldr;
     // Actors are tinted by the lights near them so they sit in the scene instead of floating over it.
     Color actorLight{1,1,1,1};
@@ -211,9 +214,9 @@ private:
     void gunModel(int gun,Vec muzzle,Vec aim,Vec up,float scale,Color glow);
     void drawTrails(const Game& game,const Operative& op,Vec ground);
     void collectLights(const Game& game);
-    void drawLights(bool high);
-    void water(const Game& game,bool high);
-    void post(const Game& game,bool high,bool motionFx);
+    void drawLights();
+    void water(const Game& game);
+    void post(const Game& game,bool motionFx);
     bool visible(float x,float w=0) const { return x+offset.x+w>=-120 && x+offset.x<=width+120; }
 };
 }

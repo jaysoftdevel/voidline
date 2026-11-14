@@ -1,4 +1,4 @@
-# VOIDLINE 2.10.2
+# VOIDLINE 2.10.4
 
 VOIDLINE is a native C++ 2D shooter for Linux and Windows 11 with 20 sectors, six operatives, difficulty levels and an armory. Destroy the guardian in each sector and reach extraction to turn mission score into upgrade points and see the next part of the Vega-9 rescue story.
 
@@ -216,3 +216,15 @@ Cooperative mode retains the shared starting bay. The separated upper and lower 
 The 20-sector campaign is longer, substantially harder, and uses varied biome- and section-specific traversals (stepped shafts, maintenance lifts, bridge paths, elevated firefights, flooded deck paths and high gantries). Cooperative missions are longer too, with more doors and changing encounter layouts. The multiplayer protocol is **VL10**; both computers must run 2.10.2.
 
 Input: **E** operates levers. Weapon cycling remains available via the mouse wheel or **V**. Keyboard bindings can be customized in Settings.
+
+## Independent graphics quality settings (v2.10.3)
+
+Settings > Graphics complexity contains Performance, Balanced, Quality, Ultra and Custom presets,
+plus individual rendering resolution, dynamic scaling, lighting, shadow quality, material relief, FXAA,
+color grading, bloom, glow intensity, atmospheric fog, reflections, water shader detail, light shafts,
+particles and background/scenery complexity. Changes are saved and used by the next rendered frame.
+All options modify the local renderer only; multiplayer protocol and gameplay state are unchanged.
+
+## Visible crosshair, safe enemy footing and shouldered weapons (v2.10.4)
+
+The aiming reticle now uses high-contrast luminous lime with a dark five-pixel outline for visibility over any biome and muzzle flash. Grounded enemies must keep their leading foot supported by real ground or a ledge, and cannot walk across gaps or skip a pit at high speeds. Flying enemies retain their aerial behavior. Operatives and armed enemies now use smoother two-handed weapon shoulder presentation; raising the rifle transitions from low carry while firing immediately brings it up. The rendered rifle muzzle remains aligned with projectile origin once shouldered.

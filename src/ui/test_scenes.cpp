@@ -17,6 +17,16 @@ void App::sceneForTest(std::string_view scene) {
         settings.fpsCounter=true; settings.fpsCorner=1;
         settingsReturn=View::menu; show(View::settings); return;
     }
+    if (scene=="graphics-settings" || scene=="graphics-effects") {
+        settingsReturn=View::menu;
+        graphicsPage=scene=="graphics-effects"?1:0;
+        show(View::graphics); return;
+    }
+    if (scene=="graphics-low" || scene=="graphics-ultra") {
+        settings.graphics=graphicsPreset(scene=="graphics-low"?0:3);
+        r.setGraphics(settings.graphics);
+        launch(1); game.entry=0; return;
+    }
     if (scene=="fps-game") {
         settings.fpsCounter=true; settings.fpsCorner=3;
         launch(0); game.entry=0; return;

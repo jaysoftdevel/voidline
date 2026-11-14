@@ -33,7 +33,9 @@ void Renderer::drawSoldier(const EnemyView& v) {
     h.headSnap=e.headSnap; h.buckle=e.buckle*.3f;
     h.scarf=false; h.gripFromChest=true; h.farFree=false;
     // The far hand lets go of the rifle while the soldier is walking and hasn't seen the target.
-    h.relax=e.raise<.5f?1.f-e.raise*2.f:0.f;
+    const float shouldered=smooth(clamp(e.raise));
+    h.shoulder=shouldered;
+    h.relax=1.f-shouldered;
     if (!e.alive) {
         // Stagger, buckle, topple: the fall builds over half a second.
         h.fall=smooth(v.dead/.5f);
@@ -43,7 +45,7 @@ void Renderer::drawSoldier(const EnemyView& v) {
     const float lowAngle=v.facing>0?.7f:pi-.7f;
     const Vec chest{x,v.y-12.f};
     const float aimAngle=e.warning>0?e.aim:std::atan2(v.target.y-chest.y,v.target.x-chest.x);
-    h.aim=e.warning>0?ray(e.aim):normal(mix(ray(lowAngle),ray(aimAngle),smooth(e.raise)));
+    h.aim=normal(mix(ray(lowAngle),ray(aimAngle),shouldered));
     h.recoil=e.recoil;
     h.suit=e.hit>0?hex(0xffe9d0):mix(mix(hex(0x2a323d),accent,.16f),hex(0x14171c),v.burnt*.5f);
     h.shell=e.hit>0?hex(0xffffff):mix(mix(hex(0x56626f),accent,.28f),hex(0x14171c),v.burnt*.5f);

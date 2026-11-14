@@ -57,6 +57,7 @@ void Renderer::material(const Game& g) {
     gl.UseProgram(materialProgram);
     gl.Uniform1f(materialCamera,g.camera);
     gl.Uniform1i(materialSector,static_cast<int>(g.stage->biome));
+    gl.Uniform1i(materialDetail,graphics.materials);
     gl.BindVertexArray(vao); gl.BindBuffer(GL_ARRAY_BUFFER,buffer);
     gl.BufferData(GL_ARRAY_BUFFER,vertices.size()*sizeof(Vertex),vertices.data(),GL_STREAM_DRAW);
     gl.DrawArrays(GL_TRIANGLES,0,static_cast<GLsizei>(vertices.size()));

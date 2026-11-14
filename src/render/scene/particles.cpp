@@ -6,7 +6,7 @@ using namespace vl::scene;
 namespace vl {
 void Renderer::drawParticles(const Game& g) {
     const Color cold=hex(g.stage->cold),accent=hex(g.stage->accent);
-    for (int i=0;i<66;++i) {
+    for (int i=0;i<(graphics.particles==0?0:graphics.particles==1?18:graphics.particles==2?48:88);++i) {
         const float depth=hash(i+190);
         float x=std::fmod(hash(i*7+14)*1320+g.time*(6+depth*17)+offset.x*(.08f+depth*.13f),1320.f);
         if (x<0) x+=1320;
@@ -17,7 +17,11 @@ void Renderer::drawParticles(const Game& g) {
         if (i%4==0) halo(p,3+depth*4,tint.alpha(glow));
         rect({p.x,p.y,.6f+depth*1.9f,.7f+depth*1.6f},tint.energy(1.23f).alpha(glow));
     }
-    for (const auto& particle:g.particles) {
+    for (size_t k=0;k<g.particles.size();++k) {
+        // Preserve simulation and co-op packet state: only visual sampling changes.
+        if (graphics.particles==0 || (graphics.particles==1 && k%3!=0) ||
+            (graphics.particles==2 && k%4==0)) continue;
+        const auto& particle=g.particles[k];
         if (!visible(particle.p.x)) continue;
         const float life=particle.life/particle.maxLife;
         const Vec p=particle.p+offset;

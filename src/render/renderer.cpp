@@ -15,6 +15,7 @@ Renderer::Renderer(SDL_Window* win,std::filesystem::path art,bool softwareMode)
     materialProgram=program(shader::mesh,shader::material);
     materialCamera=uniform(materialProgram,"camera");
     materialSector=uniform(materialProgram,"sector");
+    materialDetail=uniform(materialProgram,"detail");
     lightProgram=program(shader::fullscreen,shader::light);
     waterProgram=program(shader::fullscreen,shader::water);
     atmosphereProgram=program(shader::fullscreen,shader::atmosphere);
@@ -98,7 +99,15 @@ Renderer::~Renderer() {
     gl.DeleteBuffers(1,&buffer); gl.DeleteVertexArrays(1,&vao);
 }
 
+void Renderer::setGraphics(const GraphicsQuality& value) {
+    graphics=value;
+    if (!graphics.dynamicResolution) {
+        resolution=1.f; slowFrames=fastFrames=0;
+    }
+}
+
 void Renderer::adapt(float frameMs) {
+    if (!graphics.dynamicResolution) return;
     smoothedMs=mix(smoothedMs,std::min(frameMs,60.f),.05f);
     // Step down quickly when frames miss a 50 fps budget and back up slowly once there is clear headroom.
     slowFrames=smoothedMs>20.5f?slowFrames+1:0;
