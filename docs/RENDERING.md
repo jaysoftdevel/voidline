@@ -13,11 +13,29 @@ Platform faces use world-space material noise for fine grain, paint wear, brushe
 
 The uploaded gait reference informed heel contact, toe-off and swing. The simulation advances the gait by horizontal travel. Each stance foot locks to platform coordinates, including moving lifts. The renderer blends pose snapshots and solves two-segment legs. Sprint increases stride and body lean, and crouch reduces the collision height as well as the rendered stance. Jumps use a short push-off, a tucked airborne pose, variable lift and a damped landing response.
 
+## Version 2.1 pipeline
+
+- **Formats:** HDR targets use `R11F_G11F_B10F`, which halves bandwidth against the earlier RGBA16F and loses no range that the scene needs. The tone-mapped result goes into one `RGBA8` target.
+- **Tone mapping:** [AgX](https://github.com/sobotka/AgX) display transform with the polynomial sigmoid approximation, the same family of transform that Blender 4 and Godot 4 adopted. A punch and saturation step follows.
+- **Anti-aliasing:** [FXAA 3.11](https://developer.download.nvidia.com/assets/gamedev/files/sdk/11/FXAA_WhitePaper.pdf) (Timothy Lottes) on the tone-mapped image, then film grain.
+- **Relief lighting:** The atmosphere pass reads the backplate as a height field and the light map's gradient as a light direction, so lit faces catch light and cavities stay dark. This brings a normal-mapped look to the painted plates without extra textures.
+- **Actor lighting:** Figures are drawn after lighting and tinted by the lights that reach them.
+- **Volumetric shafts:** Lamp cones are drawn before fog and bloom, so they pick up haze and glow.
+- **Soft clouds:** Smoke and dust use a generated fractal noise sprite.
+- **Adaptive resolution:** The world buffer follows frame time. It steps down quickly when frames exceed about 20 ms and back up slowly when there is headroom. The window and interface always render at native resolution.
+- **Cheaper state changes:** Uniform locations are cached and asset lookups avoid string allocation.
+
+Run `./run.sh --smoke-test --scene 4 --width 1920 --frames 600` to see an average frame-time breakdown.
+
 ## Figures and animation
 
-`src/figure.cpp` holds a shared side-view human rig used by the three operatives and the soldier enemies. It has a spine that follows the pelvis, a head that looks toward the aim, a neck, shoulders with pauldrons, two-bone arms and legs, hands and boots. Each operative has their own face, hair and headgear, and a distinct backpack. The torso carries plates, a belt, pouches, a cross strap and lamps, and the legs carry knee pads, greaves and boot soles.
+The shared side-view human rig lives in `src/render/figures/`: `rig.cpp` builds the skeleton, `legs.cpp`, `torso.cpp`, `head.cpp`, `headgear.cpp` and `arms.cpp` draw the parts and `humanoid.cpp` ties them together. The three operatives and the soldier enemies use it. Each operative has their own face, hair, headgear and backpack.
 
-Motion layers on top of the foot-locked gait. The body turns through a profile instead of snapping, breathes while idle, sinks and squashes on landing, recoils from each shot and flinches when hit. Arms follow the weapon grip. Soldiers carry their rifle low until a target is in range and then raise it. Defeated enemies tumble, bounce and settle before they fade. Drones bank and spin four-blade rotors, turrets track with a gimbal and kick back, and stalkers use a diagonal gait with a lashing tail and a crouch before a lunge.
+**Arms follow human anatomy.** An arm is a shoulder, an upper arm of 11.6 units and a forearm of 10.6 units joined by an elbow that only bends forward, like a real one. A free arm swings against the same-side leg: about 20 degrees at a walk and 40 to 45 at a run, further forward than back, and the elbow flexes more as the arm comes forward. The shoulder blade glides with the arm. A reaching arm solves the elbow from the hand position, keeps it below and behind the line from shoulder to hand and never stretches past its reach. The elbow pad sits on the outside of the bend and creases show on the inside as it folds. Hands are closed fists around a grip or relaxed open hands with curled fingers and a thumb. Operatives carry the rifle low while walking, with the support arm swinging freely, and raise it with both arms when aiming, firing or reloading.
+
+Motion layers on top of the foot-locked gait. The body turns through a profile, breathes while idle, squashes on landing, recoils from each shot and flinches when hit. Soldiers carry the rifle low until a target is in range.
+
+**Hit feedback and deaths.** Enemies store their wounds relative to their body, so holes follow them as they move, fall and tumble. Soldiers react by body part. Dying soldiers collapse in place (the rig gains `fall`, which bends the knees and spine and lets the arms go limp), the rifle is spawned as a separate particle and the body topples about its feet. Other types have their own death poses in `enemy_*.cpp`: rotors shear off drones, turret barrels are blown off, stalker legs curl in and guardians smolder and sink. The matching simulation code is in `src/game/death_*.cpp`.
 
 ## Stylized look
 

@@ -1,0 +1,44 @@
+#include "game/game.hpp"
+#include "game/detail.hpp"
+
+namespace vl {
+// Acceleration toward the wanted speed, then the world edges.
+void Game::runHorizontal(float dt,int direction,bool grounded) {
+    auto& p=player;
+    const float baseSpeed=character->speed*speedScale;
+    const bool reversing=direction && p.velocity.x*direction<0;
+    const float pace=clamp(std::abs(p.velocity.x)/baseSpeed);
+    if (grounded) {
+        p.sprinting=!p.crouched && held(Key::sprint) && direction;
+        p.sprintDirection=p.sprinting?direction:0;
+    }
+    if (p.crouched) p.sprinting=false;
+    const float speed=baseSpeed*(p.crouched?.40f:p.sprinting?1.28f:1.f);
+    const float acceleration=grounded
+        ? (reversing?3380.f:p.crouched && std::abs(p.velocity.x)>speed?3200.f:direction?mix(2700.f,1730.f,pace):3000.f)
+        : (direction?1320.f:105.f);
+    float targetSpeed=direction*speed;
+    if (!grounded && p.sprinting && direction!=p.sprintDirection) targetSpeed=direction*baseSpeed;
+    p.velocity.x=approach(p.velocity.x,targetSpeed,acceleration*dt);
+    const float edge=bossDead?stage->worldWidth-playerW:stage->exit.x-106;
+    const float nextX=p.box.x+p.velocity.x*dt;
+    p.box.x=clamp(nextX,12,edge);
+    if (p.box.x!=nextX) p.velocity.x=0;
+}
+
+// Stops the operative at the sides of solid platforms. Ledges stay one-way during jumps, and a grounded
+// operative needs clearance to walk beneath them.
+void Game::collideWalls(float oldX,bool grounded) {
+    auto& p=player;
+    for (const auto& surface:platforms) {
+        const auto& s=surface.box;
+        const bool lowCeiling=grounded && p.box.bottom()>=s.bottom()-.5f;
+        if ((!surface.ground && !lowCeiling) || p.box.bottom()<=s.y+.5f || p.box.y>=s.bottom()) continue;
+        if (oldX+playerW<=s.x && p.box.right()>s.x) {
+            p.box.x=s.x-playerW; p.velocity.x=0;
+        } else if (oldX>=s.right() && p.box.x<s.right()) {
+            p.box.x=s.right(); p.velocity.x=0;
+        }
+    }
+}
+} // namespace vl

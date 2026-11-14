@@ -1,0 +1,69 @@
+#include "render/renderer.hpp"
+#include "render/scene/scene_util.hpp"
+
+using namespace vl::scene;
+
+namespace vl {
+void Renderer::collectLights(const Game& g) {
+    lights.clear(); blockers.clear();
+    const Color cold=hex(g.stage->cold), accent=hex(g.stage->accent);
+    for (const auto& p:g.platforms) if (visible(p.box.x,p.box.w))
+        blockers.push_back({p.box.x+offset.x,p.box.y+offset.y,p.box.w,p.box.h});
+    for (const auto& e:g.enemies) {
+        if (!e.alive || !visible(e.box.x,e.box.w)) continue;
+        const auto b=e.box;
+        if (e.kind==EnemyKind::boss || e.kind==EnemyKind::turret)
+            blockers.push_back({b.x+offset.x+b.w*.18f,b.y+offset.y+b.h*.20f,b.w*.64f,b.h*.70f});
+    }
+    const auto& p=g.player.box;
+    blockers.push_back({p.x+offset.x+8,p.y+offset.y+5,16,p.h-13});
+    if (g.player.muzzle>0)
+        lights.push_back({g.muzzle()+offset+playerShift,178,4.8f*g.player.muzzle/.069f,hex(weapons[g.gun].color),ray(g.player.aim),-.1f,true});
+    for (const auto& e:g.enemies) if (e.alive && visible(e.box.x,e.box.w) && (e.kind==EnemyKind::boss || e.warning>0))
+        lights.push_back({e.box.center()+offset,110,e.warning>0?2.16f:1.35f,accent});
+    lights.push_back({{p.center().x+offset.x,p.y+offset.y+std::min(p.h*.31f,16.f)},128,1.05f,hex(g.character->color),ray(g.player.aim),.45f,false});
+    if (visible(g.stage->beacon.x)) lights.push_back({g.stage->beacon+offset-Vec{0,47},102,1.28f,g.checkpoint?hex(0x96ffc3):cold});
+    if (visible(g.stage->exit.x)) lights.push_back({g.stage->exit+offset-Vec{0,86},165,1.65f,g.bossDead?hex(0x8effc8):hex(0xff7250)});
+    for (const auto& vent:g.stage->vents) if (visible(vent.x) && g.ventState(vent.phase)>0)
+        lights.push_back({Vec{vent.x,vent.y-7}+offset,98,1.78f,accent,{0,-1},.12f});
+    for (int i=0;i<17;i+=2) {
+        const float x=140+i*273+hash(i+g.index*32)*90;
+        if (!visible(x)) continue;
+        const float y=253+hash(i+54)*126;
+        lights.push_back({Vec{x+11,y+8}+offset,215,1.86f+.17f*std::sin(g.time*2+i),accent,{.12f,1},.16f});
+    }
+    for (int i=0;i<9;++i) {
+        const float x=167+511*i;
+        if (!visible(x)) continue;
+        lights.push_back({Vec{x,143+hash(i+43)*102}+offset,301,1.49f,cold,{-.19f,1},.27f});
+    }
+    for (const auto& s:g.shots) if ((s.longShot || s.blast>0) && visible(s.p.x)) lights.push_back({s.p+offset,s.blast>0?96.f:58.f,s.blast>0?1.5f:.88f,s.color,{0,1},-1,false});
+    for (const auto& a:g.ambient) {
+        const float pulse=a.pulse();
+        if (pulse<.05f) continue;
+        const Vec at{a.p.x+offset.x*a.depth,a.p.y+offset.y*a.depth};
+        if (at.x<-300 || at.x>width+300) continue;
+        lights.push_back({at,a.kind==AmbientKind::lightning?520.f:380.f,1.25f*std::min(1.f,pulse),g.skyColor,{0,1},-1,false});
+    }
+    for (const auto& s:g.hostile) if (visible(s.p.x)) lights.push_back({s.p+offset,36,.65f,s.color,{0,1},-1,false});
+}
+
+// Sums the light that reaches a point, ignoring occlusion, so figures pick up the color of nearby lamps and flashes.
+Color Renderer::litBy(Vec p,const Game& g) const {
+    const Color cold=hex(g.stage->cold);
+    Color result{.58f+cold.r*.10f,.60f+cold.g*.10f,.66f+cold.b*.10f,1};
+    for (const auto& l:lights) {
+        if (l.radius<50) continue;
+        const Vec d=p-l.p;
+        const float r=length(d)/l.radius;
+        if (r>=1) continue;
+        float spot=1;
+        if (l.cone>=0) spot=smooth((dot(normal(d),normal(l.direction))-l.cone)/.29f);
+        const float falloff=(1-r*r)*(1-r*r)/(1+5.8f*r*r);
+        const float k=falloff*l.energy*spot*.42f;
+        result.r+=l.tint.r*k; result.g+=l.tint.g*k; result.b+=l.tint.b*k;
+    }
+    result.r=std::min(result.r,1.55f); result.g=std::min(result.g,1.55f); result.b=std::min(result.b,1.55f);
+    return result;
+}
+} // namespace vl

@@ -1,0 +1,64 @@
+#include "render/figures/humanoid.hpp"
+
+namespace vl {
+
+// Both legs. The far leg is drawn first and darker. Each leg is a boot, a shin with a greave, a thigh with a
+// plate, and a knee pad over the joint. The knee always bends forward, like a human knee.
+void Renderer::drawLegs(const Humanoid& h,const Rig& g) {
+    using Look=Humanoid::Look;
+    const Color ink=h.ink;
+    const int dir=g.dir;
+    auto leg=[&](int i,bool far) {
+        const Vec contact=h.heels[i];
+        const Vec toeRay=ray(h.footAngle[i]);
+        const Vec forward{toeRay.x*dir,-toeRay.y};
+        const float lift=h.grounded?std::max(0.f,std::max(contact.y,(contact+forward*8).y)-h.ground.y):0.f;
+        const Vec heel=contact-Vec{0,2.4f+lift};
+        const Vec toe=contact+forward*8-Vec{0,2.4f+lift};
+        const Vec ankle=heel-Vec{0,2.1f};
+        const Vec socket=g.hip+Vec{i==0?-2.f:2.f,i==0?-1.f:.5f};
+        const Vec knee=solveKnee(socket,ankle,15.6f,14.6f,dir);
+        const Color cloth=far?h.shadow:h.suit;
+        const Color plate=far?h.shadow.energy(1.4f):h.shell;
+        const Color boot=far?h.leather.energy(.6f):h.leather;
+        // Boot: outline, upper, rubber sole with tread, toe cap and heel block.
+        line(heel-Vec{2.7f*dir,0},toe+Vec{1.4f*dir,0},far?5.2f:6.2f,ink);
+        line(heel-Vec{2.1f*dir,.5f},toe,far?3.4f:4.4f,boot);
+        line(heel-Vec{2.4f*dir,2.f},toe+Vec{.9f*dir,2.f},1.5f,hex(far?0x14171d:0x262b34));
+        if (!far) {
+            for (int t=0;t<3;++t) {
+                const Vec p=mix(heel,toe,.2f+t*.3f)+Vec{0,2.4f};
+                line(p,p+Vec{0,.9f},.8f,ink);
+            }
+            line(heel-Vec{1.6f*dir,-.6f},toe-Vec{0,.9f},.8f,plate.alpha(.7f));
+        }
+        ellipse(toe-Vec{.8f*dir,.1f},{far?2.3f:2.8f,far?2.2f:2.6f},plate.energy(far?.8f:1.f));
+        polygon(heel-Vec{2.8f*dir,1.f},heel-Vec{.4f*dir,1.f},heel-Vec{.4f*dir,-2.6f},heel-Vec{2.8f*dir,-2.6f},plate.energy(.75f));
+        // Thigh, shin, greave and the plate over the thigh.
+        armor(socket,knee,far?3.3f:4.5f,far?2.4f:3.3f,cloth,h.edge,!far);
+        armor(knee,ankle,far?2.6f:3.4f,far?1.9f:2.5f,cloth.energy(.92f),h.edge,!far);
+        armor(mix(knee,ankle,.2f),mix(knee,ankle,.86f),far?1.8f:2.1f,far?1.5f:1.7f,plate,h.edge,!far);
+        ellipse(ankle,{far?2.6f:3.3f,2.2f},cloth.energy(.8f));
+        if (!far) {
+            armor(mix(socket,knee,.28f),mix(socket,knee,.66f),2.5f,2.4f,h.look==Look::soldier?plate:h.trim.energy(.72f),h.edge,true);
+            const Vec strap=mix(socket,knee,.5f);
+            line(strap-Vec{3.6f,0},strap+Vec{3.6f,0},1.1f,ink.alpha(.8f));
+            ellipse(mix(socket,knee,.46f),{.8f,.8f},h.edge);
+            // Laces across the instep.
+            for (int t=0;t<2;++t) {
+                const Vec p=mix(ankle,toe,.42f+t*.22f)-Vec{0,1.2f};
+                line(p-Vec{1.1f,0},p+Vec{1.1f,0},.8f,h.trim.alpha(.9f));
+            }
+        }
+        // Knee pad.
+        ellipse(knee,{far?2.7f:3.5f,far?2.9f:3.8f},ink);
+        ellipse(knee,{far?2.0f:2.7f,far?2.2f:3.0f},plate.energy(far?.9f:1.1f));
+        if (!far) {
+            line(knee+Vec{-2.2f,-1.2f},knee+Vec{2.f,-1.6f},.9f,h.edge.alpha(.85f));
+            line(knee+Vec{-1.9f,.9f},knee+Vec{2.1f,1.1f},1.2f,h.trim.energy(1.15f));
+        }
+    };
+    const int rear=h.heels[0].x*dir<h.heels[1].x*dir?0:1;
+    leg(rear,true); leg(1-rear,false);
+}
+} // namespace vl
