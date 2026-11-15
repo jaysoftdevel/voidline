@@ -1,4 +1,10 @@
 #include "engine/engine.hpp"
+#include "content/runtime_model_catalog.hpp"
+#include "content/skeleton.hpp"
+#include "content/enemy_motion.hpp"
+#include "content/characters.hpp"
+#include "platform/paths.hpp"
+#include <iomanip>
 #include <iostream>
 #ifdef _WIN32
 #include "platform/paths.hpp"
@@ -6,6 +12,24 @@
 
 namespace {
 int run(int argc,char** argv) try {
+    // Verify the exact models the executable will use, without initializing graphics.
+    if(argc==2 && std::string_view(argv[1])=="--model-report") {
+        const auto root=vl::executableDirectory();
+        const auto assets=root/"assets";
+        std::cout<<"Executable directory: "<<root.string()<<'\n';
+        std::cout<<"Runtime archive: "<<(assets/"game.vpak").string()<<'\n';
+        vl::loadBakedCharacterModels(assets);
+        vl::loadBakedEnemyModels(assets);
+        for(size_t id=0;id<vl::characters.size();++id) {
+            const auto& model=vl::characterSkeletons[id];
+            std::cout<<"Character "<<id<<" "<<vl::characters[id].name
+                     <<": bodyHeight="<<model.bodyHeight
+                     <<", bodyWidth="<<model.bodyWidth
+                     <<", base.head=("<<model.offsets[0][3].x<<','<<model.offsets[0][3].y<<')'
+                     <<", run.hand=("<<model.offsets[2][8].x<<','<<model.offsets[2][8].y<<')'<<'\n';
+        }
+        return 0;
+    }
     const auto options=vl::parseOptions(argc,argv);
 #ifdef _WIN32
     if (options.report) {

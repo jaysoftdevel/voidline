@@ -1,5 +1,6 @@
 #include "content/model_io.hpp"
 #include "content/skeleton.hpp"
+#include "content/enemy_motion.hpp"
 #include <json-c/json.h>
 #include <bit>
 #include <cmath>
@@ -258,6 +259,13 @@ uint32_t modelFingerprint() {
             characterSkeletons[i].recoil,characterSkeletons[i].idleBreath})f(n);
     }
     for(const auto& e:specs){f(e.w);f(e.h);f(e.speed);f(e.reach);f(e.delay);push(uint32_t(e.hp));push(uint32_t(e.damage));push(uint32_t(e.score));}
+    for(const auto& profile:enemySkeletons){
+        for(const auto& pose:profile.offsets)for(Vec p:pose){f(p.x);f(p.y);}
+        for(const auto& pose:profile.depths)for(float z:pose)f(z);
+        for(float n:{profile.stride,profile.armSwing,profile.aimRaise,profile.bodyHeight,profile.bodyWidth,
+            profile.headScale,profile.armLength,profile.legLength,profile.weaponSeat,profile.walkCycle,
+            profile.acceleration,profile.braking,profile.recoil,profile.idleBreath})f(n);
+    }
     return h;
 }
 } // namespace vl

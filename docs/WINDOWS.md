@@ -107,3 +107,7 @@ Character model update v2.10.6: clients must use matching VLRM profiles packed i
 ### 2.10.7 model format compatibility
 
 VOIDLINE Model Studio v0.0.9 is Linux-only, but exports `.vlrm` v2 models that the shared Windows/Linux game loader can decode. Older `.vlrm` v1 files remain readable. Rebuild the game to pack the exported file into `game.vpak`. The current gameplay render remains 2D; authored Z offsets are preserved for future 3D rigs. A Windows compile is not verified in this environment.
+
+### v2.10.9 edited rig diagnostic
+
+Use `voidline.exe --model-report` in the Windows runtime distribution folder to see which `assets/game.vpak` was actually loaded and character rig values. On Linux Model Studio v0.0.12 publishes edited VLRM/VLEM assets to the **source** assets folder as well as a selected runtime archive. Rebuild from that source to preserve changes. The networking protocol is unchanged (VL12).

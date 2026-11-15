@@ -1,4 +1,20 @@
-# VOIDLINE 2.10.7
+# VOIDLINE v2.10.9 — Baked model integration and verification fix
+
+The game now exposes `--model-report` to verify the exact `game.vpak` loaded by the launched executable and all six character rigs. Model Studio v0.0.12 fixes publishing to both the installed archive and the source asset files, so rebuilding no longer silently restores old models.
+
+Character Run-pose vectors are now blended during regular walking as well as sprinting. Core game version updated, but the multiplayer protocol remains VL12 (peers still need matching asset models).
+
+For Kade Vale (character ID 2):
+
+```bash
+./build/voidline/voidline --model-report
+```
+
+Look for `Character 2 Kade Vale` and compare the `bodyHeight`, `base.head`, and `run.hand` values to the editor's publication report. The output also states the exact archive path. If values differ, you are running a different build/runtime folder.
+
+---
+
+# VOIDLINE 2.10.9
 
 VOIDLINE is a native C++ 2D shooter for Linux and Windows 11 with 20 sectors, six operatives, difficulty levels and an armory. Destroy the guardian in each sector and reach extraction to turn mission score into upgrade points and see the next part of the Vega-9 rescue story.
 
@@ -251,3 +267,17 @@ Edited acceleration, braking, gait cadence, stride and aim speed affect gameplay
 ## VLRM v2 compatibility (2.10.7)
 
 The Linux-only Model Studio 0.0.9 writes version-4 character JSON with XYZ joint offsets and a baked VLRM v2. The game accepts both v1 and v2 packs, caches the model once on startup, and uses the existing 2D procedural animation for active gameplay. Edited Z coordinates are retained for future 3D visual rendering but do not currently reposition sprites in-game. As before, manually copy the exported `.vlrm` to `assets/models/characters.vlrm` in the game source and rebuild. Rebuild on both platforms when changing shared multiplayer models.
+
+## Enemy motion model integration (v2.10.8)
+
+Model Studio 0.0.11 exports a checked binary `models/enemies.vlem` in `game.vpak`.
+VOIDLINE loads the ten rigs once at launch; humanoid enemy skeletons use edited
+Base/Aim/Run joints and proportions in the procedural renderer. Other enemy
+archetypes use movement cadence/stride and shared animation timing.
+Enemy acceleration, braking and weapon raise rates also use the baked parameters.
+The multiplayer model fingerprint includes all enemy motion settings; both peers
+should use the same 2.10.8 build and game.vpak. Missing `enemies.vlem` keeps
+existing defaults, while a corrupt binary causes a clear startup error.
+
+The game's display is still 2D; Z/depth vectors remain preserved in models
+but do not produce full 3D geometry inside gameplay.

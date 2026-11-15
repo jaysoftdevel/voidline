@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(voidline VERSION 2.10.7 LANGUAGES CXX)
+project(voidline VERSION 2.10.9 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

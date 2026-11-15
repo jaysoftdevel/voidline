@@ -1,6 +1,7 @@
 #include "game/game.hpp"
 #include "game/detail.hpp"
 #include "game/enemy_ground.hpp"
+#include "content/enemy_motion.hpp"
 
 namespace vl {
 void Game::moveEnemies(float dt) {
@@ -14,6 +15,7 @@ void Game::moveEnemies(float dt) {
     const auto& pattern=patterns[static_cast<int>(stage->biome)];
     for (auto& e:enemies) {
         if (!e.alive) continue;
+        const auto& authored=enemySkeletons[static_cast<size_t>(e.kind)];
         const float pace=difficulty->pace*(1+later*.023f)*(e.elite?1.15f:1.f);
         e.hit=std::max(0.f,e.hit-dt);
         updateEnemyFeedback(e,dt);
@@ -40,7 +42,7 @@ void Game::moveEnemies(float dt) {
         const bool boss=e.kind==EnemyKind::boss;
         // The weapon comes up when the target is in range and drops back after a moment.
         const bool canAim=(inRange && !blocked(origin,target)) || e.warning>0;
-        e.raise=approach(e.raise,canAim?1.f:0.f,dt*(canAim?7.2f:3.0f));
+        e.raise=approach(e.raise,canAim?1.f:0.f,dt*(canAim?7.2f*authored.aimRaise:3.0f*authored.braking));
         if (boss && std::abs(d.x)<555 && !bossActive) {
             bossActive=true; message({origin.x,e.box.y-18},stage->boss,hex(stage->accent),1.7f);
             shake=8; audio.event("launch",.76f);
@@ -83,7 +85,8 @@ void Game::moveEnemies(float dt) {
             else if (!inRange && !boss) targetSpeed=e.facing*e.speed*.60f*pace;
             if (heavy) targetSpeed*=.65f;
             if (e.flinch>0) targetSpeed*=.3f;
-            e.vx=approach(e.vx,targetSpeed,dt*(stalker || scavenger?670.f:420.f));
+            e.vx=approach(e.vx,targetSpeed,dt*(stalker || scavenger?670.f:420.f)*
+                            (targetSpeed==0?authored.braking:authored.acceleration));
             const float desired=clamp(e.box.x+e.vx*dt,e.origin.x-e.patrol,e.origin.x+e.patrol);
             const float footing=groundedEnemyX(*stage,e,oldX,desired);
             e.box.x=footing;

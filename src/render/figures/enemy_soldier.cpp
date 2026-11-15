@@ -1,5 +1,6 @@
 #include "render/figures/enemy_view.hpp"
 #include "render/figures/humanoid.hpp"
+#include "content/enemy_motion.hpp"
 
 namespace vl {
 // Soldier built on the shared human rig. The rifle is carried low until a target is in range, and then raised.
@@ -10,10 +11,11 @@ void Renderer::drawSoldier(const EnemyView& v) {
     const Color black=v.black,hull=v.hull,rim=v.rim,plate=v.plate,alert=v.alert,accent=v.accent;
     Humanoid h;
     h.look=Humanoid::Look::soldier;
+    h.model=&enemySkeletons[static_cast<size_t>(e.kind)];
     const Vec ground=v.ground;
     const float x=v.x;
     h.ground=ground; h.facing=v.facing; h.stride=v.facing; h.turn=v.turn;
-    const float cycle=std::fmod(e.distance/56,1.f);
+    const float cycle=std::fmod(e.distance/56*h.model->walkCycle,1.f);
     const float pace=e.alive?v.pace:0.f;
     for (int i=0;i<2;++i) {
         const float c=std::fmod(cycle+.5f*i,1.f);
@@ -46,7 +48,7 @@ void Renderer::drawSoldier(const EnemyView& v) {
     const Vec chest{x,v.y-12.f};
     const float aimAngle=e.warning>0?e.aim:std::atan2(v.target.y-chest.y,v.target.x-chest.x);
     h.aim=normal(mix(ray(lowAngle),ray(aimAngle),shouldered));
-    h.recoil=e.recoil;
+    h.recoil=e.recoil*h.model->recoil;
     h.suit=e.hit>0?hex(0xffe9d0):mix(mix(hex(0x2a323d),accent,.16f),hex(0x14171c),v.burnt*.5f);
     h.shell=e.hit>0?hex(0xffffff):mix(mix(hex(0x56626f),accent,.28f),hex(0x14171c),v.burnt*.5f);
     h.trim=accent; h.edge=mix(hex(0xc4d0d6),accent,.3f); h.shadow=hex(0x1a2029);

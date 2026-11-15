@@ -45,7 +45,7 @@ Renderer::ArmPose Renderer::freeArm(const Humanoid& h,const Rig& g,Vec s,bool ne
     if(h.model){
         const auto& profile=*h.model;
         const auto shift=[&](SkeletonJoint joint){
-            const Vec d=skeletonOffset(profile,joint,h.shoulder*profile.aimRaise,h.run);
+            const Vec d=skeletonOffset(profile,joint,h.shoulder*profile.aimRaise,std::max(h.run,h.weight*.84f));
             return Vec{d.x*facing,d.y};
         };
         arm.elbow+=shift(near?SkeletonJoint::nearElbow:SkeletonJoint::farElbow);
@@ -76,7 +76,7 @@ Renderer::ArmPose Renderer::gripArm(const Humanoid& h,Vec s,Vec hand,bool near) 
     if(h.model){
         const auto& profile=*h.model;
         const auto shift=[&](SkeletonJoint joint){
-            const Vec d=skeletonOffset(profile,joint,h.shoulder*profile.aimRaise,h.run);
+            const Vec d=skeletonOffset(profile,joint,h.shoulder*profile.aimRaise,std::max(h.run,h.weight*.84f));
             return Vec{d.x*facing,d.y};
         };
         arm.elbow+=shift(near?SkeletonJoint::nearElbow:SkeletonJoint::farElbow);
@@ -107,8 +107,8 @@ void Renderer::drawArms(const Humanoid& h,const Rig& g) {
     if(h.model){
         const auto& profile=*h.model;
         const float faced=h.turn<0?-1.f:1.f;
-        const Vec n=skeletonOffset(profile,SkeletonJoint::nearHand,h.shoulder*profile.aimRaise,h.run);
-        const Vec f=skeletonOffset(profile,SkeletonJoint::farHand,h.shoulder*profile.aimRaise,h.run);
+        const Vec n=skeletonOffset(profile,SkeletonJoint::nearHand,h.shoulder*profile.aimRaise,std::max(h.run,h.weight*.84f));
+        const Vec f=skeletonOffset(profile,SkeletonJoint::farHand,h.shoulder*profile.aimRaise,std::max(h.run,h.weight*.84f));
         nearHand+=Vec{n.x*faced,n.y};farHand+=Vec{f.x*faced,f.y};
     }
     // A collapsed figure drops the weapon and both arms go free.

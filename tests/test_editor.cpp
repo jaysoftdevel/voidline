@@ -3,6 +3,8 @@
 #include "content/model_io.hpp"
 #include "content/skeleton.hpp"
 #include "content/runtime_model.hpp"
+#include "content/enemy_motion.hpp"
+#include "content/enemy_runtime_model.hpp"
 #include "game/stairs.hpp"
 #include "game/enemy_ground.hpp"
 #include <filesystem>
@@ -76,6 +78,22 @@ void runEditorTests() {
     characterSkeletons[2].bodyHeight=1.5f;
     CHECK(modelJoint(characterSkeletons[2],SkeletonJoint::head).y<originalJoint.y);
     characterSkeletons=rigsBefore;
+    CHECK(modelFingerprint()==originalHash);
+    // Ten baked enemy motion rigs must round-trip and affect the multiplayer hash.
+    const auto enemyBefore=enemySkeletons;
+    enemySkeletons[7].offsets[2][8]={5.f,-2.f};
+    enemySkeletons[7].depths[1][8]=6.f;
+    enemySkeletons[7].acceleration=1.3f;
+    CHECK(modelFingerprint()!=originalHash);
+    const auto enemyData=enemy_runtime_model::encode(enemySkeletons);
+    std::array<SkeletonProfile,10> decodedEnemy{};
+    CHECK(enemy_runtime_model::decode(enemyData,decodedEnemy,&error));
+    CHECK(decodedEnemy[7].offsets[2][8].x==5.f);
+    CHECK(decodedEnemy[7].depths[1][8]==6.f);
+    CHECK(decodedEnemy[7].acceleration==1.3f);
+    auto damagedEnemy=enemyData;damagedEnemy.back()^=0x02;
+    CHECK(!enemy_runtime_model::decode(damagedEnemy,decodedEnemy,&error));
+    enemySkeletons=enemyBefore;
     CHECK(modelFingerprint()==originalHash);
     // Reject malformed geometry and invalid model tuning, not just bad JSON.
     Stage level=stages[0];

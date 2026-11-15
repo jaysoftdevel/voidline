@@ -1,4 +1,5 @@
 #include "render/figures/enemy_view.hpp"
+#include "content/enemy_motion.hpp"
 
 namespace vl {
 // Draws one enemy or one corpse. The look of each type is in enemy_*.cpp. This file builds the shared view and
@@ -12,8 +13,9 @@ void Renderer::drawEnemy(const Enemy& e,Color accent,Biome biome,float time,Vec 
     if (e.kind==EnemyKind::interceptor) accent=hex(0xc9a0ff);
     if (e.kind==EnemyKind::juggernaut) accent=hex(0xff775f);
     v.accent=accent;
-    v.biome=biome; v.facing=e.facing; v.time=time; v.turn=e.turn; v.target=target;
-    v.pace=clamp(std::abs(e.vx)/96);
+    const auto& authored=enemySkeletons[static_cast<size_t>(e.kind)];
+    v.biome=biome; v.facing=e.facing; v.time=time*authored.walkCycle; v.turn=e.turn; v.target=target;
+    v.pace=clamp(std::abs(e.vx)/96)*authored.stride;
     v.breath=std::sin(time*2.1f+e.phase);
     v.dead=e.alive?0.f:e.deathAge;
     v.burnt=e.alive?0.f:smooth(v.dead/.7f);

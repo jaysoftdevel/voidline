@@ -55,6 +55,7 @@ Options parseOptions(int argc,char** argv) {
                 "Move: A/D or arrows. Jump (twice to flip): Space, W, Up or K. Sprint: Shift. Crouch: C, S, Down or Ctrl.\n"
                 "Fire: mouse, F or J. Bullet time: Q, X or right mouse. Reload: R. Weapons: 1-7, V or mouse wheel. Interact with levers: E (gamepad D-pad up).\n"
                 "Pause: Esc or P. Fullscreen: F11. A gamepad is supported when connected.\n"
+                "Runtime model verification: --model-report\n"
                 "Diagnostics: --smoke-test [--frames N] [--width PIXELS] [--scene 1..20|splash|enemy-roster|operative0..5|map|summary|multiplayer-join|multiplayer-roster|cooperative-menu|cooperative-insertion|cooperative-gate|prologue-N|menu|create|armory|intro|cinematic-arrival|cinematic-close|cinematic-detail|cinematic-recover|stand[0-2]|gallery[0-2]|walk|flip|slow] [--screenshot PATH.ppm]\n";
             std::exit(0);
         } else if (arg=="--version") {
