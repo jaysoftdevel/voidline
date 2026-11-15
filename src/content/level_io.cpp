@@ -159,7 +159,7 @@ bool readLevel(const std::filesystem::path& file,const Stage& base,Stage& result
     if(auto* outlines=field(root.get(),"structureVertices")){
         if(!json_object_is_type(outlines,json_type_object) || json_object_object_length(outlines)>maximumObjects)
             return fail(error,"Invalid structure outline container");
-        json_object_object_foreach(outlines,label,points) {
+        json_object_object_foreach(outlines,label,polygonVertices) {
             const std::string key(label);
             const size_t separator=key.rfind(':');
             if(separator==std::string::npos)return fail(error,"Invalid polygon structure identifier");
@@ -175,13 +175,13 @@ bool readLevel(const std::filesystem::path& file,const Stage& base,Stage& result
             try{index=std::stoi(number);}catch(...){return fail(error,"Invalid structure index");}
             const size_t bound=layer==0?edit.ground.size():layer==1?edit.ledges.size():
                     layer==2?edit.cover.size():edit.relays.size();
-            if(index<0 || static_cast<size_t>(index)>=bound || !json_object_is_type(points,json_type_array) ||
-                json_object_array_length(points)<3 || json_object_array_length(points)>32)
+            if(index<0 || static_cast<size_t>(index)>=bound || !json_object_is_type(polygonVertices,json_type_array) ||
+                json_object_array_length(polygonVertices)<3 || json_object_array_length(polygonVertices)>32)
                 return fail(error,"Invalid polygon vertex count or reference");
             StructurePolygon polygon{};polygon.layer=layer;polygon.index=index;
-            for(size_t i=0;i<json_object_array_length(points);++i){
+            for(size_t i=0;i<json_object_array_length(polygonVertices);++i){
                 Vec vertex{};
-                if(!parseVec(json_object_array_get_idx(points,i),vertex))
+                if(!parseVec(json_object_array_get_idx(polygonVertices,i),vertex))
                     return fail(error,"Invalid polygon vertex coordinate");
                 polygon.corners.push_back(vertex);
             }

@@ -2,6 +2,8 @@
 #include "game/detail.hpp"
 #include "support.hpp"
 #include "services/storage.hpp"
+#include "content/level_io.hpp"
+#include "platform/paths.hpp"
 #include <filesystem>
 #include <chrono>
 
@@ -169,6 +171,35 @@ void stageData() {
     }
 }
 
+// Verify custom levels still load in the game while built-in progression tests
+// remain independent of published levels in the actual game runtime folder.
+void authoredLevelOverride() {
+    const auto file=levelFile(executableDirectory()/"levels",0,false);
+    // This is the isolated test runner; never overwrite a user's real level.
+    if (std::filesystem::exists(file)) {
+        CHECK(!"Test runner directory contains a pre-existing level override");
+        return;
+    }
+    Stage edited=stages[0];
+    edited.worldWidth+=16.f;
+    std::string error;
+    if (!writeLevel(file,edited,0,false,&error)) {
+        std::cerr<<"Could not write isolated test level: "<<error<<'\n';
+        CHECK(false);
+        return;
+    }
+    Silent audio;
+    Game game(audio);
+    game.start(0,fullSave());
+    CHECK(game.stage!=&stages[0]);
+    CHECK(game.stage->worldWidth==edited.worldWidth);
+    std::error_code ec;
+    std::filesystem::remove(file,ec);
+    CHECK(!ec);
+    game.start(0,fullSave());
+    CHECK(game.stage==&stages[0]);
+}
+
 void checkpointRestore() {
     Silent audio;
     Game game(audio);
@@ -204,4 +235,5 @@ void runProgressionTests() {
     rosterAndCharacters();
     stageData();
     checkpointRestore();
+    authoredLevelOverride();
 }

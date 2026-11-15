@@ -133,7 +133,9 @@ int main() {
         assert(art::decode(file,decoded,error));
         assert(decoded.width==4&&decoded.height==4&&decoded.rgba==pixels.rgba);
     }
-    // The installed game archive is updated only by an explicit workspace export.
+    // Packed games must not become a persistent editor workspace. Explicit
+    // archive tooling remains available, but opening it may never resurrect
+    // cached authoring files.
     const auto installed=folder/"installed game";
     const auto working=folder/"original assets";
     const auto pack=installed/"assets"/"game.vpak";
@@ -141,28 +143,22 @@ int main() {
     int packed=0;
     assert(art::repack(working,pack,packed,error) && packed==1);
     assert(fs::is_regular_file(pack));
-    const auto sidecar=folder/"workspace cache";
+    const auto sidecar=folder/"obsolete editor cache";
+    fs::create_directories(sidecar/"models");
+    {std::ofstream stale(sidecar/"models"/"movement-descriptions.json");stale<<"STALENESS";}
     setenv("VOIDLINE_STUDIO_WORKSPACES",sidecar.c_str(),1);
-    auto imported=workspace::prepare(installed);
-    assert(imported.ok && !imported.existing && imported.count==1);
-    auto reopened=workspace::prepare(installed);
-    assert(reopened.ok && reopened.existing && reopened.project==imported.project);
-    art::Raster revised=pixels;revised.rgba[1]=88;
-    assert(art::encode(imported.project/"assets"/"test.png",revised,error));
-    packed=0;
-    assert(workspace::updatePak(installed,imported.project,packed,error) && packed==1);
+    assert(!workspace::prepare(installed).ok);
+    assert(!workspace::validGame(installed));
+    const auto authoring=folder/"explicit archive tools";
     int validated=0;
+    assert(art::unpack(pack,authoring/"assets",validated,error) && validated==1);
+    art::Raster revised=pixels;revised.rgba[1]=88;
+    assert(art::encode(authoring/"assets"/"test.png",revised,error));
+    assert(art::repack(authoring/"assets",pack,packed,error) && packed==1);
     const auto extracted=folder/"unpacked verification";
     assert(art::unpack(pack,extracted,validated,error) && validated==1);
     art::Raster actual{};
-    assert(art::decode(extracted/"test.png",actual,error));
-    assert(actual.rgba==revised.rgba);
-    int backups=0;
-    for(const auto& item:fs::directory_iterator(pack.parent_path()))
-        if(item.path().filename().string().find("game.vpak.backup-")==0)++backups;
-    assert(backups==1);
-    // Reject a workspace that's not associated with the target installation.
-    assert(!workspace::updatePak(folder/"unrelated game",imported.project,packed,error));
+    assert(art::decode(extracted/"test.png",actual,error) && actual.rgba==revised.rgba);
     // Regression for the real editor -> PAK -> CMake-rebuild workflow: the
     // source asset tree must receive the edited binary as well as the runtime.
     const auto source=folder/"source game";
@@ -171,16 +167,22 @@ int main() {
      file<<"cmake_minimum_required(VERSION 3.16)\nproject(voidline VERSION 2.10.9 LANGUAGES CXX)\n";}
     {std::ofstream file(source/"scripts"/"pack-assets.py");file<<"# fake pack command\n";}
     fs::create_directories(source/"assets");
+    fs::create_directories(source/"levels");
+    for(int id=0;id<int(characters.size());++id)
+        assert(saveCharacterModelAt(characterModelFile(source/"models",id),id,&error));
+    for(int id=0;id<int(specs.size());++id)
+        assert(saveEnemyModelAt(enemyModelFile(source/"models",id),id,&error));
+    {std::ofstream movement(source/"models"/"movement-descriptions.json");movement<<"{\"movements\":[]}";}
     assert(workspace::sourceFor(source/"build"/"dist"/"VOIDLINE")==source);
     int modified=0;
-    assert(workspace::publishSourceAssets(imported.project,source,modified,error));
+    assert(workspace::publishSourceAssets(authoring,source,modified,error));
     assert(modified>=1);
     assert(fs::is_regular_file(source/"assets"/"test.png"));
-    assert(fs::file_size(source/"assets"/"test.png")==fs::file_size(imported.project/"assets"/"test.png"));
+    assert(fs::file_size(source/"assets"/"test.png")==fs::file_size(authoring/"assets"/"test.png"));
     art::Raster again=pixels;again.rgba[1]=72;
-    assert(art::encode(imported.project/"assets"/"test.png",again,error));
+    assert(art::encode(authoring/"assets"/"test.png",again,error));
     modified=0;
-    assert(workspace::publishSourceAssets(imported.project,source,modified,error));
+    assert(workspace::publishSourceAssets(authoring,source,modified,error));
     assert(modified==1);
     assert(art::decode(source/"assets"/"test.png",actual,error) && actual.rgba==again.rgba);
     assert(fs::is_directory(source/"update-backups"));
@@ -189,27 +191,35 @@ int main() {
     assert(art::repack(source/"assets",source/"rebuild"/"game.vpak",packed,error));
     assert(art::unpack(source/"rebuild"/"game.vpak",extracted,validated,error));
     assert(art::decode(extracted/"test.png",actual,error) && actual.rgba==again.rgba);
-    // Source checkouts without game.vpak are directly authorable. The editor
-    // automatically detects assets/, saves a private cache, and never overwrites
-    // edits on reopen. Runtime folders still resolve their actual PAKs.
+    // Editor source workspaces are DIRECT, including when stale cache folders
+    // exist or a game.vpak is built inside the source checkout.
     assert(workspace::validGame(source));
     const auto sourceResolved=workspace::resolve(source);
     assert(sourceResolved.valid && sourceResolved.fromSource && sourceResolved.pack.empty());
     assert(workspace::resolve(source/"build"/"voidline").fromSource);
     auto sourceWorkspace=workspace::prepare(source);
-    assert(sourceWorkspace.ok && sourceWorkspace.fromSource && sourceWorkspace.count==1);
+    assert(sourceWorkspace.ok && sourceWorkspace.fromSource && sourceWorkspace.project==source);
+    assert(workspace::projectFor(source)==source);
+    assert(!fs::exists(sidecar/".workspace-ready"));
     auto sameSource=workspace::prepare(source);
-    assert(sameSource.ok && sameSource.existing && sameSource.project==sourceWorkspace.project);
+    assert(sameSource.ok && sameSource.existing && sameSource.project==source);
+    assert(fs::is_regular_file(sourceWorkspace.project/"models"/"characters"/"0.vlcharacter.json"));
+    // Refresh/reopen MUST return the changed live file, not a historical copy.
+    const auto changedModel=source/"models"/"characters"/"0.vlcharacter.json";
+    {std::ofstream changed(changedModel,std::ios::app);changed<<" \n";}
+    assert(workspace::prepare(source).project==source);
+    assert(workspace::projectFor(source/"models")==source);
     assert(workspace::resolve(source/"assets").fromSource);
     assert(!workspace::updatePak(source,sourceWorkspace.project,packed,error));
     const auto built=source/"build"/"voidline";
     fs::create_directories(built/"assets");
     {std::ofstream binary(built/"voidline");binary<<"test game";}
     assert(art::repack(source/"assets",built/"assets"/"game.vpak",packed,error));
-    assert(workspace::resolve(built).valid && !workspace::resolve(built).fromSource);
+    assert(workspace::resolve(built).valid && workspace::resolve(built).fromSource);
+    assert(workspace::resolve(built).root==source);
     art::Raster newest=pixels;newest.rgba[2]=91;
     assert(art::encode(sourceWorkspace.project/"assets"/"test.png",newest,error));
-    assert(workspace::publishSourceAssets(sourceWorkspace.project,source,modified,error) && modified==1);
+    assert(workspace::publishSourceAssets(sourceWorkspace.project,source,modified,error) && modified==0);
     const auto staged=sourceWorkspace.project/"export"/"game.vpak";
     assert(art::repack(sourceWorkspace.project/"assets",staged,packed,error));
     std::vector<fs::path> copied;
@@ -217,8 +227,49 @@ int main() {
     assert(copied[0]==fs::canonical(built/"assets"/"game.vpak"));
     assert(art::unpack(built/"assets"/"game.vpak",extracted,validated,error));
     assert(art::decode(extracted/"test.png",actual,error) && actual.rgba==newest.rgba);
+    // All level edits are already durable in the game workspace on Save.
+    // Publish only stages their live files to runtime; no duplicate copies.
+    for(int group=0;group<2;++group)for(int i=0;i<(group?cooperativeSectorCount:sectorCount);++i){
+        const bool multiplayer=group!=0;
+        assert(writeLevel(levelFile(sourceWorkspace.project/"levels",i,multiplayer),
+                          multiplayer?cooperativeStages[i]:stages[i],i,multiplayer,&error));
+    }
+    int changedLevels=-1;
+    assert(workspace::publishLevels(sourceWorkspace.project,source,source,changedLevels,error));
+    assert(changedLevels==0 && fs::exists(source/"levels"/"sector-01.vllevel.json"));
+    auto custom=stages[0];custom.worldWidth+=160.f;
+    assert(writeLevel(levelFile(sourceWorkspace.project/"levels",0,false),custom,0,false,&error));
+    assert(workspace::publishLevels(sourceWorkspace.project,source,source,changedLevels,error));
+    assert(changedLevels==0);
+    Stage fromSource{};
+    assert(readLevel(source/"levels"/"sector-01.vllevel.json",stages[0],fromSource,0,false,&error));
+    assert(fromSource.worldWidth==custom.worldWidth);
+    std::vector<fs::path> distributed;
+    assert(workspace::syncRuntimeLevels(source,distributed,error));
+    assert(distributed.size()>=1 && fs::is_regular_file(built/"levels"/"sector-01.vllevel.json"));
+    assert(readLevel(built/"levels"/"sector-01.vllevel.json",stages[0],fromSource,0,false,&error));
+    assert(fromSource.worldWidth==custom.worldWidth);
+    assert(workspace::publishLevels(sourceWorkspace.project,source,source,changedLevels,error) && changedLevels==0);
+    auto customCoop=cooperativeStages[0];customCoop.worldWidth+=200.f;
+    assert(writeLevel(levelFile(sourceWorkspace.project/"levels",0,true),customCoop,0,true,&error));
+    assert(workspace::publishLevels(sourceWorkspace.project,source,source,changedLevels,error) && changedLevels==0);
+    assert(workspace::syncRuntimeLevels(source,distributed,error));
+    assert(fs::is_regular_file(built/"levels"/"coop-01.vllevel.json"));
+    // Installed game outside the source tree also receives level edits when
+    // the editor is given the matching game source checkout explicitly.
+    {std::ofstream externalGame(installed/"voidline");externalGame<<"external game";}
+    assert(workspace::syncRuntimeLevels(source,distributed,error,installed));
+    assert(fs::is_regular_file(installed/"levels"/"coop-01.vllevel.json"));
+    // Restoring a stage saves the baseline file into the game workspace.
+    // Runtime synchronization uses this authoritative file.
+    assert(writeLevel(levelFile(sourceWorkspace.project/"levels",0,false),stages[0],0,false,&error));
+    assert(workspace::publishLevels(sourceWorkspace.project,source,source,changedLevels,error) && changedLevels==0);
+    assert(fs::exists(source/"levels"/"sector-01.vllevel.json"));
+    assert(workspace::syncRuntimeLevels(source,distributed,error));
+    assert(fs::exists(built/"levels"/"sector-01.vllevel.json"));
+    assert(fs::is_regular_file(built/"levels"/"coop-01.vllevel.json"));
     assert(!workspace::resolve(folder/"missing installation").valid);
     fs::remove_all(folder);
-    std::cout<<"Workspace/file tests (including source-only load/publish, runtime archive refresh and backups) passed\n";
+    std::cout<<"Workspace/file tests (live source, no cache, runtime packaging) passed\n";
     return 0;
 }

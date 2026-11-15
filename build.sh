@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Clean, verbose build of VOIDLINE. Every run starts from an empty build directory.
+# Incremental VOIDLINE build. Reuses CMake objects and relinks only changed code.
 #
-#   ./build.sh                 clean build, then run the unit tests
+#   ./build.sh                 incremental build, then run the unit tests
+#   ./build.sh --clean         delete build/ and rebuild everything
 #   ./build.sh --no-tests      skip the unit tests
 #   ./build.sh --verbose       print every compiler and linker command line
 #   ./build.sh --debug         build without optimization and with debug info
@@ -12,11 +13,13 @@ root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 build="$root/build"
 log="$root/build.log"
 run_tests=1
+clean=0
 verbose=0
 type=Release
 extra=()
 for arg in "$@"; do
   case "$arg" in
+    --clean) clean=1 ;;
     --no-tests) run_tests=0 ;;
     --verbose) verbose=1 ;;
     --debug) type=Debug ;;
@@ -33,7 +36,13 @@ now() { date +%s.%N; }
 elapsed() { awk -v a="$1" -v b="$2" 'BEGIN { printf "%.1f", b - a }'; }
 human() { numfmt --to=iec --suffix=B "$1" 2>/dev/null || echo "$1 B"; }
 step() { printf '\n%s[%s/7] %s%s\n' "$bold$cyan" "$1" "$2" "$plain"; }
-fail() { printf '%s%s%s\n' "$red" "$1" "$plain" >&2; printf '%sFull log: %s%s\n' "$dim" "$log" "$plain" >&2; exit 1; }
+fail() {
+  printf '\n%sERROR: %s%s\n' "$red" "$1" "$plain" >&2
+  printf '  Full build log: %s\n' "$log" >&2
+  printf '  Last 45 build log lines:\n' >&2
+  if [[ -f "$log" ]]; then tail -n 45 "$log" | sed 's/^/    /' >&2; fi
+  exit 1
+}
 
 total_start=$(now)
 : > "$log"
@@ -54,20 +63,29 @@ printf '  Compiler     %s\n' "$("$compiler" --version | head -n1)"
 printf '  CMake        %s\n' "$(cmake --version | head -n1)"
 printf '  Generator    %s\n' "$generator_name"
 
-step 1 "Cleaning previous build"
-if [[ -d "$build" ]]; then
-  size=$(du -sb "$build" 2>/dev/null | cut -f1)
-  files=$(find "$build" -type f | wc -l)
-  rm -rf -- "$build" || fail "Could not remove $build"
-  printf '  Removed %s (%s files, %s)\n' "$build" "$files" "$(human "${size:-0}")"
+step 1 "Preparing build directory"
+if (( clean )); then
+  if [[ -d "$build" ]]; then
+    size=$(du -sb "$build" 2>/dev/null | cut -f1)
+    files=$(find "$build" -type f | wc -l)
+    rm -rf -- "$build" || fail "Could not remove $build"
+    printf '  --clean: removed %s (%s files, %s)\n' "$build" "$files" "$(human "${size:-0}")"
+  else
+    printf '  --clean: no previous build directory.\n'
+  fi
+elif [[ -f "$build/CMakeCache.txt" ]]; then
+  printf '  Incremental build: keeping CMake cache and compiled objects.\n'
 else
-  printf '  No previous build directory.\n'
+  printf '  First build: creating CMake cache and compiled objects.\n'
 fi
 
 step 2 "Configuring"
 t=$(now)
+# CMake cannot change generator in an existing cache: only choose one for first configure.
+if [[ -f "$build/CMakeCache.txt" ]]; then generator=(); fi
 if ! CXX="$compiler" cmake -S "$root" -B "$build" "${generator[@]}" -DCMAKE_BUILD_TYPE="$type" "${extra[@]}" >>"$log" 2>&1; then
-  tail -n 30 "$log"; fail "Configuration failed."
+  printf '  Command: cmake -S %q -B %q -DCMAKE_BUILD_TYPE=%q\n' "$root" "$build" "$type" >&2
+  fail "Configuration failed. Check missing libraries, CMake generator, or compiler errors above."
 fi
 sed -n '/VOIDLINE .* configuration/,/Output/p' "$log" | sed 's/^-- /  /' | grep -v '^  $'
 configure_time=$(elapsed "$t" "$(now)")
@@ -75,11 +93,20 @@ printf '  %sConfigured in %ss%s\n' "$dim" "$configure_time" "$plain"
 
 step 3 "Compiling and linking"
 t=$(now)
-build_args=(--build "$build" --parallel)
+# Limit parallel compilation by default; unbounded Ninja jobs can exhaust RAM.
+cores=$(nproc)
+jobs="${VOIDLINE_JOBS:-$((cores < 8 ? cores : 8))}"
+[[ "$jobs" =~ ^[1-9][0-9]*$ ]] || fail "VOIDLINE_JOBS must be a positive integer"
+printf '  Parallel jobs %s\n' "$jobs"
+build_args=(--build "$build" --parallel "$jobs")
 (( verbose )) && build_args+=(--verbose)
 warnings=0
-status=0
+status=1
 while IFS= read -r line; do
+  if [[ "$line" == __voidline_build_exit=* ]]; then
+    status="${line#__voidline_build_exit=}"
+    continue
+  fi
   printf '%s\n' "$line" >>"$log"
   case "$line" in
     *warning:*) warnings=$((warnings+1)); printf '  %s%s%s\n' "$yellow" "$line" "$plain" ;;
@@ -88,12 +115,14 @@ while IFS= read -r line; do
     \[*Linking*) printf '  %s%s%s\n' "$bold" "$line" "$plain" ;;
     *) (( verbose )) && printf '  %s%s%s\n' "$dim" "$line" "$plain" ;;
   esac
-done < <(cmake "${build_args[@]}" 2>&1; echo "__status=$?")
-# The status marker is the last line of the stream.
-status=$(grep -a '^__status=' "$log" | tail -n1 | cut -d= -f2)
-sed -i '/^__status=/d' "$log"
+done < <(cmake "${build_args[@]}" 2>&1; echo "__voidline_build_exit=$?")
 compile_time=$(elapsed "$t" "$(now)")
-[[ "${status:-1}" == 0 ]] || fail "Build failed."
+if [[ "$status" != 0 ]]; then
+  printf '  Failed command: cmake' >&2
+  printf ' %q' "${build_args[@]}" >&2
+  printf '\n  Search compiler errors: grep -nE "error:|FAILED:|undefined reference" %q\n' "$log" >&2
+  fail "Compilation or linking failed (exit $status)."
+fi
 printf '  %sBuilt in %ss with %s warning(s)%s\n' "$dim" "$compile_time" "$warnings" "$plain"
 
 step 4 "Verifying artifacts"
@@ -120,11 +149,37 @@ step 5 "Running unit tests"
 tests_summary="skipped"
 t=$(now)
 if (( run_tests )); then
-  if ctest --test-dir "$build" --output-on-failure >"$build/ctest.log" 2>&1; then
-    tests_summary=$(grep -E 'tests passed' "$build/ctest.log" | sed 's/^ *//')
-    cat "$build/ctest.log" | sed 's/^/  /' | grep -E 'Test +#|tests passed'
+  test_log="$build/ctest.log"
+  ctest_command=(ctest --test-dir "$build" --output-on-failure --output-log "$test_log")
+  printf '  Command       '
+  printf '%q ' "${ctest_command[@]}"
+  printf '\n'
+  printf '  CTest log     %s\n' "$test_log"
+  # Capture the full CTest report (including failure stdout/stderr).
+  if "${ctest_command[@]}" >"$build/ctest-console.log" 2>&1; then
+    tests_summary=$(grep -E 'tests passed' "$build/ctest-console.log" | tail -n1 | sed 's/^ *//')
+    grep -E 'Test +#|tests passed|Total Test time' "$build/ctest-console.log" | sed 's/^/  /' || true
   else
-    cat "$build/ctest.log"; fail "Unit tests failed."
+    test_exit=$?
+    printf '\n%sTEST FAILURE%s (CTest exit %s)\n' "$red" "$plain" "$test_exit" >&2
+    printf '  Full test output:\n' >&2
+    sed 's/^/    /' "$build/ctest-console.log" >&2
+    failed="$build/Testing/Temporary/LastTestsFailed.log"
+    if [[ -f "$failed" ]]; then
+      printf '\n  Failed test IDs and names:\n' >&2
+      sed 's/^/    /' "$failed" >&2
+      printf '\n  Re-run each failing test with full diagnostics:\n' >&2
+      while IFS= read -r entry; do
+        name="${entry#*:}"
+        [[ -n "$name" ]] || continue
+        printf '    ctest --test-dir %q -R %q --verbose --output-on-failure\n' "$build" "^${name}$" >&2
+      done < "$failed"
+    fi
+    printf '\n  Additional diagnostics:\n' >&2
+    printf '    CTest output log: %s\n' "$test_log" >&2
+    printf '    Detailed test log: %s\n' "$build/Testing/Temporary/LastTest.log" >&2
+    printf '    List tests: ctest --test-dir %q -N -V\n' "$build" >&2
+    fail "One or more tests failed; resolve them before distributing the game."
   fi
 else
   printf '  Skipped (--no-tests).\n'
@@ -134,8 +189,12 @@ test_time=$(elapsed "$t" "$(now)")
 step 6 "Staging the tester runtime"
 t=$(now)
 runtime="$build/dist/VOIDLINE"
-if ! bash "$root/scripts/stage-runtime.sh" "$binary" "$runtime" | tee -a "$log"; then
-  fail "Runtime staging failed."
+if bash "$root/scripts/stage-runtime.sh" "$binary" "$runtime" 2>&1 | tee -a "$log"; then
+  :
+else
+  status="$?"
+  printf '  Failed stage command: bash %q %q %q\n' "$root/scripts/stage-runtime.sh" "$binary" "$runtime" >&2
+  fail "Runtime staging failed (exit $status)."
 fi
 stage_time=$(elapsed "$t" "$(now)")
 

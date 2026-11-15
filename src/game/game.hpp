@@ -23,7 +23,7 @@ public:
     };
     bool coop=false,puzzleMode=false;
     std::vector<RelayState> relayStates;
-    bool relayOpen(size_t index) const;
+    bool relayOpen(size_t relayIndex) const;
     void updateRelays(float dt);
     bool atExtraction(const Player& body) const;
     void syncLifts() { moveLifts(0); }

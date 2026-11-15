@@ -1,4 +1,4 @@
-# VOIDLINE v2.10.12 — complete source, shared game content
+# VOIDLINE v2.10.14 — complete source, shared game content
 
 This archive contains one C++ game source tree and one asset tree. Linux and Windows
 build **the same game** from `src/`, `assets/` and `scripts/pack-assets.py`.
@@ -18,13 +18,10 @@ run Model Studio's GUI. On Ubuntu/Debian, run `./install_deps.sh` first.
 ./run-model-studio.sh   # Linux only; editor is not bundled in the game runtime
 ```
 
-If you prefer an incremental build instead of `build.sh`'s clean build:
-
-```sh
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build --parallel 4
-ctest --test-dir build --output-on-failure
-```
+`./build.sh` is incremental by default (retains the CMake cache, compiled
+objects and previously packed assets). Use `./build.sh --clean` to remove the
+entire `build/` directory and perform a complete rebuild. `--debug`,
+`--verbose`, `--no-tests` and ordinary CMake `-D...` options still work.
 
 Outputs: `build/voidline/voidline`, `build/voidline/assets/game.vpak`,
 `build/dist/VOIDLINE/` (tester runtime), and
@@ -73,12 +70,15 @@ See `MODEL-STUDIO-WORKFLOW.md` for the exact workflow.
 - `assets/models/characters.vlrm`, `characters.info.json`, and `characters.actions.json`:
   all six playable character slots from the current clean authoring snapshot.
 - `assets/models/enemies.vlem`, `enemies.info.json`, and `enemies.actions.json`:
-  all ten enemy archetypes from the current Model Studio v0.0.16 starter definitions.
+  all ten enemy archetypes from the current Model Studio v0.0.17 starter definitions.
 - `model-studio/starter-project/models/` contains editable JSON for both groups.
 - `model-studio/starter-project/levels/` contains 20 campaign and 6 cooperative layouts.
 
 The game loads the baked models and action catalogs at startup from `game.vpak`.
-Only the Linux editor can author these files; **either game build can load them**.
+Published level edits live in source `levels/` instead; builds sync those JSON
+files beside the executable and into the tester runtime. Deleting a source
+level override restores the built-in layout and removes it from subsequent
+builds. Only the Linux editor authors these files; **both OS builds load them**.
 
 ## Important file/folder handling
 

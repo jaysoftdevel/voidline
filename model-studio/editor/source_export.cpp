@@ -44,33 +44,68 @@ bool writeBinary(const fs::path& file,const std::vector<uint8_t>& data,std::stri
     }
     return true;
 }
+json_object* defaultVector(bool depth){
+    json_object* out=json_object_new_array();
+    for(int i=0;i<14;++i){
+        if(depth)json_object_array_add(out,json_object_new_double(0.));
+        else {json_object* xyz=json_object_new_array();json_object_array_add(xyz,json_object_new_double(0.));
+              json_object_array_add(xyz,json_object_new_double(0.));json_object_array_add(out,xyz);}
+    }
+    return out;
+}
 std::string actionCatalog(const fs::path& project,bool enemy,std::string& error){
     json_object* root=json_object_new_object(),*items=json_object_new_array();
     json_object_object_add(root,"schema",json_object_new_string("voidline-actions-v1"));
     json_object_object_add(root,"models",items);
+    // Retain the editable descriptions in the generated catalog. They are not
+    // a statement that the game runtime plays all these poses yet.
+    json_object* descriptor=json_object_from_file((project/"models/movement-descriptions.json").string().c_str());
+    json_object* definitions=nullptr;
+    if(descriptor && json_object_object_get_ex(descriptor,"movements",&definitions) &&
+       json_object_is_type(definitions,json_type_array))
+        json_object_object_add(root,"definitions",json_object_get(definitions));
     const int count=enemy?int(vl::specs.size()):int(vl::characters.size());
     for(int i=0;i<count;++i){
         const fs::path file=enemy?vl::enemyModelFile(project/"models",i):vl::characterModelFile(project/"models",i);
-        std::ifstream in(file);
-        std::string input((std::istreambuf_iterator<char>(in)),{});
-        json_object* parsed=json_tokener_parse(input.c_str());
-        if(!parsed){error="Could not parse action source: "+file.string();json_object_put(root);return {};}
-        json_object* skeleton=nullptr,*layers=nullptr;
-        if(json_object_object_get_ex(parsed,"skeleton",&skeleton))
+        json_object* parsed=json_object_from_file(file.string().c_str());
+        if(!parsed){error="Could not parse action source: "+file.string();json_object_put(root);
+                    if(descriptor)json_object_put(descriptor);
+                    return {};
+        }
+        json_object *skeleton=nullptr,*layers=nullptr,*depths=nullptr;
+        if(json_object_object_get_ex(parsed,"skeleton",&skeleton)){
             json_object_object_get_ex(skeleton,"sequences",&layers);
+            json_object_object_get_ex(skeleton,"sequenceDepth",&depths);
+        }
+        json_object* allLayers=layers&&json_object_is_type(layers,json_type_object)?
+                               json_object_get(layers):json_object_new_object();
+        json_object* allDepths=depths&&json_object_is_type(depths,json_type_object)?
+                               json_object_get(depths):json_object_new_object();
+        if(definitions && json_object_is_type(definitions,json_type_array)){
+            for(size_t n=0;n<json_object_array_length(definitions);++n){
+                json_object* item=json_object_array_get_idx(definitions,n),*id=nullptr,*existing=nullptr;
+                if(!item||!json_object_object_get_ex(item,"id",&id)||
+                   !json_object_is_type(id,json_type_string))continue;
+                const char* name=json_object_get_string(id);
+                if(!json_object_object_get_ex(allLayers,name,&existing))
+                    json_object_object_add(allLayers,name,defaultVector(false));
+                if(!json_object_object_get_ex(allDepths,name,&existing))
+                    json_object_object_add(allDepths,name,defaultVector(true));
+            }
+        }
         json_object* entry=json_object_new_object();
         json_object_object_add(entry,"id",json_object_new_int(i));
-        json_object_object_add(entry,"sequences",layers&&json_object_is_type(layers,json_type_object)?
-              json_object_get(layers):json_object_new_object());
+        json_object_object_add(entry,"sequences",allLayers);
+        json_object_object_add(entry,"sequenceDepth",allDepths);
         json_object_array_add(items,entry);
         json_object_put(parsed);
     }
     std::string result=json_object_to_json_string_ext(root,JSON_C_TO_STRING_PRETTY);
-    json_object_put(root);return result+"\n";
+    json_object_put(root);if(descriptor)json_object_put(descriptor);return result+"\n";
 }
 std::string generatedStages(const std::vector<vl::Stage>& stages,bool coop){
     std::ostringstream out;
-    out<<"// Generated offline by VOIDLINE Model Studio v0.0.16. Replace this original source manually.\n"
+    out<<"// Generated offline by VOIDLINE Model Studio v0.0.17. Replace this original source manually.\n"
        <<"#include \"content/stages.hpp\"\n#include <utility>\nnamespace vl {\n"
        <<"const std::array<Stage,"<<(coop?"cooperativeSectorCount":"sectorCount")<<"> "
        <<(coop?"cooperativeStages":"stages")<<"=[] {\n"
@@ -181,7 +216,7 @@ std::string enemyMetadata(){
 
 std::string generatedCharacters(){
     std::ostringstream out;
-    out<<"// Generated offline by VOIDLINE Model Studio v0.0.16. Replace original manually.\n"
+    out<<"// Generated offline by VOIDLINE Model Studio v0.0.17. Replace original manually.\n"
        <<"#pragma once\n#include \"content/types.hpp\"\nnamespace vl {\n"
        <<"inline std::array<Character,6> characters{{\n";
     for(const auto& c:vl::characters){

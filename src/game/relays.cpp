@@ -1,11 +1,11 @@
 #include "game/game.hpp"
 
 namespace vl {
-bool Game::relayOpen(size_t index) const {
-    if (!stage || index>=relayStates.size() || index>=stage->relays.size()) return false;
-    const auto& s=relayStates[index];
+bool Game::relayOpen(size_t relayIndex) const {
+    if (!stage || relayIndex>=relayStates.size() || relayIndex>=stage->relays.size()) return false;
+    const auto& s=relayStates[relayIndex];
     return s.latched || s.charge>=.95f ||
-        (stage->relays[index].control==RelayControl::lever && s.lease>0.f);
+        (stage->relays[relayIndex].control==RelayControl::lever && s.lease>0.f);
 }
 
 // All control evaluation is performed by the authoritative host. The world

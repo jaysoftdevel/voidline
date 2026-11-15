@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(voidline_model_studio VERSION 0.0.16 LANGUAGES CXX)
+project(voidline_model_studio VERSION 0.0.19 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")

@@ -34,6 +34,17 @@ fs::path projectFor(const fs::path& game);
 // Locate the source tree CMake uses to regenerate game.vpak during a rebuild.
 fs::path sourceFor(const fs::path& game);
 // Copies validated edited media into source/assets with backups outside the asset tree.
+// Publish only level layouts that differ from the source/runtime baseline.
+// Reverting a level to the compiled default removes its source override.
+bool publishLevels(const fs::path& authoring,const fs::path& game,const fs::path& source,
+                   int& changed,std::string& error);
+// Refresh executable-adjacent level layouts from the source of truth after publish.
+bool syncRuntimeLevels(const fs::path& source,std::vector<fs::path>& updated,std::string& error,
+                       const fs::path& activeGame={});
+// Editable JSON models and movement descriptors are authoritative inputs.
+// Back up and atomically publish source/models; never require a runtime PAK.
+bool publishEditableModels(const fs::path& authoring,const fs::path& source,
+                           int& changed,std::string& error);
 bool publishSourceAssets(const fs::path& authoring, const fs::path& source, int& changed, std::string& error);
 // Synchronize already-built executable-adjacent archives after a successful
 // Update PAK. The function does not touch the current live game executable.

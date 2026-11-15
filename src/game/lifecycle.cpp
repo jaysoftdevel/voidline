@@ -23,7 +23,11 @@ void Game::start(int sector,const Save& save,bool cooperative) {
     const auto path=levelFile(executableDirectory()/"levels",index,cooperative);
     if (std::filesystem::exists(path)) {
         std::string why;
-        if (readLevel(path,*stage,editedStage,index,cooperative,&why)) stage=&editedStage;
+        // A materialized stock level is not a gameplay override. Keep the
+        // compiled stage pointer unless source JSON actually changes content.
+        if (readLevel(path,*stage,editedStage,index,cooperative,&why)) {
+            if(levelFingerprint(editedStage)!=levelFingerprint(*stage))stage=&editedStage;
+        }
         else std::cerr<<"VOIDLINE: ignoring invalid custom level "<<utf8Path(path)<<": "<<why<<'\n';
     }
     relayStates.assign(stage->relays.size(),{});

@@ -65,6 +65,11 @@ Renderer::Face Renderer::drawHead(const Humanoid& h,const Rig& g) {
     case Look::voss: drawVossHead(h,face); break;
     case Look::rook: drawRookHead(h,face); break;
     case Look::vale: drawValeHead(h,face); break;
+    // These operatives use the common unadorned face; their individualized
+    // clothing and equipment are drawn by the other rig passes.
+    case Look::mercer:
+    case Look::cole:
+    case Look::nyx: break;
     case Look::soldier: drawHelmet(h,face); break;
     }
     return face;

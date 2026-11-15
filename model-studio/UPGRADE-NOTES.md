@@ -1,4 +1,14 @@
-# Model Studio v0.0.16 upgrade notes
+## 0.0.18 / VOIDLINE 2.10.15 — source-only workspace
+
+Model Studio no longer imports or reuses any private authoring cache. The game
+checkout is the active editor project; Save commits edits directly to its input
+files. Old caches are preserved but ignored. Pick a source root, not an
+installed PAK. F5 reloads current file from disk. Publish bakes source assets;
+rebuilds remain incremental. See `../MODEL-STUDIO-WORKFLOW.md`.
+
+---
+
+# Model Studio v0.0.17 upgrade notes
 
 - Opening a VOIDLINE **source checkout** no longer requires `game.vpak`; the
   game assets, models, and levels are auto-resolved from the source structure.

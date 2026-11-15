@@ -79,6 +79,9 @@ for category in levels models; do
     cp -a -n -- "$source/." "$stage/$category/"
   done
 done
+# Source levels take precedence over any previously staged runtime override.
+# Removing a source override restores the compiled-in stage on both platforms.
+python3 "$root/scripts/sync-levels.py" "$root/levels" "$stage/levels"
 
 cat > "$stage/README.txt" <<'README'
 Run ./run.sh from this folder. Use ./run.sh --windowed for a window.

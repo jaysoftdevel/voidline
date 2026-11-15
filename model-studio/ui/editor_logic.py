@@ -9,45 +9,41 @@ import copy
 import re
 from pathlib import Path
 
-# These four archetypes are rendered with the game Humanoid joint rig.
-# Other enemies use distinct procedural renderers and do not consume humanoid
-# per-joint offsets; keep their existing data intact but disable misleading edits.
-# Explicit states used by the game renderer / simulation. The existing Base, Aim,
-# Run layers remain compatible with VLRM/VLEM v2. Per-action authored offsets
-# are an additional, optional baked payload, not animation keyframes.
-ACTION_STATES = ("idle", "walk", "sprint", "crouch", "jump", "fall", "land",
-                 "fire", "reload", "hit", "death", "patrol", "chase",
-                 "alert", "recoil", "stagger", "stairs", "interact")
+# The movement-description JSON is an editable INPUT, not a generated PAK file.
+# Source workspaces import it to their models/ directory and may extend it.
+_DEFAULT_MOVEMENT_CATALOG = Path(__file__).resolve().parents[1] / "starter-project/models/movement-descriptions.json"
 LEGACY_STATES = ("base", "aim", "run")
-CHARACTER_STATES = ("base", "idle", "walk", "run", "sprint", "crouch", "jump",
-                    "fall", "land", "stairs", "aim", "fire", "reload", "hit", "death", "interact")
-SOLDIER_STATES = ("base", "idle", "patrol", "run", "chase", "stairs", "aim",
-                  "alert", "fire", "recoil", "hit", "stagger", "death")
-PROCEDURAL_STATES = {
-    0:("idle", "patrol", "chase", "alert", "fire", "hit", "death"),
-    2:("idle", "alert", "fire", "recoil", "hit", "death"),
-    3:("idle", "patrol", "chase", "jump", "fall", "land", "hit", "death"),
-    4:("idle", "patrol", "chase", "alert", "fire", "hit", "death"),
-    5:("idle", "patrol", "chase", "jump", "hit", "death"),
-    8:("idle", "patrol", "chase", "alert", "fire", "recoil", "hit", "death")
-}
+HUMANOID_ENEMIES = frozenset((1, 6, 7, 9))
 
-def movement_sequences(kind, doc):
-    if kind == "character": return CHARACTER_STATES
-    if kind == "enemy":
-        try: ident = int(doc.get('id', -1))
-        except (ValueError,TypeError): ident = -1
-        return SOLDIER_STATES if ident in (1,6,7,9) else PROCEDURAL_STATES.get(ident, ("idle", "patrol", "hit", "death"))
-    return ()
+def movement_definitions(catalog=None):
+    import json
+    path = Path(catalog) if catalog else _DEFAULT_MOVEMENT_CATALOG
+    if not path.is_file():
+        path = _DEFAULT_MOVEMENT_CATALOG
+    data = json.loads(path.read_text(encoding="utf-8"))
+    moves = data.get("movements", [])
+    ids = [entry["id"] for entry in moves]
+    if len(ids) != len(set(ids)) or not all(re.fullmatch(r"[a-z][a-z0-9_]*", name) for name in ids):
+        raise ValueError("Movement descriptor has duplicate or invalid state names")
+    return moves
 
-def ensure_sequences(doc):
-    skeleton=doc.setdefault('skeleton',{})
-    seq=skeleton.setdefault('sequences',{})
-    depth=skeleton.setdefault('sequenceDepth',{})
-    # Keep only real authoring records: don't overwrite custom vectors on open.
-    for state in ACTION_STATES:
-        if state not in seq: seq[state]=[[0.0,0.0] for _ in range(14)]
-        if state not in depth: depth[state]=[0.0 for _ in range(14)]
+ACTION_STATES = tuple(item["id"] for item in movement_definitions())
+
+def movement_sequences(kind, doc, catalog=None):
+    if kind not in ("character", "enemy"):
+        return ()
+    # Expose every authored state for every model. Procedural enemies still
+    # cannot have their unused humanoid joints dragged (see can_edit_joint).
+    return LEGACY_STATES + tuple(entry["id"] for entry in movement_definitions(catalog)
+                                 if entry["id"] not in LEGACY_STATES)
+
+def ensure_sequences(doc, catalog=None):
+    skeleton = doc.setdefault("skeleton", {})
+    seq = skeleton.setdefault("sequences", {})
+    depth = skeleton.setdefault("sequenceDepth", {})
+    for state in (item["id"] for item in movement_definitions(catalog)):
+        seq.setdefault(state, [[0.0, 0.0] for _ in range(14)])
+        depth.setdefault(state, [0.0 for _ in range(14)])
     return doc
 
 def create_model_from_template(template, kind, name, new_id):
@@ -64,6 +60,96 @@ def assign_model_to_slot(prototype, slot):
     result=copy.deepcopy(prototype)
     result['id']=int(slot)
     result.pop('templateOf',None)
+    return result
+
+# Clipboard data uses the OS clipboard only. No model snapshots are cached on disk.
+CLIPBOARD_FORMAT = "voidline-model-studio-clipboard-v1"
+
+def _validated_pose(data):
+    if not isinstance(data, dict) or set(data) != {"xy", "depth"}:
+        raise ValueError("Clipboard movement must contain XY and depth vectors")
+    xy, depth = data["xy"], data["depth"]
+    if not isinstance(xy, list) or len(xy) != 14 or not isinstance(depth, list) or len(depth) != 14:
+        raise ValueError("Movement must have exactly 14 joints and 14 depth offsets")
+    for vector in xy:
+        if not isinstance(vector, list) or len(vector) != 2:
+            raise ValueError("Every joint requires X and Y offsets")
+        if any(isinstance(number, bool) or not isinstance(number, (int,float)) or
+               not isfinite(number) or abs(number)>65536 for number in vector):
+            raise ValueError("Movement contains invalid joint coordinates")
+    if any(isinstance(number, bool) or not isinstance(number, (int,float)) or
+           not isfinite(number) or abs(number)>65536 for number in depth):
+        raise ValueError("Movement contains invalid depth coordinates")
+    return copy.deepcopy(xy),copy.deepcopy(depth)
+
+def copy_model_payload(doc, kind):
+    """Encode the full editable model in a versioned, system-clipboard format."""
+    import json
+    if kind not in ("character", "enemy") or not isinstance(doc, dict) or not isinstance(doc.get("skeleton"), dict):
+        raise ValueError("Select a character or enemy model to copy")
+    return json.dumps({"format":CLIPBOARD_FORMAT,"operation":"model","modelType":kind,
+                       "data":doc},ensure_ascii=False,allow_nan=False)
+
+def paste_model_payload(payload, destination, kind):
+    """Return a new model, preserving the destination's file identity/slot."""
+    import json
+    if kind not in ("character", "enemy") or not isinstance(destination,dict):
+        raise ValueError("Select a destination model")
+    if len(payload)>6_000_000:raise ValueError("Clipboard model is too large")
+    try:clip=json.loads(payload)
+    except (ValueError,TypeError) as exc:raise ValueError("Clipboard does not contain valid model JSON") from exc
+    if not isinstance(clip,dict) or clip.get("format")!=CLIPBOARD_FORMAT or clip.get("operation")!="model":
+        raise ValueError("Clipboard does not contain a VOIDLINE model; use Copy Model")
+    if clip.get("modelType")!=kind:
+        raise ValueError("Cannot paste a different model type into this file")
+    incoming=clip.get("data")
+    if (not isinstance(incoming,dict) or not isinstance(incoming.get("skeleton"),dict)
+            or not isinstance(incoming.get("geometry"),dict)
+            or not isinstance(incoming.get("motion"),dict)):
+        raise ValueError("Clipboard model has no valid skeleton/geometry/motion")
+    skeleton=incoming["skeleton"]
+    for pose_name in LEGACY_STATES:
+        _validated_pose({"xy":skeleton.get(pose_name),
+                         "depth":skeleton.get("depth",{}).get(pose_name)})
+    result=copy.deepcopy(incoming)
+    # ID and schema belong to the selected source file, not the copied model.
+    for key in ("id","schema"):
+        if key in destination:result[key]=destination[key]
+    result.pop("templateOf",None)
+    return result
+
+def copy_movement_payload(doc, pose):
+    import json
+    if not isinstance(doc,dict) or not isinstance(doc.get("skeleton"),dict):
+        raise ValueError("Select a model before copying a movement")
+    rig=doc["skeleton"]
+    if pose in LEGACY_STATES:
+        xy=rig.get(pose);depth=rig.get("depth",{}).get(pose)
+    else:
+        xy=rig.get("sequences",{}).get(pose);depth=rig.get("sequenceDepth",{}).get(pose)
+    _validated_pose({"xy":xy,"depth":depth})
+    return json.dumps({"format":CLIPBOARD_FORMAT,"operation":"movement", "sourcePose":pose,
+                       "data":{"xy":xy,"depth":depth}},allow_nan=False)
+
+def paste_movement_payload(payload, destination, pose):
+    """Return an updated copy, mapping copied joint offsets into the selected pose."""
+    import json
+    if len(payload)>100_000:raise ValueError("Clipboard movement is too large")
+    try:clip=json.loads(payload)
+    except (ValueError,TypeError) as exc:raise ValueError("Clipboard does not contain valid movement JSON") from exc
+    if not isinstance(clip,dict) or clip.get("format")!=CLIPBOARD_FORMAT or clip.get("operation")!="movement":
+        raise ValueError("Clipboard does not contain a VOIDLINE movement; use Copy Movement")
+    if not isinstance(destination,dict) or not isinstance(destination.get("skeleton"),dict):
+        raise ValueError("Select a destination model")
+    xy,depth=_validated_pose(clip.get("data"))
+    result=copy.deepcopy(destination)
+    rig=result["skeleton"]
+    if pose in LEGACY_STATES:
+        rig[pose]=xy;rig.setdefault("depth",{})[pose]=depth
+    elif isinstance(pose,str) and re.fullmatch(r"[a-z][a-z0-9_]*",pose):
+        rig.setdefault("sequences",{})[pose]=xy
+        rig.setdefault("sequenceDepth",{})[pose]=depth
+    else:raise ValueError("Choose a valid destination movement")
     return result
 
 def polygon_vertices(doc, selection):
@@ -107,7 +193,6 @@ def remove_structure_vertex(doc, selection, vertex):
     doc.setdefault('structureVertices',{})[f'{selection[0]}:{selection[1]}']=updated
     return updated
 
-HUMANOID_ENEMIES = frozenset((1, 6, 7, 9))
 ENEMY_NAMES = ("Drone", "Ranger", "Turret", "Stalker", "Guardian", "Scavenger",
                "Sniper", "Bulwark", "Interceptor", "Juggernaut")
 RECTS = ("ground", "ledges", "cover")

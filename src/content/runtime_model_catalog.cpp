@@ -27,7 +27,7 @@ void loadActionSequences(const AssetPack& pack,const char* name,
                          std::array<SkeletonProfile,N>& profiles) {
     if(!pack.contains(name))return;
     const auto bytes=pack.read(name);
-    if(bytes.size()>1024*1024)throw std::runtime_error("Action sequence file too large");
+    if(bytes.size()>8*1024*1024)throw std::runtime_error("Action sequence file too large");
     Json root(json_tokener_parse(std::string(bytes.begin(),bytes.end()).c_str()),json_object_put);
     json_object* models=nullptr;
     if(!root || !json_object_is_type(root.get(),json_type_object) ||

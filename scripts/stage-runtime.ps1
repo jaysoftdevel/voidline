@@ -70,6 +70,8 @@ Windows supplies Direct3D and the display driver.
         }
     }
 
+    & python (Join-Path $PSScriptRoot 'sync-levels.py') (Join-Path $root 'levels') (Join-Path $stage 'levels')
+    if ($LASTEXITCODE -ne 0) { throw 'Could not synchronize published levels.' }
     $exe = Join-Path $stage 'voidline.exe'
     $version = & $exe --version
     if ($LASTEXITCODE -ne 0) { throw 'The staged executable could not start.' }

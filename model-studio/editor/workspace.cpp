@@ -1,5 +1,7 @@
 #include "workspace.hpp"
 #include "content/model_io.hpp"
+#include "content/level_io.hpp"
+#include "content/stages.hpp"
 #include <algorithm>
 #include <chrono>
 #include <iterator>
@@ -8,6 +10,8 @@
 #include <iomanip>
 #include <sstream>
 #include <system_error>
+#include <json-c/json.h>
+#include <tuple>
 
 namespace workspace {
 namespace {
@@ -16,42 +20,7 @@ fs::path normalized(const fs::path& p) {
     auto result=fs::weakly_canonical(p,ec);
     return ec?fs::absolute(p):result;
 }
-std::string key(const fs::path& path) {
-    uint64_t h=14695981039346656037ull;
-    for(const unsigned char c:normalized(path).generic_string()){h^=c;h*=1099511628211ull;}
-    std::ostringstream s;s<<std::hex<<std::setw(16)<<std::setfill('0')<<h;
-    return s.str();
-}
-fs::path dataRoot() {
-    if(const char* custom=std::getenv("VOIDLINE_STUDIO_WORKSPACES"))
-        if(*custom)return custom;
-    if(const char* data=std::getenv("XDG_DATA_HOME"))
-        if(*data)return fs::path(data)/"voidline-model-studio"/"workspaces";
-    if(const char* home=std::getenv("HOME"))
-        if(*home)return fs::path(home)/".local"/"share"/"voidline-model-studio"/"workspaces";
-    return fs::temp_directory_path()/"voidline-model-studio-workspaces";
-}
-bool copyCustom(const fs::path& source,const fs::path& destination,Progress* progress,int& count,std::string& error) {
-    if(!fs::is_directory(source))return true;
-    std::error_code ec;
-    for(const auto& item:fs::recursive_directory_iterator(source,fs::directory_options::skip_permission_denied,ec)){
-        if(ec){error="Cannot read custom model directory";return false;}
-        if(item.is_symlink(ec)){error="Symlinks not permitted in workspace models";return false;}
-        if(!item.is_regular_file(ec))continue;
-        const auto name=item.path().lexically_relative(source);
-        if(!art::safePath(name))continue;
-        const auto target=destination/name;
-        fs::create_directories(target.parent_path(),ec);
-        if(ec){error="Cannot create model directory";return false;}
-        if(!fs::exists(target)){
-            fs::copy_file(item.path(),target,fs::copy_options::none,ec);
-            if(ec){error="Cannot import existing model file";return false;}
-            ++count;
-            if(progress)progress->report(count,count+1,"Importing "+name.filename().string());
-        }
-    }
-    return true;
-}
+
 }
 
 fs::path sourceFor(const fs::path& game) {
@@ -82,27 +51,24 @@ Resolved resolve(const fs::path& selected) {
             folder=folder.parent_path().parent_path();
         else folder=folder.parent_path();
     }
-    // The file picker can select assets/ or a build subdirectory. Prefer a
-    // complete installed runtime at the selected location over its ancestor
-    // source checkout, so the old installed-game workflow remains supported.
-    if(folder.filename()=="assets" && fs::is_regular_file(folder/"game.vpak",ec))
-        folder=folder.parent_path();
-    if(fs::is_regular_file(folder/"assets"/"game.vpak",ec)) {
-        result.root=folder;
-        result.pack=folder/"assets"/"game.vpak";
-        result.source=sourceFor(folder);
-        result.valid=fs::file_size(result.pack,ec)>=12 && !ec;
-        if(!result.valid)result.error="Invalid assets/game.vpak in "+folder.string();
-        return result;
-    }
-    // A source checkout has no PAK before CMake has built the runtime. Locate
-    // the authoritative source/assets directory via its game CMake structure.
+    // Always prefer the real source checkout, even when the selection points
+    // into build/ or a source tree happens to contain a generated game.vpak.
+    // Never allow an installed PAK or a private editor copy to shadow source.
     const auto source=sourceFor(folder);
     if(!source.empty()) {
         result.root=source;
         result.source=source;
         result.fromSource=true;
         result.valid=true;
+        return result;
+    }
+    // An installed binary alone cannot be an editable game workspace: it has
+    // no authoritative JSON model inputs. Require the corresponding source.
+    if((folder.filename()=="assets" && fs::is_regular_file(folder/"game.vpak",ec)) ||
+       fs::is_regular_file(folder/"assets"/"game.vpak",ec)) {
+        result.error="This is a packaged game, not the editable source workspace. "
+                     "Open the game source root containing CMakeLists.txt, models/, levels/, and assets/. "
+                     "Editor data is never read from game.vpak or a local cache.";
         return result;
     }
     result.error="No VOIDLINE workspace found at "+folder.string()+
@@ -143,6 +109,230 @@ bool importAssets(const Resolved& game,const fs::path& destination,
         }
     }
     if(ec){error="Cannot scan source assets";return false;}
+    return true;
+}
+
+
+// The game loads authored levels beside the executable, not from game.vpak.
+// The source checkout's levels/ directory is the authoritative rebuild input.
+namespace {
+bool managedLevelName(const fs::path& p) {
+    const auto name=p.filename().string();
+    const bool coop=name.rfind("coop-",0)==0;
+    const bool sector=name.rfind("sector-",0)==0;
+    if(!coop&&!sector)return false;
+    const size_t start=coop?5:7;
+    if(name.size()!=start+2+std::string(".vllevel.json").size() ||
+       name.substr(start+2)!=".vllevel.json")return false;
+    return name[start]>='0'&&name[start]<='9'&&name[start+1]>='0'&&name[start+1]<='9';
+}
+bool sameFile(const fs::path& a,const fs::path& b) {
+    std::error_code ec;
+    if(!fs::is_regular_file(a,ec)||!fs::is_regular_file(b,ec)||
+       fs::file_size(a,ec)!=fs::file_size(b,ec)||ec)return false;
+    std::ifstream left(a,std::ios::binary),right(b,std::ios::binary);
+    return left&&right&&std::equal(std::istreambuf_iterator<char>(left),{},
+                                   std::istreambuf_iterator<char>(right),{});
+}
+bool installLevel(const fs::path& file,const fs::path& target,const fs::path& backup,
+                  std::string& error) {
+    std::error_code ec;
+    if(fs::is_symlink(target,ec)) {error="Refusing to replace symlinked level: "+target.string();return false;}
+    if(fs::is_regular_file(target,ec)) {
+        fs::create_directories(backup.parent_path(),ec);
+        if(ec){error="Cannot create level backup folder";return false;}
+        fs::copy_file(target,backup,fs::copy_options::overwrite_existing,ec);
+        if(ec){error="Cannot back up level: "+target.string();return false;}
+    }
+    if(file.empty()) {
+        fs::remove(target,ec);
+        if(ec){error="Cannot remove reverted level override: "+target.string();return false;}
+        return true;
+    }
+    fs::create_directories(target.parent_path(),ec);
+    if(ec){error="Cannot create published level folder";return false;}
+    const fs::path temp=target.string()+".vlstudio-writing";
+    fs::copy_file(file,temp,fs::copy_options::overwrite_existing,ec);
+    if(ec){error="Cannot write level: "+target.string();return false;}
+    fs::rename(temp,target,ec);
+    if(ec){ec.clear();fs::remove(target,ec);ec.clear();fs::rename(temp,target,ec);}
+    if(ec){error="Cannot replace level: "+target.string();return false;}
+    return true;
+}
+}
+
+bool publishLevels(const fs::path& authoring,const fs::path& game,const fs::path& source,
+                   int& changed,std::string& error) {
+    changed=0;
+    const auto root=source.empty()?normalized(game):normalized(source);
+    if(root.empty()||!fs::is_directory(root)) {error="A writable game or source root is required for level publishing";return false;}
+    if(!fs::is_directory(authoring/"levels")){error="Authoring levels folder not found";return false;}
+    const auto stamp=std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+    const auto backup=root/"update-backups"/("model-studio-levels-"+stamp)/"levels";
+    for(int group=0;group<2;++group)for(int id=0;id<(group?vl::cooperativeSectorCount:vl::sectorCount);++id){
+        const bool coop=group!=0;
+        const auto& base=coop?vl::cooperativeStages[id]:vl::stages[id];
+        const auto file=vl::levelFile(authoring/"levels",id,coop);
+        const auto target=vl::levelFile(root/"levels",id,coop);
+        vl::Stage edited{};
+        if(!vl::readLevel(file,base,edited,id,coop,&error)){
+            error="Authoring level "+file.string()+": "+error;return false;
+        }
+        vl::Stage previous=base;
+        if(fs::exists(target)) {
+            if(!vl::readLevel(target,base,previous,id,coop,&error)){
+                error="Existing source level "+target.string()+": "+error;return false;
+            }
+        }
+        if(vl::levelFingerprint(edited)==vl::levelFingerprint(previous))continue;
+        // Don't leave obsolete level overrides around when the editor restores
+        // the built-in baseline. This works for both campaign and co-op levels.
+        const fs::path input=vl::levelFingerprint(edited)==vl::levelFingerprint(base)?fs::path{}:file;
+        if(!installLevel(input,target,backup/target.filename(),error))return false;
+        ++changed;
+    }
+    return true;
+}
+
+bool syncRuntimeLevels(const fs::path& source,std::vector<fs::path>& updated,std::string& error,
+                       const fs::path& activeGame) {
+    updated.clear();
+    std::error_code ec;
+    const auto base=normalized(source);
+    if(!fs::is_directory(base/"assets")) {error="Game source assets folder missing";return false;}
+    const auto stamp=std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+    std::vector<fs::path> buildDirectories;
+    for(const auto& buildName:{"build","build-debug","build-release","build-windows","linux-runtime"})
+        buildDirectories.push_back(base/buildName);
+    // An installed game may live outside the source checkout's build folders.
+    // Publishing with a manually linked source tree must update that game too.
+    if(!activeGame.empty()) {
+        const auto game=normalized(activeGame);
+        if(game!=base && fs::is_regular_file(game/"assets"/"game.vpak",ec))
+            buildDirectories.push_back(game);
+    }
+    for(const auto& build:buildDirectories){
+        if(!fs::is_directory(build,ec)||fs::is_symlink(build,ec))continue;
+        for(fs::recursive_directory_iterator it(build,fs::directory_options::skip_permission_denied,ec),end;
+            it!=end&&!ec;it.increment(ec)){
+            if(it.depth()>6){it.disable_recursion_pending();continue;}
+            if(it->is_symlink(ec)){it.disable_recursion_pending();continue;}
+            if(!it->is_regular_file(ec))continue;
+            const auto name=it->path().filename().string();
+            if(name!="voidline"&&name!="voidline.exe"&&name!="VOIDLINE.exe")continue;
+            const auto target=it->path().parent_path()/"levels";
+            // Avoid an editor core or test binary. Only games adjacent to a PAK.
+            if(!fs::is_regular_file(it->path().parent_path()/"assets"/"game.vpak",ec))continue;
+            fs::create_directories(target,ec);
+            if(ec){error="Cannot create runtime levels directory";return false;}
+            // Remove only managed level snapshots, preserving unknown sidecars.
+            for(fs::directory_iterator old(target,ec),oldEnd;old!=oldEnd&&!ec;old.increment(ec)){
+                if(old->is_symlink(ec)){if(managedLevelName(old->path())){error="Linked runtime level rejected";return false;}continue;}
+                if(!old->is_regular_file(ec)||!managedLevelName(old->path()))continue;
+                const auto latest=base/"levels"/old->path().filename();
+                if(fs::is_regular_file(latest,ec))continue;
+                if(!installLevel({},old->path(),fs::path(old->path().string()+".backup-"+stamp),error))return false;
+                updated.push_back(old->path());
+            }
+            if(ec){error="Cannot scan runtime levels";return false;}
+            if(!fs::is_directory(base/"levels"))continue;
+            for(fs::directory_iterator src(base/"levels",ec),srcEnd;src!=srcEnd&&!ec;src.increment(ec)){
+                if(src->is_symlink(ec)){error="Linked source level rejected";return false;}
+                if(!src->is_regular_file(ec)||!managedLevelName(src->path()))continue;
+                const auto dst=target/src->path().filename();
+                if(sameFile(src->path(),dst))continue;
+                if(!installLevel(src->path(),dst,fs::path(dst.string()+".backup-"+stamp),error))return false;
+                updated.push_back(dst);
+            }
+            if(ec){error="Cannot scan source levels";return false;}
+        }
+        if(ec){error="Cannot scan runtime tree";return false;}
+    }
+    return true;
+}
+
+bool publishEditableModels(const fs::path& authoring,const fs::path& source,
+                           int& changed,std::string& error) {
+    changed=0;
+    const auto input=authoring/"models";
+    const auto targetRoot=source/"models";
+    if(!fs::is_directory(input)||!fs::is_directory(source/"assets")||
+       !fs::is_regular_file(source/"scripts/pack-assets.py")) {
+        error="Authoring models or destination source tree missing";return false;
+    }
+    const auto stamp=std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+    const auto backupRoot=source/"update-backups"/("model-studio-input-models-"+stamp)/"models";
+    for(const auto& [group,count,suffix]:{
+            std::tuple<const char*,int,const char*>{"characters",6,".vlcharacter.json"},
+            {"enemies",10,".vlenemy.json"}}) {
+        for(int id=0;id<count;++id){
+            const fs::path relative=fs::path(group)/(std::to_string(id)+suffix);
+            const fs::path inputFile=input/relative,target=targetRoot/relative;
+            std::error_code ec;
+            if(fs::is_symlink(inputFile,ec)||fs::is_symlink(target,ec)) {
+                error="Refusing to publish symlinked editable model: "+relative.string();return false;
+            }
+            if(!fs::is_regular_file(inputFile,ec)) {error="Missing editable model "+inputFile.string();return false;}
+            json_object* doc=json_object_from_file(inputFile.string().c_str());
+            json_object* idValue=nullptr,*skeleton=nullptr,*seq=nullptr,*depth=nullptr;
+            const bool valid=doc&&json_object_object_get_ex(doc,"id",&idValue)&&
+                json_object_is_type(idValue,json_type_int)&&json_object_get_int(idValue)==id&&
+                json_object_object_get_ex(doc,"skeleton",&skeleton)&&
+                json_object_is_type(skeleton,json_type_object)&&
+                json_object_object_get_ex(skeleton,"sequences",&seq)&&
+                json_object_is_type(seq,json_type_object)&&
+                json_object_object_get_ex(skeleton,"sequenceDepth",&depth)&&
+                json_object_is_type(depth,json_type_object);
+            if(doc)json_object_put(doc);
+            if(!valid){error="Invalid model ID or missing movement sequences: "+relative.string();return false;}
+            if(sameFile(inputFile,target))continue;
+            if(fs::is_regular_file(target,ec)) {
+                fs::create_directories((backupRoot/relative).parent_path(),ec);
+                if(ec){error="Cannot create editable model backup";return false;}
+                fs::copy_file(target,backupRoot/relative,fs::copy_options::overwrite_existing,ec);
+                if(ec){error="Cannot back up editable model "+relative.string();return false;}
+            }
+            fs::create_directories(target.parent_path(),ec);
+            if(ec){error="Cannot create editable model source folder";return false;}
+            const auto temporary=fs::path(target.string()+".vlstudio-writing");
+            fs::copy_file(inputFile,temporary,fs::copy_options::overwrite_existing,ec);
+            if(ec){error="Cannot stage editable model "+relative.string();return false;}
+            fs::rename(temporary,target,ec);
+            if(ec){std::error_code ignored;fs::remove(target,ignored);ec.clear();fs::rename(temporary,target,ec);}
+            if(ec){error="Cannot publish editable model "+relative.string();return false;}
+            ++changed;
+        }
+    }
+    // Publish the user-editable movement definitions, not just generated actions.
+    const auto src=input/"movement-descriptions.json";
+    const auto dst=targetRoot/"movement-descriptions.json";
+    if(fs::is_regular_file(src) && !sameFile(src,dst)) {
+        std::error_code ec;
+        if(fs::is_symlink(src,ec)||fs::is_symlink(dst,ec)) {
+            error="Movement catalog symlink rejected";return false;
+        }
+        json_object* catalog=json_object_from_file(src.string().c_str());
+        json_object* moves=nullptr;
+        const bool valid=catalog&&json_object_object_get_ex(catalog,"movements",&moves)&&
+                         json_object_is_type(moves,json_type_array);
+        if(catalog)json_object_put(catalog);
+        if(!valid){error="Invalid source movement catalog";return false;}
+        if(fs::is_regular_file(dst,ec)){
+            fs::create_directories(backupRoot,ec);
+            if(ec){error="Cannot create movement backup directory";return false;}
+            fs::copy_file(dst,backupRoot/dst.filename(),fs::copy_options::overwrite_existing,ec);
+            if(ec){error="Cannot back up movement catalog";return false;}
+        }
+        fs::create_directories(dst.parent_path(),ec);
+        if(ec){error="Cannot create movement catalog directory";return false;}
+        const auto temporary=fs::path(dst.string()+".vlstudio-writing");
+        fs::copy_file(src,temporary,fs::copy_options::overwrite_existing,ec);
+        if(ec){error="Cannot stage movement catalog";return false;}
+        fs::rename(temporary,dst,ec);
+        if(ec){std::error_code ignored;fs::remove(dst,ignored);ec.clear();fs::rename(temporary,dst,ec);}
+        if(ec){error="Cannot publish movement catalog";return false;}
+        ++changed;
+    }
     return true;
 }
 
@@ -251,46 +441,45 @@ bool syncRuntimePaks(const fs::path& archive,const fs::path& source,
 
 fs::path projectFor(const fs::path& game) {
     const auto found=resolve(game);
-    return dataRoot()/key(found.valid?found.root:game);
+    return found.valid && found.fromSource ? found.source : fs::path{};
 }
 bool validGame(const fs::path& game) {return resolve(game).valid;}
 Result prepare(const fs::path& selected,Progress* progress) {
     Result result;
     const auto found=resolve(selected);
     if(!found.valid){result.error=found.error;return result;}
-    result.game=found.root;
-    result.source=found.source;
-    result.fromSource=found.fromSource;
-    result.project=projectFor(found.root);
-    std::error_code ec;
-    fs::create_directories(result.project,ec);
-    if(ec){result.error="Cannot create authoring workspace";return result;}
-    const auto marker=result.project/".workspace-ready";
-    // Keep all user edits when a saved authoring workspace is reopened.
-    if(fs::is_regular_file(marker) && fs::is_directory(result.project/"assets") &&
-       fs::is_directory(result.project/"models") && fs::is_directory(result.project/"levels")) {
-        std::ifstream in(marker);std::string recorded;std::getline(in,recorded);
-        if(recorded!=normalized(found.root).string()){
-            result.error="Workspace marker does not match selected game";return result;
-        }
-        if(progress)progress->report(1,1,"Opening saved authoring workspace");
-        result.existing=true;result.ok=true;return result;
+    if(!found.fromSource || found.source.empty()) {
+        result.error="Model Studio requires an editable game source checkout; no authoring caches or installed PAK imports are supported.";
+        return result;
     }
-    if(progress)progress->report(0,1,found.fromSource?"Reading source assets":"Reading game.vpak");
-    if(!importAssets(found,result.project/"assets",result.count,result.error,progress))return result;
-    if(progress)progress->report(1,3,"Importing editable models and levels");
-    int copied=0;
-    if(!copyCustom(found.root/"levels",result.project/"levels",progress,copied,result.error)||
-       !copyCustom(found.root/"models",result.project/"models",progress,copied,result.error))return result;
-    fs::create_directories(result.project/"levels",ec);
-    fs::create_directories(result.project/"models",ec);
-    if(ec){result.error="Cannot create authoring model folders";return result;}
-    std::ofstream out(marker,std::ios::binary|std::ios::trunc);
-    out<<normalized(found.root).string()<<'\n';
-    if(!out){result.error="Cannot save workspace marker";return result;}
-    if(progress)progress->report(1,1,"Loaded "+std::to_string(result.count)+" game assets");
-    result.ok=true;return result;
+    result.game=found.source;
+    result.source=found.source;
+    result.fromSource=true;
+    result.project=found.source;  // No XDG/HOME/private editor workspace.
+    std::error_code ec;
+    for(const char* directory:{"assets","models","models/characters","models/enemies","levels"}){
+        const auto target=result.project/directory;
+        if(fs::is_symlink(target,ec) || !fs::is_directory(target,ec)){
+            result.error="Game workspace must contain a real directory: "+target.string();return result;
+        }
+    }
+    for(int group=0;group<2;++group)for(int id=0;id<(group?10:6);++id){
+        const auto file=result.project/"models"/(group?"enemies":"characters")/
+                        (std::to_string(id)+(group?".vlenemy.json":".vlcharacter.json"));
+        if(fs::is_symlink(file,ec)||!fs::is_regular_file(file,ec)){
+            result.error="Editable source model is missing: "+file.string();return result;
+        }
+    }
+    const auto catalog=result.project/"models"/"movement-descriptions.json";
+    if(fs::is_symlink(catalog,ec)||!fs::is_regular_file(catalog,ec)){
+        result.error="Editable movement catalog is missing: "+catalog.string();return result;
+    }
+    if(progress)progress->report(1,1,"Reading live models and levels from "+result.project.string());
+    result.existing=true;
+    result.ok=true;
+    return result;
 }
+
 bool updatePak(const fs::path& selected,const fs::path& authoring,int& assets,std::string& error,Progress* progress) {
     const auto found=resolve(selected);
     if(!found.valid){error=found.error;return false;}

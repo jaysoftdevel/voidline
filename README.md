@@ -1,4 +1,32 @@
-## Complete v2.10.12 source release (Linux / Windows)
+**VOIDLINE v2.10.18 progression test fix:** CTest now runs the game unit-test
+binary in a dedicated `build/test-runner/` directory instead of beside
+editor-published runtime levels. This prevents legitimate edits to
+`levels/*.vllevel.json` from triggering the built-in stage pointer assertion
+in `tests/test_progression.cpp`. A new regression test verifies custom-level
+loading and safe restoration to built-in levels. See
+[BUILD-TEST-FIX.md](BUILD-TEST-FIX.md).
+
+**VOIDLINE v2.10.17 editor UX + build diagnostics:** Model Studio v0.0.19
+opens maximized, shows resizable readable status/confirmation/input dialogs,
+and wraps inspector/status text as the window resizes. Edit > Copy/Paste Model
+(Ctrl+C/V outside text fields) and Copy/Paste Movement (Ctrl+Shift+C/V)
+use the system clipboard, never a private editor cache. Pasting a full model
+keeps the destination source model slot ID/schema. The main incremental build
+now includes the headless Python editor test suite and prints failing test names,
+full failure output, individual rerun commands and log paths.
+See [MODEL-STUDIO-UI-CLIPBOARD-v2.10.17.md](MODEL-STUDIO-UI-CLIPBOARD-v2.10.17.md).
+
+**VOIDLINE v2.10.16 build-warning cleanup:** Fixed the source-level warnings
+reported by GCC (local/field name shadowing and explicitly handling all
+operative looks in the head-rendering switch). No compiler warnings were
+suppressed. Linux and Windows continue sharing the same game sources.
+`./build.sh` remains incremental by default, with `--clean` for a full rebuild.
+
+**VOIDLINE v2.10.15 model editor update:** Model Studio now edits the actual
+game workspace source files directly, with no authoring cache. See
+[MODEL-STUDIO-WORKFLOW.md](MODEL-STUDIO-WORKFLOW.md).
+
+## Complete source release (Linux / Windows)
 
 This release has a **single shared game source and asset tree** for Linux and Windows.
 On Linux run `./build.sh`; on Windows use `build.bat` with Visual Studio 2022 and vcpkg.
@@ -7,6 +35,34 @@ consume the same baked model files and the same deterministic `game.vpak` packer
 See [BUILD-CROSS-PLATFORM.md](BUILD-CROSS-PLATFORM.md) and verify content parity with
 `python3 scripts/check-source-assets.py`. Native Windows compilation still needs
 testing on a Windows host.
+
+## v2.10.14 — Editable movement descriptions and source-first publishing
+
+The authoring `models/` folder now contains 16 editable input model JSON files
+and a 104-state `movement-descriptions.json` catalog. All states can be selected
+in the Linux editor (including on enemies); procedural non-humanoid joint
+limitations still apply. **Publish Model Sources + Levels** commits editable
+JSON to the source checkout with backups, regenerates derived assets for the
+next incremental Linux/Windows game build, and publishes changed levels.
+Updating a currently installed `game.vpak` is optional, via **Also Publish Runtime PAK…**.
+See [MODEL-MOVEMENT-SOURCES.md](MODEL-MOVEMENT-SOURCES.md) for the workflow.
+
+## v2.10.13 — Publish levels and use incremental Linux builds
+
+**Publish models + levels** now saves edited campaign/co-op levels to `levels/`
+in the game source checkout, alongside baked models in `assets/models/`. Only
+levels that differ from the published source layout are written. Source level
+JSON is copied beside the built executable on Linux and Windows, refreshed in
+existing runtimes on publish, and synchronized into tester runtime folders on
+subsequent builds. Reverting a level to its built-in layout removes the stale
+override. Level layouts stay as **loose** `.vllevel.json` files: the game reads
+them beside the executable; they do not belong in `game.vpak`. The editor
+retains backups of overwritten level files in `update-backups/`.
+
+`./build.sh` now **reuses** `build/`, CMake's cache, object files and archives.
+Run `./build.sh --clean` to wipe `build/` and compile from scratch. Both modes
+regenerate the game archive when a source asset changes and synchronize authored
+levels. `--no-tests`, `--debug`, `--verbose` and `-D...` continue to work.
 
 ## v2.10.12 — Open source workspaces without a built game.vpak
 
@@ -66,7 +122,7 @@ Building from source requires a C++20 compiler, CMake, and the SDL2, libwebp, li
 ./run.sh
 ```
 
-`./build.sh` always starts from an empty `build/` directory. It prints the host, toolchain, configuration, every compile step, warnings, artifact checks (size, linked libraries, asset counts) and the unit test results, with a per-phase timing summary. The full log is saved to `build.log`. Options: `--verbose` shows every compiler command, `--no-tests` skips the unit tests and `--debug` builds without optimization. Other arguments go to CMake, for example `-DVOIDLINE_LTO=OFF`.
+`./build.sh` builds incrementally by default; use `./build.sh --clean` for a full rebuild. It prints the host, toolchain, configuration, every compile step, warnings, artifact checks (size, linked libraries, asset counts) and the unit test results, with a per-phase timing summary. The full log is saved to `build.log`. Options: `--verbose` shows every compiler command, `--no-tests` skips the unit tests and `--debug` builds without optimization. Other arguments go to CMake, for example `-DVOIDLINE_LTO=OFF`.
 
 The executable is `build/voidline/voidline`. The build creates `build/voidline/assets/game.vpak` with all artwork, fonts and sound recordings, and loads them directly from memory. A Windows build requires Python 3 to build the same media pack. No external media extraction utility is needed at runtime. Media bundling deters casual browsing, but is not cryptographic DRM: a determined user can recover packaged assets. The game starts in fullscreen. Use `./run.sh --windowed` or F11 to switch window modes. Settings includes High and Performance rendering modes.
 

@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <json-c/json.h>
 #include <fstream>
+#include <chrono>
 #include <iostream>
 #include <iterator>
 #include <string>
@@ -28,7 +29,7 @@ bool restoreActions(const fs::path& project,const fs::path& authorFile,int id,bo
     if(!fs::is_regular_file(packed))return true;
     json_object* catalog=json_object_from_file(packed.string().c_str());
     if(!catalog){error="Invalid packed action catalog: "+packed.string();return false;}
-    json_object *models=nullptr,*entry=nullptr,*sequences=nullptr;
+    json_object *models=nullptr,*entry=nullptr,*sequences=nullptr,*depths=nullptr;
     const bool ok=json_object_object_get_ex(catalog,"models",&models)&&
                   json_object_is_type(models,json_type_array)&&
                   id<int(json_object_array_length(models))&&
@@ -44,6 +45,9 @@ bool restoreActions(const fs::path& project,const fs::path& authorFile,int id,bo
         json_object_put(doc);json_object_put(catalog);error="Seeded model missing skeleton";return false;
     }
     json_object_object_add(skeleton,"sequences",json_object_get(sequences));
+    if(json_object_object_get_ex(entry,"sequenceDepth",&depths)&&
+       json_object_is_type(depths,json_type_object))
+        json_object_object_add(skeleton,"sequenceDepth",json_object_get(depths));
     const int written=json_object_to_file_ext(authorFile.string().c_str(),doc,JSON_C_TO_STRING_PRETTY);
     json_object_put(doc);json_object_put(catalog);
     if(written<0){error="Unable to restore packed authoring action layers";return false;}
@@ -67,6 +71,73 @@ bool seed(const fs::path& project,std::string& error) {
         }
     }
     return true;
+}
+// Missing built-in levels are materialized once INSIDE the game source root.
+// Existing level files are never regenerated, so external edits remain authoritative.
+bool seedMissingSourceLevels(const fs::path& source,std::string& error){
+    for(int group=0;group<2;++group)for(int id=0;id<(group?cooperativeSectorCount:sectorCount);++id){
+        const auto file=levelFile(source/"levels",id,group!=0);
+        if(!fs::exists(file) && !writeLevel(file,group?cooperativeStages[id]:stages[id],id,group!=0,&error))return false;
+    }
+    return true;
+}
+bool completeInputMovementLayers(const fs::path& project,std::string& error){
+    const auto catalogFile=project/"models/movement-descriptions.json";
+    if(!fs::is_regular_file(catalogFile))return true;
+    json_object* catalog=json_object_from_file(catalogFile.string().c_str());
+    json_object* movements=nullptr;
+    if(!catalog||!json_object_object_get_ex(catalog,"movements",&movements)||
+       !json_object_is_type(movements,json_type_array)){
+        if(catalog)json_object_put(catalog);
+        error="Invalid editable movement-descriptions.json";return false;
+    }
+    for(int group=0;group<2;++group)for(int id=0;id<(group?int(specs.size()):int(characters.size()));++id){
+        const auto file=group?enemyModelFile(project/"models",id):characterModelFile(project/"models",id);
+        json_object* doc=json_object_from_file(file.string().c_str());
+        json_object* sk=nullptr,*seq=nullptr,*depth=nullptr;
+        if(!doc||!json_object_object_get_ex(doc,"skeleton",&sk)||
+           !json_object_is_type(sk,json_type_object)){
+            if(doc)json_object_put(doc);
+            json_object_put(catalog);
+            error="Invalid authoring skeleton: "+file.string();return false;
+        }
+        if(!json_object_object_get_ex(sk,"sequences",&seq)||!json_object_is_type(seq,json_type_object)){
+            seq=json_object_new_object();json_object_object_add(sk,"sequences",seq);
+        }
+        if(!json_object_object_get_ex(sk,"sequenceDepth",&depth)||!json_object_is_type(depth,json_type_object)){
+            depth=json_object_new_object();json_object_object_add(sk,"sequenceDepth",depth);
+        }
+        bool changed=false;
+        for(size_t n=0;n<json_object_array_length(movements);++n){
+            json_object* item=json_object_array_get_idx(movements,n),*nameObj=nullptr,*existing=nullptr;
+            if(!item||!json_object_object_get_ex(item,"id",&nameObj)||
+               !json_object_is_type(nameObj,json_type_string))continue;
+            const char* name=json_object_get_string(nameObj);
+            if(!json_object_object_get_ex(seq,name,&existing)){
+                json_object* vec=json_object_new_array();
+                for(int j=0;j<14;++j){json_object* xy=json_object_new_array();
+                    json_object_array_add(xy,json_object_new_double(0));
+                    json_object_array_add(xy,json_object_new_double(0));json_object_array_add(vec,xy);}
+                json_object_object_add(seq,name,vec);changed=true;
+            }
+            if(!json_object_object_get_ex(depth,name,&existing)){
+                json_object* z=json_object_new_array();
+                for(int j=0;j<14;++j)json_object_array_add(z,json_object_new_double(0));
+                json_object_object_add(depth,name,z);changed=true;
+            }
+        }
+        if(changed){
+            const auto temp=fs::path(file.string()+".vlstudio-writing");
+            if(json_object_to_file_ext(temp.string().c_str(),doc,JSON_C_TO_STRING_PRETTY)<0){
+                json_object_put(doc);json_object_put(catalog);error="Cannot expand authored movement sequences";return false;
+            }
+            std::error_code ec;fs::rename(temp,file,ec);
+            if(ec){std::error_code ignored;fs::remove(file,ignored);ec.clear();fs::rename(temp,file,ec);}
+            if(ec){json_object_put(doc);json_object_put(catalog);error="Cannot commit movement sequences";return false;}
+        }
+        json_object_put(doc);
+    }
+    json_object_put(catalog);return true;
 }
 bool validate(const fs::path& project,std::string& error) {
     for(int group=0;group<2;++group)for(int id=0;id<(group?cooperativeSectorCount:sectorCount);++id){
@@ -101,13 +172,14 @@ bool generate(const fs::path& project,std::string& error){
 }
 int fail(const std::string& error){std::cerr<<error<<'\n';return 1;}
 void help(){
-    std::cout<<"VOIDLINE Model Studio 0.0.16 · Linux C++ authoring backend\n"
-             <<"  --prepare-workspace PATH         open game source or installed runtime\n"
-             <<"  --import-game PATH PROJECT      import source assets or packed media\n"
+    std::cout<<"VOIDLINE Model Studio 0.0.17 · Linux C++ authoring backend\n"
+             <<"  --prepare-workspace PATH         open LIVE game source (no local cache)\n"
+             <<"  --import-game PATH PROJECT      legacy explicit copy, not used for workspace opening\n"
              <<"  --validate PROJECT             validate 26 levels and 16 models\n"
              <<"  --export-all PROJECT           seed missing built-in models\n"
              <<"  --export-project PROJECT       generate sources and VLRM/VLEM models\n"
-             <<"  --update-workspace PATH [SOURCE] publish edited models into source and runtimes\n"
+             <<"  --publish-sources PATH [SOURCE]  update editable model inputs, baked source assets, levels (no PAK)\n"
+             <<"  --update-workspace PATH [SOURCE] publish inputs and also refresh runtime PAKs\n"
              <<"  --detect-source PATH          find CMake source used by rebuild\n"
              <<"  --resolve-workspace PATH       show detected workspace structure\n"
              <<"  --export-single PROJECT character|enemy|level ID OUTPUT\n"
@@ -130,12 +202,15 @@ int main(int argc,char** argv){
         return 0;
     }
     if((action=="--prepare-workspace"&&argc==3)||
-       (action=="--update-workspace"&&(argc==3||argc==4))){
+       ((action=="--update-workspace"||action=="--publish-sources")&&(argc==3||argc==4))){
         const fs::path game=fs::absolute(argv[2]);
         const auto project=workspace::prepare(game);
         if(!project.ok)return fail(project.error);
         std::string error;
-        if(!recoverPacked(project.project,error)||!seed(project.project,error))return fail(error);
+        if(!seedMissingSourceLevels(project.project,error))return fail(error);
+        // --prepare-workspace is read-only for model JSON. The only permitted
+        // first-open writes are missing default levels in source/levels/.
+        if(action!="--prepare-workspace" && !completeInputMovementLayers(project.project,error))return fail(error);
         if(action=="--prepare-workspace"){
             std::cout<<"GAME\t"<<project.game.string()<<'\n'
                      <<"MODE\t"<<(project.fromSource?"source":"runtime")<<'\n'
@@ -145,33 +220,65 @@ int main(int argc,char** argv){
         }
         if(!generate(project.project,error))return fail(error);
         std::error_code ec;
+        int generatedAssets=0;
+        const auto backup=project.project/"update-backups"/
+                          ("model-studio-derived-"+std::to_string(std::chrono::system_clock::now().time_since_epoch().count()));
         for(const char* file:{"characters.vlrm","enemies.vlem","characters.info.json","enemies.info.json","characters.actions.json","enemies.actions.json"}){
             const auto src=project.project/"export"/"assets"/"models"/file;
             const auto dest=project.project/"assets"/"models"/file;
+            // Do not overwrite/re-timestamp unchanged source assets on publish.
+            bool equal=false;
+            if(fs::is_regular_file(dest,ec) && fs::file_size(src,ec)==fs::file_size(dest,ec) && !ec){
+                std::ifstream a(src,std::ios::binary),b(dest,std::ios::binary);
+                equal=a&&b&&std::equal(std::istreambuf_iterator<char>(a),{},std::istreambuf_iterator<char>(b),{});
+            }
+            if(equal)continue;
+            if(fs::is_symlink(dest,ec))return fail("Refusing to replace linked asset "+dest.string());
+            if(fs::is_regular_file(dest,ec)){
+                fs::create_directories(backup,ec);
+                if(ec)return fail("Cannot create generated asset backup directory");
+                fs::copy_file(dest,backup/file,fs::copy_options::overwrite_existing,ec);
+                if(ec)return fail(std::string("Cannot back up generated asset ")+file);
+            }
             fs::create_directories(dest.parent_path(),ec);
             if(ec)return fail("Cannot create baked model folder");
-            fs::copy_file(src,dest,fs::copy_options::overwrite_existing,ec);
+            const auto temp=fs::path(dest.string()+".vlstudio-writing");
+            fs::copy_file(src,temp,fs::copy_options::overwrite_existing,ec);
             if(ec)return fail(std::string("Cannot stage ")+file);
+            fs::rename(temp,dest,ec);
+            if(ec){std::error_code ignored;fs::remove(dest,ignored);ec.clear();fs::rename(temp,dest,ec);}
+            if(ec)return fail(std::string("Cannot install ")+file);
+            ++generatedAssets;
         }
-        // Use the CMake source tree as the authority for future rebuilds. A source
-        // workspace works without game.vpak; an installed-game workspace retains
-        // the legacy archive publishing path and may also sync source assets.
+        std::cout<<"GENERATED_ASSETS_UPDATED\t"<<generatedAssets<<'\n';
+        // The source workspace is the only authoring workspace; all source
+        // files are already saved in-place before publishing baked game assets.
         const fs::path source=argc==4?fs::absolute(argv[3]):project.source;
         if(!source.empty() && workspace::sourceFor(source)!=fs::weakly_canonical(source))
             return fail("SOURCE must be the VOIDLINE game source root (CMakeLists.txt and scripts/pack-assets.py)");
-        int count=0,sourceFiles=0;
+        if(source.empty() || fs::weakly_canonical(source)!=project.project)
+            return fail("Publishing is limited to the open game source workspace.");
+        int count=0,sourceFiles=0,inputFiles=0;
         if(!source.empty()){
+            // Authoritative inputs are committed BEFORE any optional game.vpak.
+            if(!workspace::publishEditableModels(project.project,source,inputFiles,error))return fail(error);
+            std::cout<<"INPUT_MODELS_UPDATED\t"<<source.string()<<"/models\t"<<inputFiles<<'\n';
             if(!workspace::publishSourceAssets(project.project,source,sourceFiles,error))return fail(error);
-            std::cout<<"SOURCE_UPDATED\t"<<source.string()<<"\t"<<sourceFiles<<'\n';
+            std::cout<<"SOURCE_UPDATED\t"<<source.string()<<"\t"<<(sourceFiles+generatedAssets)<<'\n';
         }else{
             std::cout<<"SOURCE_MISSING\tNo source checkout was found. Installed pack changes "
                         "will not survive a rebuild from unrelated source assets.\n";
         }
+        int changedLevels=0;
+        if(!workspace::publishLevels(project.project,project.game,source,changedLevels,error))return fail(error);
+        std::cout<<"LEVELS_IN_SOURCE\t"<<(source.empty()?project.game:source).string()+"/levels"<<'\n';
         // Source-only mode publishes directly from its raw assets; a PAK is
         // generated into the editor export directory and optionally distributed
         // to already-built runtimes. No source-root game.vpak is required.
         fs::path newArchive;
-        if(project.fromSource){
+        if(action=="--publish-sources"){
+            std::cout<<"PACK_SKIPPED\tEditable model inputs and rebuild assets saved; runtime PAK unchanged.\n";
+        }else if(project.fromSource){
             newArchive=project.project/"export"/"game.vpak";
             if(!art::repack(project.project/"assets",newArchive,count,error))return fail(error);
             std::cout<<"PACK_STAGED\t"<<newArchive.string()<<'\n';
@@ -181,11 +288,19 @@ int main(int argc,char** argv){
             std::cout<<"RUNTIME_PAK\t"<<newArchive.string()<<'\n';
         }
         std::vector<fs::path> refreshed;
-        if(!source.empty() && !workspace::syncRuntimePaks(newArchive,source,refreshed,error))return fail(error);
+        if(!source.empty() && !newArchive.empty() && !workspace::syncRuntimePaks(newArchive,source,refreshed,error))return fail(error);
         for(const auto& path:refreshed)std::cout<<"RUNTIME_PAK\t"<<path.string()<<'\n';
-        if(project.fromSource && refreshed.empty())
+        // Levels are saved in source/levels/ immediately, so source-vs-source
+        // comparison is intentionally always unchanged. Still synchronize the
+        // live workspace to existing built runtimes on every Publish.
+        if(!source.empty()){
+            std::vector<fs::path> levelRuntimes;
+            if(!workspace::syncRuntimeLevels(source,levelRuntimes,error,project.game))return fail(error);
+            for(const auto& path:levelRuntimes)std::cout<<"RUNTIME_LEVEL\t"<<path.string()<<'\n';
+        }
+        if(action=="--update-workspace" && project.fromSource && refreshed.empty())
             std::cout<<"RUNTIME_PENDING\tNo built game found. Build VOIDLINE to create the updated runtime PAK.\n";
-        // Visible verification to distinguish the live installed pack and the editor cache.
+        // Verify the generated binary from the live source tree.
         std::array<SkeletonProfile,6> verified{};
         const auto baked=project.project/"assets"/"models"/"characters.vlrm";
         std::ifstream in(baked,std::ios::binary);
@@ -196,9 +311,9 @@ int main(int argc,char** argv){
                  <<kade.offsets[0][3].x<<","<<kade.offsets[0][3].y
                  <<"\trun.hand="<<kade.offsets[2][8].x<<","<<kade.offsets[2][8].y
                  <<"\tbodyHeight="<<kade.bodyHeight<<'\n';
-        std::cout<<"Published "<<count<<" assets; "
+        std::cout<<"Published "<<inputFiles<<" editable model input(s), "<<count<<" packed assets; "
                  <<(source.empty()?"installed archive only":"game source assets synchronized")
-                 <<". Model changes are loaded on game restart.\n";return 0;
+                 <<"; game source levels are authoritative. Rebuild or restart the game to load changes.\n";return 0;
     }
     if(action=="--import-game"&&argc==4){
         const fs::path game=fs::absolute(argv[2]),project=fs::absolute(argv[3]);
@@ -222,14 +337,14 @@ int main(int argc,char** argv){
     if((action=="--export-all"||action=="--validate"||action=="--export-project")&&argc==3){
         const fs::path project=fs::absolute(argv[2]);std::string error;
         if(action=="--export-all"){
-            if(!seed(project,error))return fail(error);
+            if(!seed(project,error)||!completeInputMovementLayers(project,error))return fail(error);
             std::cout<<"EXPORTED 26 LEVELS + 16 MODELS\n";return 0;
         }
         if(action=="--validate"){
             if(!validate(project,error))return fail(error);
             std::cout<<"Validated 26 levels and 16 models\n";return 0;
         }
-        if(!generate(project,error))return fail(error);
+        if(!completeInputMovementLayers(project,error)||!generate(project,error))return fail(error);
         std::cout<<"OFFLINE EXPORT: C++ source, images, characters.vlrm, enemies.vlem\n";return 0;
     }
     if(action=="--export-single"&&argc==6){

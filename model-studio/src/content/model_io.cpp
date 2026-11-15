@@ -43,7 +43,7 @@ Json parse(const std::filesystem::path& file){
     std::ifstream stream(file,std::ios::binary);
     if(!stream)return {nullptr,json_object_put};
     std::string s((std::istreambuf_iterator<char>(stream)),{});
-    if(s.size()>65536)return {nullptr,json_object_put};
+    if(s.size()>2*1024*1024)return {nullptr,json_object_put};
     return {json_tokener_parse(s.c_str()),json_object_put};
 }
 bool schema(json_object* j,const char* type,int id) {

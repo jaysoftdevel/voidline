@@ -1,16 +1,17 @@
-Model Studio v0.0.16 (Linux only)
+Model Studio 0.0.19 / VOIDLINE 2.10.17 — NO EDITOR CACHE
 
-Build game + editor: ./build.sh (from the game source root)
-Editor-only build:    cd model-studio && ./build.sh && cd ..
-Open editor:         ./run-model-studio.sh --open-workspace "$PWD"
+From the game source root:
+  ./build.sh
+  ./run-model-studio.sh --open-workspace "$PWD"
 
-1. Open Game Workspace and select the game source root (CMakeLists.txt + assets/)
-   or a built runtime with assets/game.vpak. No game.vpak is required for source.
-2. Edit a character or enemy model and Save (Ctrl+S).
-3. Export Single Model creates only a JSON copy. Export Project Sources creates
-   generated C++ and baked assets in the editor cache but does not publish.
-4. Publish models updates source assets and any built game.vpak, retaining backups.
-5. If no runtime is built yet, run ./build.sh (Linux) or build.bat (Windows).
-6. Verify with ./build/voidline/voidline --model-report; restart to apply edits.
+All model and level JSON files load directly from game/models and game/levels.
+Save (Ctrl+S) updates the source file immediately. F5 reloads it from disk.
+Publish Model Sources + Levels regenerates baked assets and stages level files.
+Build again with ./build.sh (incremental). --clean explicitly does a clean build.
+Game PAK update is optional and separate.
 
+No ~/.local/share/voidline-model-studio/workspaces/ cache is used or created.
+Select the source checkout, not a separately installed runtime PAK.
 Full instructions: ../MODEL-STUDIO-WORKFLOW.md
+
+Copy/Paste: Ctrl+C/V model; Ctrl+Shift+C/V selected movement (outside text inputs).

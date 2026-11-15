@@ -19,13 +19,16 @@ import sys
 import time
 import threading
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox, simpledialog
+from tkinter import ttk, filedialog
 from editor_logic import (can_edit_joint, rig_status, run_cycles_per_second, run_phase,
                           hit_level_object, move_level_object, create_level_object,
                           delete_level_object, level_selected_anchor, edit_scalar_property, TOOL_KEYS,
                           ACTION_STATES, movement_sequences, ensure_sequences, create_model_from_template,
                           assign_model_to_slot, polygon_vertices, edit_structure_vertex,
-                          add_structure_vertex, remove_structure_vertex)
+                          add_structure_vertex, remove_structure_vertex,
+                          copy_model_payload, paste_model_payload,
+                          copy_movement_payload, paste_movement_payload)
+from studio_dialogs import StudioDialog, DIALOG_FONT
 
 try:
     from PIL import Image, ImageTk
@@ -38,7 +41,7 @@ if not CORE.exists():
     CORE = ROOT / "bin" / "linux" / "voidline-editor-core"
 if not CORE.exists():
     CORE = ROOT.parent / "build" / "model-studio" / "voidline-editor-core"
-VERSION = "0.0.16"
+VERSION = "0.0.19"
 NAMES = ("pelvis", "waist", "neck", "head", "near shoulder", "far shoulder",
          "near elbow", "far elbow", "near hand", "far hand", "near knee", "far knee", "near ankle", "far ankle")
 BASE = ((0,-33),(0,-41),(2,-49),(4,-59),(6,-46),(-5,-46),(14,-35),(-13,-35),
@@ -64,7 +67,7 @@ PALETTE = {"ground":"#576579", "ledges":"#93a5b7", "cover":"#a97d59", "stairs":"
            "relays":"#edce89", "insertion":"#a6e9a4", "exit":"#6ee5c6"}
 
 
-def prepare_motion(doc):
+def prepare_motion(doc, catalog=None):
     """Import legacy enemy v1 and character rigs without destroying their statistics."""
     rig = doc.setdefault("skeleton", {})
     for pose in POSES:
@@ -83,7 +86,7 @@ def prepare_motion(doc):
             data.setdefault(k, value)
     if doc.get("schema") == "voidline-enemy-v1":
         doc["schema"] = "voidline-enemy-v2"
-    ensure_sequences(doc)
+    ensure_sequences(doc, catalog)
     return doc
 
 
@@ -347,8 +350,9 @@ class Studio(tk.Tk):
         window_h=min(870,max(640,screen_h-92))
         self.geometry(f"{window_w}x{window_h}+{max(0,(screen_w-window_w)//2)}+{max(0,(screen_h-window_h)//2)}")
         self.minsize(960,640)
+        self.after_idle(self.maximize_window)
         self.project=None;self.game=None;self.path=None;self.doc=None
-        self.kind=None;self.model_id=0;self.dirty=False;self.selected_level=None
+        self.kind=None;self.model_id=0;self.dirty=False;self.selected_level=None;self.disk_signature=None
         self.joint_index=tk.IntVar(value=3)
         self.pose=tk.StringVar(value="Run")
         self.frame=tk.IntVar(value=0)
@@ -367,23 +371,127 @@ class Studio(tk.Tk):
         self.selected_vertex=None
         self._build_ui()
         self.bind("<Control-s>", lambda e:self.save())
+        self.bind("<F5>", lambda e:self.reload_file())
         self.bind("<Control-o>", lambda e:self.open_document())
         self.bind("<Control-Shift-O>", lambda e:self.open_workspace())
         self.bind("<Control-Shift-S>", lambda e:self.save_as())
         self.bind("<Delete>",self.on_delete_key)
-        self.bind("<F11>", lambda e:self.attributes("-zoomed",not self.attributes("-zoomed")))
+        self.bind("<Control-c>",self.copy_model_key)
+        self.bind("<Control-v>",self.paste_model_key)
+        self.bind("<Control-Shift-C>",self.copy_movement_key)
+        self.bind("<Control-Shift-V>",self.paste_movement_key)
+        self.bind("<F11>", lambda e:self.toggle_maximized())
         if options:
             if options[0]=="--open-workspace" and len(options)>1:
                 self.after(100,lambda:self.open_workspace(options[1]))
             elif options[0]=="--game-dir" and len(options)>1:
                 self.after(100,lambda:self.open_workspace(options[1]))
 
+    def maximize_window(self):
+        """Use the window manager's maximize state; maintain a usable fallback."""
+        try:self.attributes("-zoomed",True)
+        except tk.TclError:
+            try:self.state("zoomed")
+            except tk.TclError:
+                self.geometry(f"{self.winfo_screenwidth()}x{self.winfo_screenheight()}+0+0")
+
+    def toggle_maximized(self):
+        try:self.attributes("-zoomed",not bool(self.attributes("-zoomed")))
+        except tk.TclError:self.maximize_window()
+
+    def on_window_resize(self,event):
+        if event.widget is self:
+            self.status_label.configure(wraplength=max(300,event.width-30))
+
+    def _dialog(self,title,message,buttons=("OK",),prompt=None,minvalue=None,maxvalue=None):
+        return StudioDialog(self,title,message,buttons,prompt,minvalue,maxvalue).show()
+
+    def show_info(self,title,message,**_kwargs):
+        self._dialog(title,message)
+    def show_warning(self,title,message,**_kwargs):
+        self._dialog(title,message)
+    def show_error(self,title,message,**_kwargs):
+        self._dialog(title,message)
+    def ask_yes_no(self,title,message,**_kwargs):
+        return self._dialog(title,message,("Yes","No"))=="Yes"
+    def ask_yes_no_cancel(self,title,message,**_kwargs):
+        result=self._dialog(title,message,("Yes","No","Cancel"))
+        return None if result=="Cancel" else result=="Yes"
+    def ask_string(self,title,message,parent=None,**_kwargs):
+        result=self._dialog(title,message,("OK","Cancel"),prompt="string")
+        return None if result=="Cancel" else result
+    def ask_integer(self,title,message,minvalue=None,maxvalue=None,parent=None,**_kwargs):
+        result=self._dialog(title,message,("OK","Cancel"),prompt="integer",
+                            minvalue=minvalue,maxvalue=maxvalue)
+        return None if result=="Cancel" else result
+
+    def _clipboard_text(self):
+        try:return self.clipboard_get()
+        except tk.TclError as exc:raise ValueError("System clipboard is empty or has no text") from exc
+
+    def _write_clipboard(self,payload):
+        self.clipboard_clear();self.clipboard_append(payload)
+        self.update_idletasks()   # publish to desktop clipboard manager
+
+    def copy_model(self):
+        try:
+            if self.kind not in ("character","enemy"):raise ValueError("Select a character/enemy model")
+            self.apply_fields()
+            self._write_clipboard(copy_model_payload(self.doc,self.kind))
+            self.status.set(f"Copied {self.kind} model to system clipboard")
+        except ValueError as exc:self.show_warning("Copy model",str(exc))
+
+    def paste_model(self):
+        try:
+            if self.kind not in ("character","enemy"):raise ValueError("Select a character/enemy model")
+            pasted=paste_model_payload(self._clipboard_text(),self.doc,self.kind)
+            if pasted==self.doc:return
+            self.doc=pasted;self.dirty=True
+            self.show_properties();self.redraw_models()
+            self.status.set(f"Pasted model into {self.path.name}; slot ID preserved. Ctrl+S to save to source.")
+        except ValueError as exc:self.show_warning("Paste model",str(exc))
+
+    def copy_movement(self):
+        try:
+            if not can_edit_joint(self.kind,self.doc):raise ValueError("Select a model with an editable skeleton")
+            self._write_clipboard(copy_movement_payload(self.doc,self.pose.get().lower()))
+            self.status.set(f"Copied {self.pose.get()} movement to system clipboard")
+        except ValueError as exc:self.show_warning("Copy movement",str(exc))
+
+    def paste_movement(self):
+        try:
+            if not can_edit_joint(self.kind,self.doc):raise ValueError("Select a model with an editable skeleton")
+            pose=self.pose.get().lower()
+            pasted=paste_movement_payload(self._clipboard_text(),self.doc,pose)
+            if pasted==self.doc:return
+            self.doc=pasted;self.dirty=True
+            self.update_joint_display();self.redraw_models()
+            self.status.set(f"Pasted movement into {pose} of {self.path.name}; Ctrl+S saves to source.")
+        except ValueError as exc:self.show_warning("Paste movement",str(exc))
+
+    @staticmethod
+    def _text_editor_focused(event):
+        return isinstance(event.widget,(tk.Entry,tk.Text,ttk.Entry,ttk.Combobox,tk.Spinbox))
+    def copy_model_key(self,event):
+        if self._text_editor_focused(event):return
+        self.copy_model();return "break"
+    def paste_model_key(self,event):
+        if self._text_editor_focused(event):return
+        self.paste_model();return "break"
+    def copy_movement_key(self,event):
+        if self._text_editor_focused(event):return
+        self.copy_movement();return "break"
+    def paste_movement_key(self,event):
+        if self._text_editor_focused(event):return
+        self.paste_movement();return "break"
+
     def _build_ui(self):
         menubar=tk.Menu(self)
         file=tk.Menu(menubar,tearoff=False)
-        entries=[("Open Game Workspace…",self.open_workspace),("Open Authoring Project…",self.pick_project),
+        entries=[("Open Game Workspace…",self.open_workspace),("Open Source Project…",self.pick_project),
                  ("Open File…",self.open_document),("Save",self.save),("Save As…",self.save_as),
-                 ("Export Single Model…",self.export_single),("Publish Models to Game",self.update_workspace),
+                 ("Export Single Model…",self.export_single),("Publish Model Sources + Levels",self.update_workspace),
+                 ("Also Publish Runtime PAK…",lambda:self.update_workspace(update_pak=True)),
                  ("Export Project Sources",self.export_project)]
         for idx,(label,callback) in enumerate(entries):
             if idx in (3,5):file.add_separator()
@@ -394,12 +502,20 @@ class Studio(tk.Tk):
         file.add_command(label="New Enemy…",command=lambda:self.new_model("enemy"))
         file.add_command(label="Assign Model to Existing Game Slot…",command=self.assign_model)
         menubar.add_cascade(label="File",menu=file)
+        edit=tk.Menu(menubar,tearoff=False)
+        edit.add_command(label="Copy Model     Ctrl+C",command=self.copy_model)
+        edit.add_command(label="Paste Model     Ctrl+V",command=self.paste_model)
+        edit.add_separator()
+        edit.add_command(label="Copy Movement     Ctrl+Shift+C",command=self.copy_movement)
+        edit.add_command(label="Paste Movement     Ctrl+Shift+V",command=self.paste_movement)
+        menubar.add_cascade(label="Edit",menu=edit)
         view=tk.Menu(menubar,tearoff=False)
         view.add_checkbutton(label="Show body volumes",variable=self.show_plates,command=self.redraw_models)
         view.add_command(label="Reset 3D orbit",command=self.reset_orbit)
+        view.add_command(label="Reload Selected File from Game Workspace",command=self.reload_file)
         menubar.add_cascade(label="View",menu=view)
         help_menu=tk.Menu(menubar,tearoff=False)
-        help_menu.add_command(label="About",command=lambda:messagebox.showinfo("Model Studio",f"VOIDLINE Model Studio {VERSION}\nLinux-only · Tk/ttk desktop interface\nC++ authoring/export backend"))
+        help_menu.add_command(label="About",command=lambda:self.show_info("Model Studio",f"VOIDLINE Model Studio {VERSION}\nLinux-only · Tk/ttk desktop interface\nC++ authoring/export backend"))
         menubar.add_cascade(label="Help",menu=help_menu)
         self.config(menu=menubar)
         toolbar=ttk.Frame(self,padding=5);toolbar.pack(fill="x")
@@ -408,7 +524,7 @@ class Studio(tk.Tk):
         files.grid(row=0,column=0,sticky="ew",padx=2,pady=2)
         for name,func in (("New character",lambda:self.new_model("character")),("New enemy",lambda:self.new_model("enemy")),("Open workspace",self.open_workspace),("Open file",self.open_document),
                           ("Save",self.save),("Export model",self.export_single),
-                          ("Publish models",self.update_workspace)):
+                          ("Publish model sources + levels",self.update_workspace)):
             ttk.Button(files,text=name,command=func).pack(side="left",padx=2)
         animation=ttk.LabelFrame(toolbar,text="Animation preview · 30 FPS",padding=5)
         animation.grid(row=1,column=0,sticky="ew",padx=3,pady=2)
@@ -490,7 +606,7 @@ class Studio(tk.Tk):
             viewport=RigViewport(grid,self,axis)
             viewport.grid(row=index//2,column=index%2,sticky="nsew",padx=2,pady=2)
             self.views.append(viewport)
-        ttk.Label(self.asset_page,text="Select an image asset from the project navigator. Files stay in the authoring workspace.").pack(anchor="w",padx=10,pady=10)
+        ttk.Label(self.asset_page,text="Select an image asset from the workspace. Files are edited directly in game/assets/.").pack(anchor="w",padx=10,pady=10)
         self.image_label=ttk.Label(self.asset_page,anchor="center")
         self.image_label.pack(fill="both",expand=True,padx=14,pady=8)
         ttk.Button(self.asset_page,text="Replace Selected Artwork…",command=self.replace_asset).pack(pady=8)
@@ -513,9 +629,14 @@ class Studio(tk.Tk):
         self.props.bind("<Configure>",lambda _e:self.inspect_canvas.configure(scrollregion=self.inspect_canvas.bbox("all")))
         self.inspect_canvas.bind("<Configure>",lambda e:self.inspect_canvas.itemconfigure(self.props_window,width=e.width))
         self.inspect_canvas.bind("<MouseWheel>",lambda e:self.inspect_canvas.yview_scroll(-1 if e.delta>0 else 1,"units"))
-        self.joint_info=ttk.Label(inspect,text="",wraplength=270)
-        self.joint_info.pack(anchor="w",pady=4)
-        ttk.Label(self,textvariable=self.status,anchor="w",relief="sunken",padding=5).pack(fill="x")
+        self.joint_info=ttk.Label(inspect,text="",wraplength=270,justify="left",font=("DejaVu Sans",10))
+        self.joint_info.pack(anchor="w",pady=4,fill="x")
+        inspect.bind("<Configure>",lambda e:(self.info.configure(wraplength=max(110,e.width-24)),
+                                              self.joint_info.configure(wraplength=max(110,e.width-24))))
+        self.status_label=ttk.Label(self,textvariable=self.status,anchor="w",relief="sunken",
+                                    padding=(8,6),justify="left",font=("DejaVu Sans",10))
+        self.status_label.pack(fill="x")
+        self.bind("<Configure>",self.on_window_resize,add="+")
 
     def open_workspace(self,path=None):
         path=path or filedialog.askdirectory(
@@ -524,6 +645,10 @@ class Studio(tk.Tk):
         game=Path(path).expanduser().resolve()
         # The backend resolves source/assets when no runtime PAK has been built.
         # Do not duplicate its path rules here: nested build/editor folders work.
+        if self.dirty and self.path:
+            answer=self.ask_yes_no_cancel("Unsaved changes", "Save changes to the current workspace before opening another one?")
+            if answer is None:return
+            if answer and not self.save():return
         self._job([str(CORE),"--prepare-workspace",str(game)],
                   "Loading game models and assets",self._workspace_imported)
 
@@ -533,32 +658,48 @@ class Studio(tk.Tk):
             raise RuntimeError("Backend did not return a resolved authoring workspace")
         self.game=Path(values["GAME"])
         self.open_project(Path(values["WORKSPACE"]))
-        mode="game source assets" if values.get("MODE")=="source" else "installed game.vpak"
-        self.status.set(f"Loaded {mode} from {self.game}. Save then Publish models.")
+        if values.get("MODE") != "source" or Path(values["WORKSPACE"]).resolve()!=self.game.resolve():
+            raise RuntimeError("Expected a live game source workspace, not a cached project")
+        self.status.set(f"Using live game files: {self.game}. Save writes directly to source; Publish bakes assets.")
 
     def pick_project(self):
-        path=filedialog.askdirectory(title="Open authoring project folder")
-        if path:
-            self.game=None
-            self.open_project(Path(path))
+        # An "authoring project" is the game source checkout, never an editor cache.
+        self.open_workspace()
 
     def open_project(self,path):
         project=Path(path).expanduser().resolve()
-        if not (project/"levels").is_dir() or not (project/"models").is_dir():
-            messagebox.showerror("Project","The selected folder must contain levels/ and models/ directories")
+        if self.game is None or project!=self.game.resolve():
+            self.show_error("Workspace", "Choose a VOIDLINE game source root using Open Game Workspace")
             return
-        marker=project/".workspace-ready"
-        if marker.is_file():
-            # Reconnect saved editor caches to the game source/runtime selected
-            # at import time. The backend verifies this association on publish.
-            recorded=marker.read_text().splitlines()
-            if recorded and Path(recorded[0]).is_dir():
-                self.game=Path(recorded[0])
+        if not (project/"assets").is_dir() or not (project/"levels").is_dir() or not (project/"models").is_dir():
+            self.show_error("Workspace", "Game source must contain assets/, levels/ and models/")
+            return
         self.project=project;self.path=None;self.doc=None;self.kind=None;self.dirty=False
+        self.disk_signature=None
         self.refresh_tree()
-        self.status.set(f"Opened authoring project: {project}")
+        self.status.set(f"Opened live game source: {project}")
         children=self.tree.get_children("characters")
         if children:self.tree.selection_set(children[0]);self.tree.see(children[0]);self._select_tree()
+
+    def source_file(self,path):
+        """Allow opening/saving only files belonging to the active game checkout."""
+        if self.project is None:return False
+        target=Path(path).expanduser().resolve()
+        return any(target.is_relative_to(self.project/folder) for folder in ("models","levels","assets"))
+
+    @staticmethod
+    def file_signature(path):
+        try:
+            stat=Path(path).stat()
+            return (stat.st_mtime_ns,stat.st_size)
+        except FileNotFoundError:return None
+
+    def reload_file(self):
+        if self.path is None:return
+        if self.dirty:
+            if not self.ask_yes_no("Reload from source", "Discard unsaved changes and reload directly from the game file?"):
+                return
+        self.load_file(self.path,self.kind)
 
     def refresh_tree(self):
         self.tree.delete(*self.tree.get_children())
@@ -579,27 +720,32 @@ class Studio(tk.Tk):
         if not selection or selection[0] not in self.node_items:return
         key,path=self.node_items[selection[0]]
         if self.dirty and self.path and self.path != path:
-            answer=messagebox.askyesnocancel("Unsaved changes","Save changes before switching documents?")
+            answer=self.ask_yes_no_cancel("Unsaved changes","Save changes before switching documents?")
             if answer is None:return
-            if answer:self.save()
+            if answer and not self.save():return
         self.load_file(path, "level" if key=="levels" else "character" if key in ("characters","custom_characters") else "enemy" if key in ("enemies","custom_enemies") else "asset")
 
     def load_file(self,path,kind=None):
+        path=Path(path).resolve()
+        if not self.source_file(path):
+            self.show_error("Open file", "Only files inside this game's models/, levels/ or assets/ can be edited")
+            return
         kind=kind or ("level" if path.name.endswith(".vllevel.json") else "character" if path.name.endswith(".vlcharacter.json") else "enemy" if path.name.endswith(".vlenemy.json") else "asset")
         try:
             doc=json.loads(path.read_text()) if kind!="asset" else None
-            if kind in ("character","enemy"):prepare_motion(doc)
+            if kind in ("character","enemy"):prepare_motion(doc, self.project / "models/movement-descriptions.json" if self.project else None)
         except Exception as exc:
-            messagebox.showerror("Open file",str(exc));return
+            self.show_error("Open file",str(exc));return
         self.stop_play()
         self.path=Path(path);self.doc=doc;self.kind=kind;self.dirty=False
+        self.disk_signature=self.file_signature(path)
         self.selected_level=None
         self._absolute_frame=0
         self.frame.set(0)
         self.title(f"{self.path.name} — VOIDLINE Model Studio {VERSION}")
         self.info.config(text=f"{kind.title()}: {doc.get('name',self.path.name) if isinstance(doc,dict) else self.path.name}\n{self.path.name}")
         if kind in ("character","enemy"):
-            choices=movement_sequences(kind,doc)
+            choices=movement_sequences(kind,doc,self.project / "models/movement-descriptions.json" if self.project else None)
             self.pose_combo.configure(values=[name.title() for name in choices])
             if self.pose.get().lower() not in choices:self.pose.set("Run" if "run" in choices else choices[0].title())
         self.tabs.select({"level":self.level_page,"character":self.model_page,"enemy":self.model_page,"asset":self.asset_page}[kind])
@@ -609,14 +755,14 @@ class Studio(tk.Tk):
 
     def new_model(self, kind):
         if not self.project:
-            messagebox.showinfo("New model", "Open a game workspace first.")
+            self.show_info("New model", "Open a game workspace first.")
             return
-        name=simpledialog.askstring("New "+kind, "Model display name:", parent=self)
+        name=self.ask_string("New "+kind, "Model display name:", parent=self)
         if not name:return
         folder=self.project/"models"/("characters" if kind=="character" else "enemies")
         files=list(folder.glob("*.vlcharacter.json" if kind=="character" else "*.vlenemy.json"))
         if not files:
-            messagebox.showerror("New model","No archetype is available as a template")
+            self.show_error("New model","No archetype is available as a template")
             return
         template=json.loads(files[0].read_text())
         chosen=self.doc if self.kind==kind else template
@@ -626,7 +772,7 @@ class Studio(tk.Tk):
         suffix=".vlcharacter.json" if kind=="character" else ".vlenemy.json"
         new_id=max([int(p.stem.split(".")[0]) for p in custom.glob("[0-9]*.*") if p.stem.split(".")[0].isdigit()] or [99])+1
         target=custom/f"{new_id:03d}-{slug}{suffix}"
-        if target.exists():messagebox.showerror("New model","Model already exists");return
+        if target.exists():self.show_error("New model","Model already exists");return
         doc=create_model_from_template(chosen,kind,name,new_id)
         target.write_text(json.dumps(doc,indent=2)+"\n")
         self.refresh_tree();self.load_file(target,kind)
@@ -635,99 +781,146 @@ class Studio(tk.Tk):
     def assign_model(self):
         if self.kind not in ("character","enemy") or not self.doc or not self.project:return
         n=6 if self.kind=="character" else 10
-        slot=simpledialog.askinteger("Assign to game slot",f"Choose a built-in {self.kind} slot to REPLACE (0–{n-1}):",
+        slot=self.ask_integer("Assign to game slot",f"Choose a built-in {self.kind} slot to REPLACE (0–{n-1}):",
                                      minvalue=0,maxvalue=n-1,parent=self)
         if slot is None:return
         base=self.project/"models"/("characters" if self.kind=="character" else "enemies")
         matches=list(base.glob(f"{slot}.vl{self.kind}.json"))
         if not matches:
-            messagebox.showerror("Assign model",f"Runtime slot {slot} not found");return
-        if not messagebox.askyesno("Replace game archetype",f"Replace {matches[0].name} with '{self.doc.get('name')}'?\nThe original will be backed up."):
+            self.show_error("Assign model",f"Runtime slot {slot} not found");return
+        if not self.ask_yes_no("Replace game archetype",f"Replace {matches[0].name} with '{self.doc.get('name')}'?\nThe original will be backed up."):
             return
-        self.save()
+        if not self.save():return
         target=matches[0]
         shutil.copy2(target,target.with_name(target.name+".backup"))
         target.write_text(json.dumps(assign_model_to_slot(self.doc,slot),indent=2)+"\n")
         self.refresh_tree();self.load_file(target,self.kind)
-        self.status.set(f"Assigned model to runtime slot {slot}; use Update PAK to publish")
+        self.status.set(f"Assigned model to runtime slot {slot}; use Publish models + levels to publish")
 
     def open_document(self):
-        file=filedialog.askopenfilename(title="Open VOIDLINE document",filetypes=[("VOIDLINE models", "*.vllevel.json *.vlcharacter.json *.vlenemy.json"),("Images","*.png *.webp *.jpg"),("All files","*")])
+        if not self.project:
+            self.show_info("Game workspace", "Open a game source workspace first")
+            return
+        file=filedialog.askopenfilename(title="Open file from game workspace",initialdir=str(self.project),
+            filetypes=[("VOIDLINE models", "*.vllevel.json *.vlcharacter.json *.vlenemy.json"),
+                       ("Images","*.png *.webp *.jpg"),("All files","*")])
         if file:self.load_file(Path(file))
 
     def save(self):
-        if self.doc is None or self.kind=="asset" or self.path is None:return
+        if self.doc is None or self.kind=="asset" or self.path is None:return True
+        if not self.source_file(self.path):
+            self.show_error("Save", "Refusing to save outside the game workspace")
+            return False
+        if self.file_signature(self.path)!=self.disk_signature:
+            self.show_warning("External change detected",
+                "The game source file changed on disk since it was opened. "
+                "Reload the file to avoid overwriting newer changes.")
+            return False
         self.apply_fields()
+        if not self.dirty:
+            self.status.set(f"Unchanged: {self.path} (read directly from game source)")
+            return True
         self.path.parent.mkdir(parents=True,exist_ok=True)
         temporary=self.path.with_name(self.path.name+".tmp")
         temporary.write_text(json.dumps(self.doc,indent=2)+"\n")
         temporary.replace(self.path)
+        self.disk_signature=self.file_signature(self.path)
         self.dirty=False
-        self.status.set(f"Saved: {self.path}")
+        self.status.set(f"Saved directly to game source: {self.path}")
+        return True
 
     def save_as(self):
-        if self.doc is None or self.kind=="asset":return
+        if self.doc is None or self.kind=="asset" or not self.project:return
         pattern={"level":".vllevel.json","character":".vlcharacter.json","enemy":".vlenemy.json"}[self.kind]
-        file=filedialog.asksaveasfilename(title="Save As",initialfile=self.path.name if self.path else "",defaultextension=pattern,
-                                          filetypes=[("VOIDLINE model", "*"+pattern)])
-        if file:self.path=Path(file);self.save()
+        directory={"level":"levels","character":"models/characters","enemy":"models/enemies"}[self.kind]
+        file=filedialog.asksaveasfilename(title="Save As (inside game source)",initialdir=str(self.project/directory),
+            initialfile=self.path.name if self.path else "",defaultextension=pattern,
+            filetypes=[("VOIDLINE model", "*"+pattern)])
+        if not file:return
+        if not self.source_file(file):
+            self.show_error("Save As", "Use Export Single Model for copies outside the game source")
+            return
+        if not str(file).endswith(pattern):
+            self.show_error("Save As", "The chosen file must have extension "+pattern)
+            return
+        self.path=Path(file).resolve()
+        self.disk_signature=self.file_signature(self.path)
+        self.dirty=True
+        self.save()
 
     def export_single(self):
         if self.doc is None or self.kind=="asset":return
-        self.save()
+        if not self.save():return
         pattern={"level":".vllevel.json","character":".vlcharacter.json","enemy":".vlenemy.json"}[self.kind]
         out=filedialog.asksaveasfilename(title="Export single model",defaultextension=pattern,initialfile=self.path.name,
                                          filetypes=[("Model", "*"+pattern)])
         if out:
             if Path(out).resolve()!=self.path.resolve():shutil.copy2(self.path,out)
-            self.status.set(f"Exported {self.kind} to {out} (copy only; select Update PAK to publish)")
+            self.status.set(f"Exported {self.kind} to {out} (copy only; select Publish to publish)")
 
-    def update_workspace(self):
+    def update_workspace(self, update_pak=False):
         if not self.project or not self.game:
-            messagebox.showinfo("Game workspace","Open a VOIDLINE game workspace first")
+            self.show_info("Game workspace","Open a VOIDLINE game workspace first")
             return
-        if not messagebox.askyesno("Publish models", "Stop VOIDLINE before publishing.\n\n"
-                                   "Save and bake the edited models, update source assets "
-                                   "for future builds, and refresh any existing game archives?\n"
-                                   "Original files will be backed up."):
+        if not self.ask_yes_no("Publish model sources", "Save editable model JSON and movement descriptions, "
+                                   "publish modified levels and rebuild-input model assets "
+                                   "to the game source?\n\n"
+                                   + ("Also rebuild runtime PAKs. Stop the game first.\n\n" if update_pak
+                                      else "The installed game PAK will NOT be changed.\n\n")
+                                   + "Changed source files will be backed up."):
             return
-        self.save()
+        if not self.save():return
         probe=subprocess.run([str(CORE),"--detect-source",str(self.game)],
                              capture_output=True,text=True,timeout=15)
         source=next((line.split("\t",1)[1] for line in probe.stdout.splitlines()
                      if line.startswith("SOURCE\t")),None) if probe.returncode==0 else None
-        if not source and messagebox.askyesno("Game source not found",
+        if not source and self.ask_yes_no("Game source not found",
                  "This appears to be a standalone installed game. You can select its original "
                  "source tree to preserve edits across builds.\n\nSelect game source now?\n"
                  "(Choose No to update the installed game only.)"):
             source=filedialog.askdirectory(title="Choose VOIDLINE game source root")
             if not source:return
-        command=[str(CORE),"--update-workspace",str(self.game)]
+        command=[str(CORE),"--update-workspace" if update_pak else "--publish-sources",str(self.game)]
         if source:command.append(str(source))
         def published(output):
             lines=output.strip().splitlines()
             self.status.set(lines[-1] if lines else "Workspace updated")
             paths=[line.split("\t",1)[1] for line in lines if line.startswith("RUNTIME_PAK\t")]
             staged=[line.split("\t",1)[1] for line in lines if line.startswith("PACK_STAGED\t")]
+            level_changes=[line.split("\t") for line in lines if line.startswith("LEVELS_UPDATED\t")]
+            level_paths=[line.split("\t",1)[1] for line in lines if line.startswith("RUNTIME_LEVEL\t")]
             sources=[line.split("\t",1)[1] for line in lines if line.startswith("SOURCE_UPDATED\t")]
+            inputs=[line.split("\t",1)[1] for line in lines if line.startswith("INPUT_MODELS_UPDATED\t")]
             report=[]
-            if sources:report.append("Source assets updated (survive rebuild):\n"+"\n".join(sources))
+            if inputs:report.append("Editable input models and movement catalog published:\n"+"\n".join(inputs))
+            if sources:report.append("Baked source assets updated (survive rebuild):\n"+"\n".join(sources))
+            if level_changes:
+                report.append("Level files are saved directly in the game source; "
+                              "future Linux/Windows rebuilds stage levels/ automatically.")
+            if level_paths:report.append("Updated runtime levels (restart game):\n"+"\n".join(level_paths[:12]))
             if paths:report.append("Updated built-game archives (restart game):\n"+"\n".join(paths))
+            elif not update_pak:report.append("Runtime PAK not changed (source-only publish). Rebuild the game to use edited model assets.")
             else:report.append("No built game archive found. Build the game to deploy the models.")
             if staged:report.append("Exported complete asset pack:\n"+"\n".join(staged))
-            if not sources:report.append("No game source was linked; future rebuilds may replace the edits.")
-            messagebox.showinfo("Models published","\n\n".join(report))
-        self._job(command,"Publishing models to game and sources",published)
+            if not sources:report.append("Workspace source assets already match the current game files.")
+            self.show_info("Models published","\n\n".join(report))
+        self._job(command,"Publishing models and levels to game and sources",published)
 
     def export_project(self):
         if not self.project:return
-        self.save();self._job([str(CORE),"--export-project",str(self.project)],"Generating C++ sources and baked models",lambda output:self.status.set(output.strip().splitlines()[-1]))
+        if not self.save():return
+        self._job([str(CORE),"--export-project",str(self.project)],"Generating C++ sources and baked models",lambda output:self.status.set(output.strip().splitlines()[-1]))
 
     def _job(self,cmd,title,on_success):
-        win=tk.Toplevel(self);win.title(title);win.transient(self);win.grab_set();win.geometry("420x125")
-        ttk.Label(win,text=title).pack(padx=14,pady=(17,8))
+        win=tk.Toplevel(self);win.title(title);win.transient(self)
+        win.geometry("620x170");win.minsize(360,150);win.resizable(True,True)
+        ttk.Label(win,text=title,font=("DejaVu Sans",12,"bold")).pack(fill="x",padx=16,pady=(16,8))
         progress=ttk.Progressbar(win,mode="indeterminate");progress.pack(fill="x",padx=16,pady=5);progress.start(12)
-        ttk.Label(win,text="Working with the installed game / authoring cache…").pack(pady=3)
+        detail=ttk.Label(win,text="Reading and writing the selected game source workspace…",
+                         wraplength=580,justify="left",font=DIALOG_FONT)
+        detail.pack(fill="both",expand=True,padx=16,pady=3)
+        win.bind("<Configure>",lambda e:detail.configure(wraplength=max(200,e.width-36)))
+        win.grab_set()
         result={};event=threading.Event()
         def worker():
             try:
@@ -739,10 +932,10 @@ class Studio(tk.Tk):
         def poll():
             if not event.is_set():win.after(90,poll);return
             progress.stop();win.grab_release();win.destroy()
-            if "error" in result:messagebox.showerror(title,result["error"])
+            if "error" in result:self.show_error(title,result["error"])
             else:
                 try:on_success(result.get("stdout",""))
-                except Exception as exc:messagebox.showerror(title,str(exc))
+                except Exception as exc:self.show_error(title,str(exc))
         win.after(90,poll)
 
     def show_properties(self):
@@ -1055,7 +1248,7 @@ class Studio(tk.Tk):
             add_structure_vertex(self.doc,self.selected_level,edge)
             self.selected_vertex=(edge+1)% (len(points)+1)
             self.edit_vertices.set(True);self.dirty=True;self.draw_level()
-        except (ValueError,IndexError) as exc:messagebox.showerror("Edit corners",str(exc))
+        except (ValueError,IndexError) as exc:self.show_error("Edit corners",str(exc))
 
     def remove_selected_vertex(self):
         if not self.selected_level:return
@@ -1064,7 +1257,7 @@ class Studio(tk.Tk):
             if points is None:return
             remove_structure_vertex(self.doc,self.selected_level,self.selected_vertex if self.selected_vertex is not None else len(points)-1)
             self.selected_vertex=None;self.dirty=True;self.draw_level()
-        except (ValueError,IndexError) as exc:messagebox.showerror("Edit corners",str(exc))
+        except (ValueError,IndexError) as exc:self.show_error("Edit corners",str(exc))
 
     def add_vertex_at_mouse(self,event):
         if not self.edit_vertices.get() or not self.selected_level:return
@@ -1166,8 +1359,8 @@ class Studio(tk.Tk):
         if self.kind!="asset" or not self.path:return
         file=filedialog.askopenfilename(title="Replace art",filetypes=[("Images","*.png *.webp *.jpg")])
         if file:
-            if not messagebox.askyesno("Replace image","Overwrite this image in the authoring workspace?"):return
-            shutil.copy2(file,self.path);self.show_asset();self.status.set("Image replaced in authoring cache; use Update PAK to publish")
+            if not self.ask_yes_no("Replace image","Overwrite this image directly in game/assets/?"):return
+            shutil.copy2(file,self.path);self.show_asset();self.status.set("Image replaced in game source; rebuild to update runtime assets")
 
 
 def main():

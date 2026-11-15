@@ -21,8 +21,24 @@ class ActionTests(unittest.TestCase):
         self.assertTrue(set(('base','run','sprint','crouch','jump','fall','land',
                              'aim','fire','reload','hit','death','interact')).issubset(names))
         self.assertIn('patrol',movement_sequences('enemy',self.enemy))
-        self.assertNotIn('sprint',movement_sequences('enemy',{'id':0}))
-        self.assertEqual(len(ACTION_STATES),18)
+        self.assertIn('sprint',movement_sequences('enemy',{'id':0}))
+        self.assertGreaterEqual(len(ACTION_STATES),90)
+        self.assertIn('wall_jump',movement_sequences('character',self.char))
+        self.assertIn('melee_combo',movement_sequences('enemy',self.enemy))
+
+    def test_source_model_files_and_descriptions_are_complete(self):
+        game=ROOT.parent
+        catalog=json.loads((game/'models/movement-descriptions.json').read_text())
+        self.assertEqual(len(catalog['movements']),len(ACTION_STATES))
+        self.assertEqual(len({item['id'] for item in catalog['movements']}),len(ACTION_STATES))
+        for kind,n,ext in (("characters",6,"vlcharacter"),("enemies",10,"vlenemy")):
+            for ident in range(n):
+                doc=json.loads((game/f'models/{kind}/{ident}.{ext}.json').read_text())
+                self.assertEqual(doc['id'],ident)
+                self.assertTrue(set(ACTION_STATES).issubset(doc['skeleton']['sequences']))
+                self.assertTrue(set(ACTION_STATES).issubset(doc['skeleton']['sequenceDepth']))
+                self.assertTrue(all(len(x)==14 for x in doc['skeleton']['sequences'].values()))
+                self.assertTrue(all(len(x)==14 for x in doc['skeleton']['sequenceDepth'].values()))
 
     def test_action_vectors_round_trip_without_changing_base(self):
         doc=prepare_motion(self.char)
@@ -41,7 +57,7 @@ class ActionTests(unittest.TestCase):
             made=create_model_from_template(source,kind,'Test prototype',103)
             self.assertEqual(made['id'],103)
             made['skeleton']['sequences']['hit'][0][0]=18.5
-            self.assertEqual(source['skeleton'].get('sequences',{}).get('hit'),None)
+            self.assertEqual(source['skeleton']['sequences']['hit'][0][0],0.0)
             slotted=assign_model_to_slot(made,source['id'])
             self.assertEqual(slotted['id'],source['id'])
             self.assertEqual(slotted['skeleton']['sequences']['hit'][0][0],18.5)

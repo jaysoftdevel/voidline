@@ -7,5 +7,5 @@ cmake --build build --parallel "${JOBS:-2}"
 ctest --test-dir build --output-on-failure
 python3 -m unittest discover -s ui -p 'test_*.py' -v
 printf '
-Model Studio v0.0.16 ready. Start with ./run.sh
+Model Studio v0.0.17 ready. Start with ./run.sh
 '

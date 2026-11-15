@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(voidline VERSION 2.10.12 LANGUAGES CXX)
+project(voidline VERSION 2.10.18 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -99,6 +99,15 @@ add_custom_command(OUTPUT ${VOIDLINE_ASSET_PACK}
   VERBATIM)
 add_custom_target(voidline_media ALL DEPENDS ${VOIDLINE_ASSET_PACK})
 add_dependencies(voidline voidline_media)
+# Editable stages are loose JSON read beside the executable by Game::start.
+# Publish Models+Levels writes only changed overrides to source/levels;
+# sync each build to Linux and Windows runtime paths, including removals.
+add_custom_target(voidline_levels ALL
+  COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/sync-levels.py
+          ${CMAKE_SOURCE_DIR}/levels $<TARGET_FILE_DIR:voidline>/levels
+  DEPENDS voidline ${CMAKE_SOURCE_DIR}/scripts/sync-levels.py
+  COMMENT "Synchronizing authored level overrides"
+  VERBATIM)
 # Visual Studio multi-configuration builds place the EXE under voidline/Release.
 # Stage the media beside the actual executable on Windows as well as Linux.
 if(WIN32)
@@ -118,7 +127,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND EXISTS "${CMAKE_SOURCE_DIR}/model-stud
   endif()
 endif()
 
-# Editable JSON stays in the offline Model Studio project. Only game.vpak
+# Authoritative editable model JSON lives in source/models and is published with Model Studio. Only game.vpak
 # (including the baked VLRM) is needed by deployed game clients.
 
 if(VOIDLINE_LTO AND VOIDLINE_IPO)
@@ -130,16 +139,34 @@ endif()
 
 install(TARGETS voidline RUNTIME DESTINATION voidline)
 install(FILES ${VOIDLINE_ASSET_PACK} DESTINATION voidline/assets)
+# CMake install is normally game-binary-only; stage any published level JSON.
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/levels/ DESTINATION voidline/levels
+        OPTIONAL FILES_MATCHING PATTERN "*.vllevel.json")
 
 include(CTest)
 if(BUILD_TESTING)
   file(GLOB VOIDLINE_TEST_SOURCES CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/tests/*.cpp)
   add_executable(voidline_tests ${VOIDLINE_TEST_SOURCES})
+  # Unit tests must not share the actual game's runtime level overrides.
+  # Model Studio publishes edited levels into voidline/levels; co-locating the
+  # test executable with the game makes built-in level assertions depend on
+  # user-authored content (tests/test_progression.cpp).
+  set_target_properties(voidline_tests PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/test-runner")
   target_compile_options(voidline_tests PRIVATE ${VOIDLINE_WARNINGS})
   target_link_libraries(voidline_tests PRIVATE voidline_services)
   add_dependencies(voidline_tests voidline_media)
   target_compile_definitions(voidline_tests PRIVATE VOIDLINE_TEST_ASSET_ROOT="${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets")
   add_test(NAME voidline_tests COMMAND voidline_tests)
+  add_test(NAME voidline_level_sync
+           COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/test_sync_levels.py)
+  # GUI logic regression checks are headless, so CI and ./build.sh exercise them
+  # without a running X server. Windows never includes Model Studio.
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND EXISTS "${CMAKE_SOURCE_DIR}/model-studio/ui/test_clipboard_dialogs.py")
+    add_test(NAME voidline_model_studio_python
+      COMMAND ${Python3_EXECUTABLE} -m unittest discover
+              -s ${CMAKE_SOURCE_DIR}/model-studio/ui -p test_*.py -v)
+  endif()
 endif()
 
 file(GLOB_RECURSE VOIDLINE_SOURCES CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/src/*.cpp ${CMAKE_SOURCE_DIR}/src/*.hpp)
