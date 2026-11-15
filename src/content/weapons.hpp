@@ -1,6 +1,10 @@
 #pragma once
 #include "content/types.hpp"
 namespace vl {
+inline constexpr std::array<int,weaponCount> weaponPrices{{210,320,390,0,300,520,650}};
+// Presentation and hotkey order only. Keep stable internal IDs for save files,
+// ability upgrades, sounds, sprites and multiplayer data.
+inline constexpr std::array<int,weaponCount> weaponDisplayOrder{{3,0,1,2,4,5,6}};
 inline const std::array<Weapon, weaponCount> weapons{{
     {"Field Carbine", "Carbine", "AUTOMATIC", "#ffad65", "Steady automatic fire with long, accurate reach.", 25, 18, 126, 0.95, 0.145, 1180, 1250, 0.024, 1, 0, 0},
     {"Breach Shotgun", "Shotgun", "SCATTER", "#ff8f7d", "Six heavy pellets that stay lethal across a room.", 17, 7, 49, 1.27, 0.53, 1050, 560, 0.36, 6, 1, 0},

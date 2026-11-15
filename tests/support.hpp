@@ -36,11 +36,13 @@ inline vl::Save startSave() { return {}; }
 inline vl::Save fullSave() {
     vl::Save save;
     save.cleared = 5;
+    save.owned.fill(true); save.equipped=0;
     return save;
 }
 inline vl::Save midSave() {
     vl::Save save;
     save.cleared = 3;
+    save.owned.fill(true); save.equipped=0;
     return save;
 }
 }

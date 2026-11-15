@@ -29,6 +29,9 @@ void Game::shoot(float dt) {
         return;
     }
     const auto& w=weapons[gun];
+    const auto& special=campaign.tiers[gun];
+    const int operativeId=int(character-characters.data());
+    const auto& skill=campaign.skills[operativeId];
     const GunSound& sound=gunSounds[gun];
     --g.ammo; p.fireDelay=g.interval; p.muzzle=.069f;
     p.readyTimer=readyHold; p.ready=std::max(p.ready,.65f);
@@ -41,11 +44,19 @@ void Game::shoot(float dt) {
         burst(exit,hex(0x9ba8ba),5,96); audio.event(sound.name,.62f*sound.gain,0,sound.rate); return;
     }
     const bool longShot=gun==2 || gun==6;
-    for (int i=0;i<w.pellets;++i) {
-        const float spread=w.pellets==1?random()-.5f:float(i)/(w.pellets-1)-.5f;
+    const int pellets=w.pellets+(gun==1?special[8]:0);
+    for (int i=0;i<pellets;++i) {
+        const float spread=pellets==1?random()-.5f:float(i)/(pellets-1)-.5f;
         const bool crit=random()<g.crit;
-        Shot shot{origin,ray(p.aim+spread*g.spread)*w.speed,g.range/w.speed,float(g.damage)*(crit?2.f:1.f),hex(w.color),w.pierce,{},longShot,false};
-        shot.gravity=w.gravity; shot.blast=w.blast; shot.crit=crit; shot.weapon=gun;
+        float multiplier=1.f;
+        if (operativeId==1 && p.support<0) multiplier*=1+.09f*skill[1];
+        if (operativeId==5 && (gun==2 || gun==5)) multiplier*=1+.12f*skill[0];
+        Shot shot{origin,ray(p.aim+spread*g.spread)*w.speed,g.range/w.speed,
+            float(g.damage)*(crit?2.f:1.f)*multiplier,hex(w.color),
+            w.pierce+((gun==2 || gun==6)?special[8]:0),{},longShot,false};
+        shot.gravity=w.gravity; shot.blast=w.blast*(gun==5?1+.15f*special[8]:1.f); shot.crit=crit; shot.weapon=gun;
+        shot.closeMultiplier=(gun==1?1+.16f*special[9]:1.f) *
+            (operativeId==0?1+.08f*skill[1]:operativeId==3?1+.11f*skill[0]:1.f);
         shot.id=++nextShot;
         shots.push_back(shot);
     }

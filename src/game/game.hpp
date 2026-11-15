@@ -13,6 +13,7 @@ public:
     void start(int sector,const Save& save,bool cooperative=false);
     void startCoop(int sector,const Save& loadout,int guestCharacter=-1,bool cooperative=false);
     void retry();
+    bool recoverLife(); // Called after a failed tick; never during physics iteration.
     void applyControls(const Controls& controls,bool second=false,bool pointerMoved=true);
     const Operative& teammate() const { return partner; }
     struct RelayState {
@@ -35,7 +36,7 @@ public:
     void hold(Key key,bool down) { keys[static_cast<size_t>(key)]=down; }
     void select(int weapon);
     void pointer(Vec position) {
-        const Vec target=position+Vec{camera,0};
+        const Vec target=position+Vec{camera,cameraY};
         pointAt(target,length(target-mouse)>2.5f);
     }
     void pointAt(Vec world,bool moved) {
@@ -64,12 +65,14 @@ public:
     const Character*& character=operative.character;
     const Difficulty* difficulty=nullptr;
     int index=0,score=0,kills=0;
+    int lives=4,maxLives=4; // A fresh allowance for each mission, including retries.
     int& gun=operative.gun;
     int activeBeacon=-1;
     bool bossActive=false,bossDead=false;
     Mode mode=Mode::paused;
     float time=0,entry=0,shake=0;
     float& camera=operative.camera;
+    float& cameraY=operative.cameraY;
     float timeScale=1,hitStop=0,punch=0,slowEnergy=1,comboTimer=0,flash=0,pain=0;
     // Crosshair feedback. hitMarker lights up on every hit and killMarker on a kill.
     float hitMarker=0,killMarker=0;
@@ -124,6 +127,7 @@ private:
     void releaseBoth();
     void updateCamera(float dt);
     void setupLoadout(const Save& save);
+    void refreshCharacterBonuses();
     void spawnPartner(Vec safe);
 
     std::minstd_rand ambientRng{0x51f};

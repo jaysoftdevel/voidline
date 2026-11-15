@@ -196,7 +196,8 @@ void sharedSimulation() {
     CHECK(net::decodeWorld(world,guest,sounds,&frame));
     CHECK(frame.mission==2 && frame.tick==47);
     CHECK(guest.player.box.x==host.teammate().player.box.x && guest.teammate().player.box.x==host.player.box.x);
-    CHECK(guest.camera==host.teammate().camera && guest.player.hp==host.teammate().player.hp);
+    CHECK(guest.camera==host.teammate().camera && guest.cameraY==host.teammate().cameraY &&
+          guest.player.hp==host.teammate().player.hp);
     CHECK(guest.gun==host.teammate().gun && guest.enemies.size()==host.enemies.size() && sounds.size()==1);
     CHECK(!net::decodeWorld(std::span(world).first(world.size()-1),guest,sounds));
     Controls decoded;

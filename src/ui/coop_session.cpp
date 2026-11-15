@@ -4,6 +4,7 @@
 #include "ui/sector_story.hpp"
 #include "content/level_io.hpp"
 #include "content/model_io.hpp"
+#include "ui/level_access.hpp"
 #include <exception>
 
 using namespace vl::ui;
@@ -63,7 +64,7 @@ void App::openMultiplayer() {
     coopCharacter=std::clamp(save.character,0,static_cast<int>(characters.size())-1);
     remoteCharacter=-1; characterLocked=remoteLocked=false; modeAnnounced=false;
     openingSkipped=skipRequested=false;
-    coopDifficulty=settings.difficulty; coopMode=CoopMode::campaign;
+    coopDifficulty=settings.difficulty; coopMode=CoopMode::campaign; debugStartLevel=0;
     advertisedAddress=net::Session::localAddress();
     show(View::multiplayer);
 }
@@ -89,7 +90,7 @@ void App::prepareCoop() {
     sharedPause={}; pauseReplyPending=false;
     pendingControls={}; netSounds.clear();
     previousPlayer=game.player; previousPartner=game.teammate().player;
-    previousCamera=game.camera; previousWorld.capture(game);
+    previousCamera=game.camera; previousCameraY=game.cameraY; previousWorld.capture(game);
     accumulator=netFrame=film=0; netInterpolation=1; notice=0;
     simulationTick=lastSnapshotTick=0;
     preloadStep=0; probes=0;
@@ -107,7 +108,7 @@ void App::startCoop(int index,bool retry) {
     if (!network.hosting() || network.state()!=State::connected ||
         !characterLocked || !remoteLocked || remoteCharacter<0) return;
     const int limit=coopMode==CoopMode::cooperative?cooperativeSectorCount:sectorCount;
-    const bool valid=index>=0 && index<limit && (mission==0?(index==0 && !retry):
+    const bool valid=index>=0 && index<limit && (mission==0?(index==(settings.debugUnlockLevels?debugStartLevel:0) && !retry):
         retry?(view==View::failed && index==game.index):
               (view==View::cleared && index==game.index+1 && index<limit));
     if (!valid) return;
@@ -174,7 +175,7 @@ void App::receiveCoop(std::span<const uint8_t> data) {
         valid=body.size()==1 && body[0]<characters.size() && !remoteLocked;
         if (valid) {
             remoteCharacter=body[0]; remoteLocked=true;
-            if (network.hosting() && characterLocked) startCoop(0);
+            if (network.hosting() && characterLocked) startCoop(settings.debugUnlockLevels?debugStartLevel:0);
         }
         if (!valid) network.fail("Invalid or repeated operative selection.");
         return;
@@ -236,7 +237,7 @@ void App::receiveCoop(std::span<const uint8_t> data) {
             CoopMode selectedMode=CoopMode::campaign;
             uint32_t generation=0,hostLayout=0;
             valid=net::decodeMission(body,index,level,generation,&selectedMode,&hostLayout) && generation==mission+1 &&
-                (mission==0?index==0:
+                (mission==0?index>=0 && index<(selectedMode==CoopMode::cooperative?cooperativeSectorCount:sectorCount):
                  (view==View::failed && index==game.index && selectedMode==coopMode) ||
                  (view==View::cleared && index==game.index+1 && selectedMode==coopMode));
             if (valid) {
@@ -274,7 +275,7 @@ void App::receiveCoop(std::span<const uint8_t> data) {
         }
         if (kind==Packet::world && coopStarted && deployAt) {
             previousPlayer=game.player; previousPartner=game.teammate().player;
-            previousCamera=game.camera;
+            previousCamera=game.camera; previousCameraY=game.cameraY;
             previousWorld.capture(game);
             std::vector<net::Sound> sounds;
             net::WorldFrame frame;
@@ -381,7 +382,7 @@ void App::loadCoop() {
 
 void App::deployCoop() {
     previousPlayer=game.player; previousPartner=game.teammate().player;
-    previousCamera=game.camera; previousWorld.capture(game);
+    previousCamera=game.camera; previousCameraY=game.cameraY; previousWorld.capture(game);
     netInterpolation=1; accumulator=netFrame=0;
     lastRemoteInput=net::now();
     input.reset();
@@ -402,7 +403,7 @@ Controls App::readCoopControls() const {
     map(Key::crouch,Act::crouch); map(Key::slow,Act::slow); map(Key::interact,Act::interact);
     if (input.pressed(Act::reload)) result.pressed|=keyBit(Key::reload);
     for (int i=0;i<static_cast<int>(weaponCount);++i)
-        if (input.pressed(static_cast<Act>(static_cast<int>(Act::weapon1)+i))) result.weapon=i;
+        if (input.pressed(static_cast<Act>(static_cast<int>(Act::weapon1)+i))) result.weapon=weaponDisplayOrder[i];
     result.cycle=int(input.pressed(Act::next))-int(input.pressed(Act::previous));
     if (input.aimStickActive()) {
         result.aimMode=AimMode::stick; result.aim=input.aimStick();
@@ -450,7 +451,7 @@ void App::advanceCoop(float dt) {
     accumulator+=dt*game.advance(dt);
     while (accumulator>=step && game.mode==Mode::active) {
         previousPlayer=game.player; previousPartner=game.teammate().player;
-        previousCamera=game.camera;
+        previousCamera=game.camera; previousCameraY=game.cameraY;
         game.tick();
         ++simulationTick;
         accumulator-=step;
@@ -484,7 +485,7 @@ void App::lockOperative() {
     const uint8_t choice=static_cast<uint8_t>(coopCharacter);
     if (!network.send(net::Packet::operative,std::span<const uint8_t>(&choice,1))) return;
     characterLocked=true;
-    if (network.hosting() && remoteLocked) startCoop(0);
+    if (network.hosting() && remoteLocked) startCoop(settings.debugUnlockLevels?debugStartLevel:0);
 }
 void App::skipPrologue() {
     if (view==View::intro) { launch(0); return; }

@@ -87,15 +87,23 @@ void App::multiplayer() {
     } else if (lobby==Lobby::host && network.state()==State::idle) {
         label({83,216},"SELECT MULTIPLAYER MODE",teal);
         button({83,232,197,42},coopMode==CoopMode::campaign?"CAMPAIGN  [X]":"CAMPAIGN",
-            [this]{coopMode=CoopMode::campaign;},true,coopMode==CoopMode::campaign);
+            [this]{coopMode=CoopMode::campaign; debugStartLevel=0;},true,coopMode==CoopMode::campaign);
         button({290,232,210,42},coopMode==CoopMode::cooperative?"COOPERATIVE  [X]":"COOPERATIVE",
-            [this]{coopMode=CoopMode::cooperative;},true,coopMode==CoopMode::cooperative);
+            [this]{coopMode=CoopMode::cooperative; debugStartLevel=0;},true,coopMode==CoopMode::cooperative);
         copy({83,291},coopMode==CoopMode::cooperative?"Spawn together, split into upper/lower routes and operate pressure plates and timed levers to unlock sliding doors.":
             "Twenty combat campaign sectors with a shared route.",418,15);
         label({83,325},"DIFFICULTY",teal);
         button({83,336,52,42},"<",[this]{--coopDifficulty;},coopDifficulty>0);
         button({442,336,52,42},">",[this]{++coopDifficulty;},coopDifficulty+1<static_cast<int>(difficulties.size()));
         r.text({155,363},difficulties[coopDifficulty].name,20,white,true);
+        if (settings.debugUnlockLevels) {
+            const int limit=coopMode==CoopMode::cooperative?cooperativeSectorCount:sectorCount;
+            debugStartLevel=std::clamp(debugStartLevel,0,limit-1);
+            label({83,413},"DEBUG: START LEVEL",amber);
+            button({83,425,52,39},"<",[this]{--debugStartLevel;},debugStartLevel>0);
+            button({442,425,52,39},">",[this,limit]{++debugStartLevel;},debugStartLevel+1<limit);
+            r.text({155,451},"LEVEL "+digits(debugStartLevel+1)+" / "+digits(limit),19,white,true);
+        }
         label({555,225},"HOST IPv4 ADDRESS",teal);
         r.rect({555,240,550,42},hex(0x091722));
         r.outline({555,240,550,42},hex(0x547582));

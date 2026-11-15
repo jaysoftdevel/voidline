@@ -22,6 +22,14 @@ void App::menu() {
     button({54,426,339,39},"SETTINGS",[this]{settingsReturn=View::menu; show(View::settings);});
     button({54,474,339,39},"CREDITS",[this]{show(View::credits);});
     button({54,522,339,39},"QUIT",[this]{running=false;});
+    if (settings.debugUnlockLevels) {
+        r.gradient({688,354,457,152},hex(0x203542),hex(0x101c28));
+        r.outline({688,354,457,152},amber.alpha(.65f));
+        label({707,380},"DEBUG MODE / SESSION LOADOUT",amber);
+        button({706,397,203,41},"LEVEL SELECTION",[this]{openDebug(false);},true,true);
+        button({922,397,204,41},"WEAPONS / UPGRADES",[this]{openDebug(true);},true,true);
+        copy({707,468},"Test every sector and cycle upgrade ranks without using credits or saving purchases.",415,12.5f,pale);
+    }
     label({1003,566},std::string("NATIVE EDITION  /  ")+version,pale);
 }
 } // namespace vl

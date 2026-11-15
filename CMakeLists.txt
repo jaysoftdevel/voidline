@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(voidline VERSION 2.10.18 LANGUAGES CXX)
+project(voidline VERSION 2.10.23 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -156,8 +156,11 @@ if(BUILD_TESTING)
   target_compile_options(voidline_tests PRIVATE ${VOIDLINE_WARNINGS})
   target_link_libraries(voidline_tests PRIVATE voidline_services)
   add_dependencies(voidline_tests voidline_media)
-  target_compile_definitions(voidline_tests PRIVATE VOIDLINE_TEST_ASSET_ROOT="${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets")
+  target_compile_definitions(voidline_tests PRIVATE VOIDLINE_TEST_ASSET_ROOT="${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets"
+    VOIDLINE_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
   add_test(NAME voidline_tests COMMAND voidline_tests)
+  add_test(NAME voidline_authored_levels
+           COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/test_authored_levels.py)
   add_test(NAME voidline_level_sync
            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/test_sync_levels.py)
   # GUI logic regression checks are headless, so CI and ./build.sh exercise them

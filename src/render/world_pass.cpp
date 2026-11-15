@@ -21,13 +21,25 @@ void Renderer::operativePose(const Player& player,const Player& previous,float a
     pose.reach=mix(previous.gait.reach,pose.reach,blend);
 }
 
-void Renderer::drawWorld(const Game& g,bool motion,float alpha,const Player& previous,float previousCamera,const Player* previousPartner,
+void Renderer::drawWorld(const Game& g,bool motion,float alpha,const Player& previous,float previousCamera,float previousCameraY,const Player* previousPartner,
                          const WorldMotion* previousWorld,Vec tilt) {
     worldRendering=true;
     const float shake=motion?g.shake:0.f;
-    offset={-mix(previousCamera,g.camera,alpha)+std::cos(g.time*119)*shake*.55f,std::sin(g.time*97)*shake*.38f};
     operativePose(g.player,previous,alpha);
-    const Vec center=g.player.box.center()+offset+playerShift;
+    const Vec renderedPlayer=g.player.box.center()+playerShift;
+    // Guard the actual interpolated view as well as the simulation camera.
+    // Otherwise a rapid climb or teleport can momentarily crop the operative
+    // between simulation ticks even though both camera endpoints are safe.
+    const float maximumX=std::max(0.f,g.stage->worldWidth-width);
+    const float horizontal=clamp(
+        clamp(mix(previousCamera,g.camera,alpha),renderedPlayer.x-width*.77f,renderedPlayer.x-width*.23f),
+        0.f,maximumX);
+    const float vertical=clamp(
+        clamp(mix(previousCameraY,g.cameraY,alpha),renderedPlayer.y-height*.90f,renderedPlayer.y-height*.10f),
+        -560.f,260.f);
+    offset={-horizontal+std::cos(g.time*119)*shake*.55f,
+            -vertical+std::sin(g.time*97)*shake*.38f};
+    const Vec center=renderedPlayer+offset;
     cameraView.tiltEnabled=motion;
     cameraView.tilt=motion?tilt:Vec{};
     cameraView.focus={clamp(center.x,width*.2f,width*.8f),clamp(center.y,height*.2f,height*.8f)};

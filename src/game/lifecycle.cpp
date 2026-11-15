@@ -33,11 +33,14 @@ void Game::start(int sector,const Save& save,bool cooperative) {
     relayStates.assign(stage->relays.size(),{});
     setpieceMask=0; bossPhase=0;
     difficulty=&difficulties[save.difficulty];
+    lives=maxLives=startingLives(save.difficulty,save.extraLives);
     const auto& rank=save.perks;
-    speedScale=1+.04f*rank[1]; jumpScale=1+.03f*rank[1];
-    slowDrain=.16f/(1+.25f*rank[2]); slowRegen=.045f*(1+.25f*rank[2]);
+    speedScale=(1+.04f*rank[1])*(save.character==1?1+.06f*save.skills[1][0]:1.f);
+    jumpScale=(1+.03f*rank[1])*(save.character==1?1+.05f*save.skills[1][0]:1.f);
+    slowDrain=.16f/(1+.25f*rank[2]); slowRegen=.045f*(1+.25f*rank[2])*(save.character==5?1+.15f*save.skills[5][1]:1.f);
     pickupAmmo=.41f*(1+.20f*rank[3]); pickupHeal=42*(1+.15f*rank[4]);
-    damageTaken=1-.06f*rank[5];
+    damageTaken=(1-.06f*rank[5])*(save.character==0?1-.05f*save.skills[0][0]:
+        save.character==3?1-.07f*save.skills[3][1]:1.f);
     platforms.clear();
     for (const auto& box:stage->ground) platforms.push_back({box,{},true});
     for (const auto& box:stage->ledges) platforms.push_back({box,{}});
@@ -80,7 +83,7 @@ void Game::start(int sector,const Save& save,bool cooperative) {
     for (const auto& item:stage->supplies) supplies.push_back({item.kind,{item.x,item.y-20}});
     setupLoadout(save);
     resetTransient(); backup={}; slowEnergy=1; bestCombo=0;
-    score=0; kills=0; time=0; camera=0;
+    score=0; kills=0; time=0; camera=0; cameraY=0;
     activeBeacon=-1; bossActive=bossDead=false;
     // Cooperative players share the same ground insertion bay; neither is
     // teleported straight to the upper puzzle route.
@@ -89,19 +92,36 @@ void Game::start(int sector,const Save& save,bool cooperative) {
     mode=Mode::active;
 }
 
+void Game::refreshCharacterBonuses() {
+    if (!character) return;
+    const int active=int(character-characters.data());
+    if (active<0 || active>=int(characters.size())) return;
+    const auto& rank=campaign.perks;
+    speedScale=(1+.04f*rank[1])*(active==1?1+.06f*campaign.skills[1][0]:1.f);
+    jumpScale=(1+.03f*rank[1])*(active==1?1+.05f*campaign.skills[1][0]:1.f);
+    slowRegen=.045f*(1+.25f*rank[2])*(active==5?1+.15f*campaign.skills[5][1]:1.f);
+    damageTaken=(1-.06f*rank[5])*(active==0?1-.05f*campaign.skills[0][0]:
+        active==3?1-.07f*campaign.skills[3][1]:1.f);
+}
+
 void Game::setupLoadout(const Save& save) {
     character=&characters[save.character];
     maxHealth=int(std::lround(character->health*(1+.10f*save.perks[0])));
-    gun=save.equipped;
+    gun=(save.equipped>=0 && save.equipped<int(weaponCount) && save.owned[save.equipped])?save.equipped:3;
     for (size_t i=0;i<guns.size();++i) {
         const auto& w=weapons[i];
         const auto& t=save.tiers[i];
-        const int capacity=std::lround(w.magazine*(1+t[1]*.25f));
-        const int reserve=w.reserve<0?-1:std::lround(w.reserve*(1+t[3]*.30f)*character->ammo);
-        guns[i]={int(std::lround(w.damage*(1+t[0]*.20f))),capacity,reserve,capacity,reserve,
-                 w.reload*(1-t[2]*.15f),0,save.cleared>=w.unlock,
-                 w.range*(1+t[4]*.14f),w.interval*(1-t[5]*.08f),w.spread*(1-t[6]*.22f),t[7]*.07f};
+        const auto& skill=save.skills[save.character];
+        const int capacity=std::lround(w.magazine*(1+t[1]*.25f)*(i==4?1+.12f*t[8]:1.f));
+        const int reserve=w.reserve<0?-1:std::lround(w.reserve*(1+t[3]*.30f)*character->ammo*(1+.12f*skill[0]*(save.character==2)));
+        guns[i]={int(std::lround(w.damage*(1+t[0]*.20f)*(i==2?1+.14f*t[9]:i==5?1+.12f*t[9]:i==6?1+.18f*t[9]:1.f))),capacity,reserve,capacity,reserve,
+                 w.reload*(1-t[2]*.15f)*(save.character==2?1-.08f*skill[1]:1.f),0,save.owned[i],
+                 w.range*(1+t[4]*.14f)*(save.character==4?1+.08f*skill[0]:1.f),
+                 w.interval*(1-t[5]*.08f)*(i==0?1-.05f*t[9]:i==3?1-.08f*t[8]:i==4?1-.07f*t[9]:1.f),
+                 w.spread*(1-t[6]*.22f)*(i==0?1-.12f*t[8]:1.f)*(save.character==4?1-.12f*skill[1]:1.f),
+                 t[7]*.07f+(i==3?t[9]*.07f:0.f)};
     }
+    refreshCharacterBonuses();
 }
 
 void Game::spawn(Vec safe) {
@@ -151,12 +171,22 @@ void Game::retry() {
     const Vec hostSpawn=beacon-Vec{playerW*.5f,0};
     spawn(hostSpawn);
     camera=clamp(beacon.x-width*.32f,0,stage->worldWidth-width);
+    cameraY=clamp(beacon.y-27.f-height*.78f,-560.f,260.f);
     player.flash=.9f; entry=0; mode=Mode::active;
     if (coop) {
         partner=backup.partner;
         for (auto& g:partner.guns) g.reload=0;
         spawnPartner(puzzleMode?beacon+Vec{32.f,0}:player.safe);
     }
+}
+
+bool Game::recoverLife() {
+    if (coop || mode!=Mode::failed || lives<=1) return false;
+    const int remaining=lives-1;
+    retry();
+    lives=remaining;
+    entry=0;
+    return true;
 }
 
 void Game::pause(bool paused) { release(); mode=paused?Mode::paused:Mode::active; }

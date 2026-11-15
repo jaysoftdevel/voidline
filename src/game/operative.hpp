@@ -18,7 +18,7 @@ struct Operative {
     std::array<Gun,weaponCount> guns{};
     const Character* character=nullptr;
     int gun=0,maxHealth=100;
-    float camera=0;
+    float camera=0,cameraY=0;
 };
 
 struct OperativeInput {

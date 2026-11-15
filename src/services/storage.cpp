@@ -127,9 +127,16 @@ std::optional<Save> Storage::get(int slot) const {
     s.credits=integer(obj,"credits",0,0,max);
     s.character=integer(obj,"character",0,0,int(characters.size())-1);
     s.difficulty=integer(obj,"difficulty",1,0,2);
+    s.extraLives=integer(obj,"extraLives",0,0,maxExtraLives);
     s.updated=integer(obj,"updated",0,0,std::numeric_limits<int64_t>::max());
     const int w=integer(obj,"equipped",0,0,int(weaponCount)-1);
-    if (s.cleared>=weapons[w].unlock) s.equipped=w;
+    s.equipped=w;
+    auto* owned=json_object_object_get(obj,"ownedWeapons");
+    const bool hasOwned=json_object_get_type(owned)==jsonArray;
+    if (hasOwned) for (size_t i=0;i<weaponCount;++i) {
+        auto* item=json_object_array_get_idx(owned,i);
+        s.owned[i]=i==3 || json_object_get_boolean(item);
+    }
     auto* tiers=json_object_object_get(obj,"upgrades");
     auto* records=json_object_object_get(obj,"records");
     for (size_t i=0;i<weaponCount;++i) {
@@ -137,7 +144,16 @@ std::optional<Save> Storage::get(int slot) const {
         for (size_t k=0;k<upgradeCount;++k) {
             const auto value=integer(rank,upgrades[k].key,0,std::numeric_limits<int>::min(),max);
             s.tiers[i][k]=int(std::clamp<int64_t>(value,0,3));
+            if (!hasOwned && s.tiers[i][k]>0) s.owned[i]=true;
         }
+    }
+    // Legacy saves retain a previously equipped weapon, but do not auto-grant all unlocked guns.
+    if (!hasOwned && s.cleared>=weapons[w].unlock) s.owned[w]=true;
+    if (!s.owned[s.equipped]) s.equipped=3;
+    auto* skills=json_object_object_get(obj,"characterSkills");
+    for (size_t c=0;c<characters.size();++c) {
+        auto* list=json_object_get_type(skills)==jsonArray?json_object_array_get_idx(skills,c):nullptr;
+        for (size_t k=0;k<2;++k) s.skills[c][k]=integer(list,characterSkills[c][k].key,0,0,3);
     }
     auto* talents=json_object_object_get(obj,"perks");
     for (size_t i=0;i<perkCount;++i) {
@@ -178,6 +194,7 @@ Settings Storage::settings() const {
     s.sprintMode=integer(j.get(),"sprintMode",s.sprintMode,0,2);
     s.crouchToggle=flag(j.get(),"crouchToggle",s.crouchToggle);
     s.diagnostics=flag(j.get(),"diagnostics",s.diagnostics);
+    s.debugUnlockLevels=flag(j.get(),"debugUnlockLevels",s.debugUnlockLevels);
     s.fpsCounter=flag(j.get(),"fpsCounter",s.fpsCounter);
     s.fpsCorner=integer(j.get(),"fpsCorner",s.fpsCorner,0,3);
     auto* keys=json_object_object_get(j.get(),"keymap");
@@ -264,6 +281,17 @@ void Storage::put(int slot,Save& s) {
     add(obj,"updated",now);
     add(obj,"score",s.score); add(obj,"credits",s.credits);
     add(obj,"character",s.character); add(obj,"difficulty",s.difficulty); add(obj,"equipped",s.equipped);
+    add(obj,"extraLives",std::clamp(s.extraLives,0,maxExtraLives));
+    auto* owned=json_object_new_array();
+    for (size_t i=0;i<weaponCount;++i) json_object_array_add(owned,json_object_new_boolean(i==3 || s.owned[i]));
+    json_object_object_add(obj,"ownedWeapons",owned);
+    auto* skills=json_object_new_array();
+    for (size_t c=0;c<characters.size();++c) {
+        auto* ranks=json_object_new_object();
+        for (size_t k=0;k<2;++k) add(ranks,characterSkills[c][k].key,s.skills[c][k]);
+        json_object_array_add(skills,ranks);
+    }
+    json_object_object_add(obj,"characterSkills",skills);
     auto* cleared=json_object_new_array();
     auto* records=json_object_new_object();
     for (int i=0;i<s.cleared;++i) {
@@ -307,6 +335,7 @@ void Storage::put(const Settings& s) {
     json_object_object_add(obj,"graphics",quality);
     addReal(obj,"music",s.music); addReal(obj,"effects",s.effects); add(obj,"difficulty",s.difficulty);
     add(obj,"sprintMode",s.sprintMode); addFlag(obj,"crouchToggle",s.crouchToggle); addFlag(obj,"diagnostics",s.diagnostics);
+    addFlag(obj,"debugUnlockLevels",s.debugUnlockLevels);
     addFlag(obj,"fpsCounter",s.fpsCounter); add(obj,"fpsCorner",std::clamp(s.fpsCorner,0,3));
     auto* keys=json_object_new_array();
     for (int code:s.keymap) json_object_array_add(keys,json_object_new_int64(code));

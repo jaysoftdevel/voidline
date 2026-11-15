@@ -104,7 +104,7 @@ void explosives() {
     }
     game.select(5);
     CHECK(game.gun == 5);
-    game.pointer({game.player.box.x - game.camera + 380.f, floorY - 30.f});
+    game.pointAt({game.player.box.x + 380.f, floorY - 30.f},true); // World-space aiming independent of camera scroll.
     game.input(Key::fire, true);
     for (int i = 0; i < 600 && game.kills < 3; ++i) game.tick();
     // One shell takes out the whole cluster.

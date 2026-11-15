@@ -1,5 +1,6 @@
 #include "ui/app.hpp"
 #include "ui/common.hpp"
+#include "ui/level_access.hpp"
 
 using namespace vl::ui;
 
@@ -8,7 +9,8 @@ void App::campaign() {
     const auto& stage=stages[sector];
     shell(stage.art); heading("CAMPAIGN","Sector map",
         std::string(characters[save.character].name)+"  /  "+difficulties[save.difficulty].name+
-        "  /  "+std::to_string(save.score)+" lifetime score");
+        "  /  "+std::to_string(save.score)+" lifetime score"+
+        (settings.debugUnlockLevels?"  /  DEBUG: ALL LEVELS AVAILABLE":""));
     r.cover(stage.art,{55,171,598,201},1.02f);
     r.gradient({55,171,598,201},hex(0x101920).alpha(.08f),hex(0x09121e).alpha(.79f));
     r.outline({55,171,598,201},hex(stage.accent).alpha(.69f));
@@ -22,19 +24,21 @@ void App::campaign() {
     label({687,274},std::string("GUARDIAN  /  ")+stage.boss,amber);
     const auto& best=save.records[sector];
     if (best.time>0) label({687,297},"BEST  /  "+std::to_string(best.score)+" SCORE  /  "+timeText(best.time));
-    button({687,316,442,40},sector<=save.cleared?"DEPLOY":"CLEAR PREVIOUS SECTOR",[this]{launch(sector);},sector<=save.cleared,true);
+    const bool accessible=canDeployLevel(sector,save.cleared,settings.debugUnlockLevels);
+    button({687,316,442,40},accessible?"DEPLOY":"CLEAR PREVIOUS SECTOR",
+           [this]{launch(sector);},accessible,true);
     constexpr int perPage=5;
     const int first=(sector/perPage)*perPage;
     const int end=std::min(first+perPage,sectorCount);
     for (int i=first;i<end;++i) {
         const auto& tile=stages[i];
         const Rect box{55.f+221*(i-first),392,206,112};
-        r.cover(tile.art,box,1,{.5f,.52f},hex(i>save.cleared?0x75818a:0xc7d7dd));
+        r.cover(tile.art,box,1,{.5f,.52f},hex(i>save.cleared && !settings.debugUnlockLevels?0x75818a:0xc7d7dd));
         r.gradient(box,hex(0x0a141d).alpha(.23f),hex(0x0a141d).alpha(.92f));
         r.outline(box,i==sector?hex(stage.accent):hovered(box)?white:hex(0x4c606d),i==sector?2:1);
         label({box.x+10,box.y+22},"SECTOR "+digits(i+1),pale);
         r.text({box.x+10,box.y+75},tile.name,20,white,true);
-        label({box.x+10,box.y+96},i<save.cleared?"CLEARED":i==save.cleared?"AVAILABLE":"LOCKED",i<save.cleared?teal:pale);
+        label({box.x+10,box.y+96},i<save.cleared?"CLEARED":i==save.cleared?"AVAILABLE":settings.debugUnlockLevels?"DEBUG ACCESS":"LOCKED",i<save.cleared?teal:pale);
         hit(box,[this,i]{sector=i;},true);
     }
     button({55,528,148,40},"MAIN MENU",[this]{show(View::menu);});

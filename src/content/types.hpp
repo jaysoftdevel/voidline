@@ -14,7 +14,7 @@ struct Character {
     int rig=-1; // 0..5 selects the original articulated armor silhouettes; -1 uses the default.
 };
 struct Difficulty { const char* name; float hp,damage,pace,score; };
-inline constexpr size_t weaponCount = 7, upgradeCount = 8, perkCount = 6;
+inline constexpr size_t weaponCount = 7, upgradeCount = 10, perkCount = 6;
 struct Weapon {
     const char *name,*shortName,*type,*color,*description;
     int damage,magazine,reserve; float reload,interval,speed,range,spread;
@@ -24,6 +24,8 @@ struct Weapon {
 struct Upgrade { const char *key,*name,*description; int base; };
 // Operative upgrades apply to every weapon and persist with the campaign.
 struct Perk { const char *key,*name,*description; int base,maxRank; };
+struct SpecialUpgrade { const char *name,*description; };
+struct CharacterSkill { const char *key,*name,*description; int base,maxRank; };
 // A sloped, walkable staircase between two footholds, left endpoint first.
 // Characters and ground enemies travel on its surface using normal left/right controls.
 struct Stair { Vec from,to; };
@@ -72,8 +74,19 @@ struct Stage {
     Vec insertion{}; // Zero y: initial floor elevation. Editable per-level operative spawn.
 };
 struct Record { float time=0; int score=0; };
+// Remaining lives are mission-local; purchased extra life slots are saved per campaign.
+inline constexpr int maxExtraLives=4;
+inline constexpr int startingLives(int difficulty,int extra=0) {
+    constexpr int byDifficulty[]{6,4,2}; // Recruit / Standard / Veteran
+    return byDifficulty[std::clamp(difficulty,0,2)]+std::clamp(extra,0,maxExtraLives);
+}
+inline constexpr int extraLifePrice(int purchased) { return 125+75*std::clamp(purchased,0,maxExtraLives); }
 struct Save {
-    int cleared=0,score=0,credits=0,character=0,difficulty=1,equipped=0;
+    int cleared=0,score=0,credits=0,character=0,difficulty=1,equipped=3;
+    int extraLives=0; // Permanent capacity; does not change on death.
+    // Buying a weapon, not clearing its unlock sector, grants access.
+    std::array<bool,weaponCount> owned=[] { std::array<bool,weaponCount> result{}; result[3]=true; return result; }();
+    std::array<std::array<int,2>,6> skills{};
     int64_t updated=0;
     std::array<std::array<int,upgradeCount>,weaponCount> tiers{};
     std::array<int,perkCount> perks{};
@@ -115,7 +128,7 @@ inline GraphicsQuality graphicsPreset(int preset) {
 struct Settings {
     std::array<int,keymapSize> keymap = [] { std::array<int,keymapSize> v{}; v.fill(-1); return v; }();
     int sprintMode = 0;
-    bool crouchToggle = false, diagnostics = false;
+    bool crouchToggle = false, diagnostics = false, debugUnlockLevels = false;
     bool audio=true,motion=true,cinematic=true,high=true,fpsCounter=false;
     int fpsCorner=1; // 0 top-left, 1 top-right, 2 bottom-left, 3 bottom-right
     GraphicsQuality graphics{};

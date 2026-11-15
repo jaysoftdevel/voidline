@@ -22,6 +22,7 @@ void App::hud() {
     };
     panel({19,16,271,75},trim);
     label({31,36},game.character->name,trim);
+    if (!game.coop) label({188,36},"LIVES "+std::to_string(game.lives)+"/"+std::to_string(game.maxLives),trim);
     r.text({31,59},"SUIT  "+std::to_string(p.hp)+" / "+std::to_string(game.maxHealth),16,white,true);
     for (int i=0;i<10;++i) {
         const Rect cell{31.f+i*24.7f,70,20.7f,7};
@@ -75,12 +76,22 @@ void App::hud() {
     label({31,570},covered?"IN COVER":p.crouched?"CROUCH":p.sprinting?"SPRINT":p.flip>0?"FLIP":game.activeBeacon>=0?"CHECKPOINT ONLINE":"FIELD COMMS  /  ACTIVE",
         covered?teal:p.crouched||p.sprinting||p.flip>0?trim:game.activeBeacon>=0?teal:muted);
     r.text({243,570},timeText(game.time),13,white,true);
-    panel({649,547,532,36},ammo);
-    for (int i=0;i<static_cast<int>(weaponCount);++i) {
-        const float x=662.f+i*74.f;
-        if (i==game.gun) r.slab({x-5,553,72,24},5,hex(0x29404b),hex(0x1c2d37));
-        r.text({x,569},std::to_string(i+1)+" "+weapons[i].shortName,11.5f,
-               !game.guns[i].available?hex(0x647382):i==game.gun?ammo:white,true);
+    // The quick bar lists only owned/equipped-in-loadout guns, with pistol first.
+    // Hotkey labels stay stable even when some guns have not been purchased.
+    int available=0;
+    for (int id:weaponDisplayOrder) if (game.guns[id].available) ++available;
+    constexpr float cellWidth=74.f;
+    const float barWidth=std::max(100.f,available*cellWidth+16.f);
+    const float start=1181.f-barWidth;
+    panel({start,547,barWidth,36},ammo);
+    int shown=0;
+    for (int hotkey=0;hotkey<static_cast<int>(weaponCount);++hotkey) {
+        const int id=weaponDisplayOrder[hotkey];
+        if (!game.guns[id].available) continue;
+        const float x=start+13.f+shown++*cellWidth;
+        if (id==game.gun) r.slab({x-5,553,72,24},5,hex(0x29404b),hex(0x1c2d37));
+        r.text({x,569},std::to_string(hotkey+1)+" "+weapons[id].shortName,11.5f,
+               id==game.gun?ammo:white,true);
     }
     if (game.coop) {
         const auto& partner=game.teammate();

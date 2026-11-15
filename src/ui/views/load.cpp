@@ -15,7 +15,8 @@ void App::load() {
             const auto& s=*slots[i];
             r.text({71,box.y+52},characters[s.character].name,27,white,true);
             r.text({72,box.y+74},std::string(difficulties[s.difficulty].name)+"    |    "+
-                std::to_string(s.cleared)+"/"+std::to_string(sectorCount)+" sectors    |    "+std::to_string(s.score)+" total score",14,pale);
+                std::to_string(s.cleared)+"/"+std::to_string(sectorCount)+" sectors    |    "+
+                std::to_string(startingLives(s.difficulty,s.extraLives))+" lives    |    "+std::to_string(s.score)+" total score",14,pale);
         } else r.text({72,box.y+59},"Empty slot",22,muted,true);
         button({948,box.y+27,180,39},"LOAD",[this,i]{loadCampaign(i+1);},slots[i].has_value(),true);
     }

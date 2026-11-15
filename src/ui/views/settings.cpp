@@ -25,6 +25,11 @@ void App::options() {
     setting(327,"New campaign difficulty",difficulties[settings.difficulty].name,[this]{settings.difficulty=(settings.difficulty+1)%3; commitSettings();});
     setting(383,"Graphics complexity", "CONFIGURE", [this]{graphicsPage=0; show(View::graphics);});
     setting(439,"Show FPS counter",settings.fpsCounter?"ON":"OFF",[this]{settings.fpsCounter=!settings.fpsCounter; commitSettings();});
+    setting(495,"Debug: unlock all levels",settings.debugUnlockLevels?"ON":"OFF",[this]{
+        settings.debugUnlockLevels=!settings.debugUnlockLevels;
+        debugLoadoutReady=false;
+        commitSettings();
+    });
     volume(159,"Music",settings.music);
     volume(215,"Effects",settings.effects);
     const bool fs=(SDL_GetWindowFlags(window)&sdl::fullscreen)!=0;
@@ -41,6 +46,6 @@ void App::options() {
     r.rect({615,439,530,51},hex(0x152531)); r.outline({615,439,530,51},hex(0x415565));
     r.text({630,470},"FPS display corner",17,white,true);
     button({941,446,190,37},std::string(corners[settings.fpsCorner]),[this]{settings.fpsCorner=(settings.fpsCorner+1)%4; commitSettings();});
-    button({55,526,142,41},"BACK",[this]{show(settingsReturn);},true,true);
+    button({55,551,142,38},"BACK",[this]{show(settingsReturn);},true,true);
 }
 } // namespace vl

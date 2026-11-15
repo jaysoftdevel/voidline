@@ -2,6 +2,8 @@
 #include "game/detail.hpp"
 #include "support.hpp"
 #include "services/storage.hpp"
+#include "ui/level_access.hpp"
+#include "ui/debug_loadout.hpp"
 #include "content/level_io.hpp"
 #include "platform/paths.hpp"
 #include <filesystem>
@@ -17,13 +19,16 @@ void fpsSettings() {
     Storage storage(path);
     auto options=storage.settings();
     CHECK(!options.fpsCounter && options.fpsCorner==1);
-    options.fpsCounter=true; options.fpsCorner=3;
+    CHECK(!options.debugUnlockLevels);
+    options.fpsCounter=true; options.fpsCorner=3; options.debugUnlockLevels=true;
     storage.put(options);
     auto read=storage.settings();
     CHECK(read.fpsCounter && read.fpsCorner==3);
-    read.fpsCounter=false; read.fpsCorner=0; storage.put(read);
+    CHECK(read.debugUnlockLevels);
+    read.fpsCounter=false; read.fpsCorner=0; read.debugUnlockLevels=false; storage.put(read);
     read=storage.settings();
     CHECK(!read.fpsCounter && read.fpsCorner==0);
+    CHECK(!read.debugUnlockLevels);
     auto& q=read.graphics;
     q=graphicsPreset(3);
     CHECK(q.preset==3 && q.resolution==4 && q.shadows==3 && q.reflections==3 && !q.dynamicResolution);
@@ -41,6 +46,51 @@ void fpsSettings() {
     std::filesystem::remove(path);
     std::filesystem::remove(path.string()+".lock");
 }
+void debugLevelAccess() {
+    CHECK(canDeployLevel(0,0,false));
+    CHECK(!canDeployLevel(1,0,false));
+    CHECK(canDeployLevel(19,0,true));
+    CHECK(!canDeployLevel(20,0,true));
+    CHECK(!canDeployLevel(-1,20,true));
+    CHECK(canDeployLevel(5,5,false));
+    CHECK(canDeployLevel(5,0,true,cooperativeSectorCount));
+    CHECK(!canDeployLevel(6,0,true,cooperativeSectorCount));
+    CHECK(progressAfterCompletion(0,19)==0); // debug jump doesn't unlock missed sectors
+    CHECK(progressAfterCompletion(3,2)==3);
+    CHECK(progressAfterCompletion(3,3)==4);
+}
+void debugWeaponAndUpgradeCycles() {
+    Save original;
+    original.credits=0;
+    const Save preserved=original;
+    auto debug=makeDebugLoadout(original);
+    for (bool owned:debug.owned) CHECK(owned);
+    CHECK(debug.equipped==3); // The pistol stays the default weapon.
+    CHECK(original.owned==preserved.owned && original.tiers==preserved.tiers);
+    for (size_t weapon=0;weapon<weaponCount;++weapon) {
+        for (size_t rank=0;rank<upgradeCount;++rank) {
+            auto& tier=debug.tiers[weapon][rank];
+            for (int expected=1;expected<=3;++expected) {
+                tier=nextDebugRank(tier,3);
+                CHECK(tier==expected);
+            }
+            tier=nextDebugRank(tier,3);
+            CHECK(tier==0);
+        }
+    }
+    for (int i=0;i<5;++i) CHECK(nextDebugRank(i,4)==(i+1)%5);
+    debug.equipped=6;
+    debug.tiers[6][0]=3;
+    Silent audio;
+    Game instance(audio);
+    instance.start(0,debug);
+    for (const auto& gun:instance.guns) CHECK(gun.available);
+    CHECK(instance.gun==6);
+    CHECK(instance.guns[6].damage>weapons[6].damage);
+    CHECK(original.credits==0 && original.equipped==3);
+    CHECK(original.owned==preserved.owned && original.tiers==preserved.tiers);
+}
+
 void upgradesAndPerks() {
     using namespace vl;
     Silent audio;
@@ -111,6 +161,145 @@ void rosterAndCharacters() {
     e.hp=500;
     game.damageEnemy(e,100,e.box.center(),{-1,0},false);
     CHECK(frontal<500-e.hp);
+}
+
+void authoredLevelSources() {
+    const auto root=std::filesystem::path(VOIDLINE_TEST_SOURCE_DIR)/"levels";
+    for (int mode=0;mode<2;++mode) {
+        for (int i=0;i<(mode?cooperativeSectorCount:sectorCount);++i) {
+            const auto& original=mode?cooperativeStages[i]:stages[i];
+            Stage modified;
+            std::string error;
+            const auto file=levelFile(root,i,mode!=0);
+            if (!readLevel(file,original,modified,i,mode!=0,&error)) {
+                std::cerr<<"Authored level rejected: "<<file<<": "<<error<<'\n';
+                CHECK(false); continue;
+            }
+            CHECK(!modified.ground.empty() && !modified.ledges.empty());
+            CHECK(modified.insertion.x>0 && modified.exit.x<modified.worldWidth);
+            CHECK(modified.enemies.size()==original.enemies.size());
+            CHECK(modified.relays.size()==original.relays.size());
+        }
+    }
+}
+
+void livesAndWeaponDisplayOrder() {
+    CHECK(startingLives(0)==6);
+    CHECK(startingLives(1)==4);
+    CHECK(startingLives(2)==2);
+    CHECK(startingLives(2,2)==4);
+    CHECK(startingLives(0,maxExtraLives)==10);
+    CHECK(startingLives(1,-100)==4);
+    CHECK(extraLifePrice(0)==125 && extraLifePrice(1)==200);
+    CHECK(weaponDisplayOrder.front()==3);
+    std::array<bool,weaponCount> seen{};
+    for (int id:weaponDisplayOrder) {
+        CHECK(id>=0 && id<int(weaponCount));
+        CHECK(!seen[id]); seen[id]=true;
+    }
+    Silent audio;
+    Game game(audio);
+    for (int difficulty=0;difficulty<3;++difficulty) {
+        Save save; save.difficulty=difficulty; save.extraLives=2;
+        game.start(0,save);
+        CHECK(game.maxLives==startingLives(difficulty,2));
+        CHECK(game.lives==game.maxLives);
+        CHECK(game.gun==3 && game.guns[3].available);
+        for (int i=0;i<int(weaponCount);++i) CHECK(game.guns[i].available==(i==3));
+        CHECK(!game.recoverLife()); // Still active; no life consumed.
+        const int initial=game.lives;
+        for (int used=1;used<initial;++used) {
+            game.mode=Mode::failed;
+            CHECK(game.recoverLife());
+            CHECK(game.mode==Mode::active && game.player.hp==game.maxHealth);
+            CHECK(game.lives==initial-used);
+        }
+        game.mode=Mode::failed;
+        CHECK(!game.recoverLife()); // Last death ends the attempt.
+        game.retry(); game.lives=game.maxLives;
+        CHECK(game.lives==initial); // Manual retry replenishes the full set.
+    }
+    // Purchased capacity survives a save/reload; older campaigns default to zero.
+    const auto file=std::filesystem::temp_directory_path()/
+        ("voidline-lives-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())+".json");
+    {
+        Storage storage(file);
+        Save purchased; purchased.difficulty=2; purchased.extraLives=3;
+        storage.put(1,purchased);
+        const auto saved=storage.get(1);
+        CHECK(saved.has_value());
+        if (saved) CHECK(saved->extraLives==3 && startingLives(saved->difficulty,saved->extraLives)==5);
+    }
+    std::filesystem::remove(file);
+    std::filesystem::remove(file.string()+".lock");
+}
+
+void purchaseAndSpecialization() {
+    Silent audio;
+    Game game(audio);
+    Save starter;
+    game.start(0,starter);
+    CHECK(game.gun==3);
+    for (size_t i=0;i<weaponCount;++i) CHECK(game.guns[i].available==(i==3));
+    game.select(0); CHECK(game.gun==3);
+    starter.cleared=20; // Clearing a sector is eligibility, never ownership.
+    game.start(0,starter); CHECK(!game.guns[0].available && game.gun==3);
+    starter.owned[0]=true; starter.equipped=0;
+    game.start(0,starter); CHECK(game.guns[0].available && game.gun==0);
+    // Ownership and personal skills persist across a campaign save/reload.
+    const auto file=std::filesystem::temp_directory_path()/
+        ("voidline-loadout-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())+".json");
+    {
+        Storage storage(file);
+        Save buying=starter;
+        buying.owned[2]=true; buying.skills[0]={2,1};
+        buying.tiers[2][9]=2;
+        storage.put(1,buying);
+        const auto restored=storage.get(1);
+        CHECK(restored.has_value());
+        if (restored) {
+            CHECK(restored->owned[0] && restored->owned[2] && restored->owned[3]);
+            CHECK(!restored->owned[1]);
+            CHECK(restored->skills[0][0]==2 && restored->skills[0][1]==1);
+            CHECK(restored->tiers[2][9]==2);
+        }
+    }
+    std::filesystem::remove(file);
+    std::filesystem::remove(file.string()+".lock");
+    // Both weapon-specific upgrade slots produce gameplay changes.
+    Save upgraded=starter;
+    upgraded.tiers[0][8]=3; upgraded.tiers[0][9]=3;
+    Game special(audio); special.start(0,upgraded);
+    CHECK(special.guns[0].spread<game.guns[0].spread);
+    CHECK(special.guns[0].interval<game.guns[0].interval);
+    for (size_t i=0;i<weaponCount;++i) {
+        Save input=starter; input.owned[i]=true; input.equipped=int(i);
+        input.tiers[i][8]=3; input.tiers[i][9]=3;
+        special.start(0,input);
+        CHECK(special.guns[i].available && special.gun==int(i));
+        CHECK(special.guns[i].damage>=weapons[i].damage);
+    }
+    for (int i=0;i<int(characters.size());++i) {
+        Save plain=starter,enhanced=starter;
+        plain.character=i; enhanced.character=i;
+        enhanced.skills[i]={3,3};
+        game.start(0,plain); special.start(0,enhanced);
+        switch(i) {
+        case 0: CHECK(special.damageTaken<game.damageTaken); break;
+        case 1: CHECK(special.speedScale>game.speedScale && special.jumpScale>game.jumpScale); break;
+        case 2: CHECK(special.guns[0].maxReserve>game.guns[0].maxReserve && special.guns[0].duration<game.guns[0].duration); break;
+        case 3: CHECK(special.damageTaken<game.damageTaken); break;
+        case 4: CHECK(special.guns[0].range>game.guns[0].range && special.guns[0].spread<game.guns[0].spread); break;
+        case 5: CHECK(special.slowRegen>game.slowRegen); break;
+        }
+    }
+    // Even without a cursor, a player crossing the screen edge remains visible.
+    game.start(0,starter);
+    game.cameraY=0;
+    game.player.support=-1;
+    game.player.box.y=10;
+    for (int i=0;i<7;++i) game.tick();
+    CHECK(game.cameraY < 0.f);
 }
 
 void stageData() {
@@ -231,8 +420,13 @@ void checkpointRestore() {
 
 void runProgressionTests() {
     fpsSettings();
+    debugLevelAccess();
+    debugWeaponAndUpgradeCycles();
     upgradesAndPerks();
     rosterAndCharacters();
+    purchaseAndSpecialization();
+    livesAndWeaponDisplayOrder();
+    authoredLevelSources();
     stageData();
     checkpointRestore();
     authoredLevelOverride();

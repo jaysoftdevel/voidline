@@ -25,6 +25,7 @@ void Game::swapOperatives() {
     controllingPartner=!controllingPartner;
     std::swap(operative,partner);
     std::swap(localInput,partnerInput);
+    refreshCharacterBonuses();
 }
 
 void Game::releaseBoth() {
@@ -36,6 +37,7 @@ void Game::spawnPartner(Vec safe) {
     swapOperatives();
     spawn(safe);
     camera=clamp(safe.x-width*.32f,0,stage->worldWidth-width);
+    cameraY=clamp(safe.y-27.f-height*.78f,-560.f,260.f);
     player.flash=.9f;
     swapOperatives();
 }
@@ -67,7 +69,35 @@ bool Game::atExtraction(const Player& body) const {
 }
 
 void Game::updateCamera(float dt) {
-    const float target=clamp(player.box.x-width*.34f+player.velocity.x*.28f,0,stage->worldWidth-width);
-    camera=mix(camera,target,1-std::exp(-4.9f*dt));
+    const Vec center=player.box.center();
+    const float maxX=std::max(0.f,stage->worldWidth-width);
+    // Only the top and bottom 10% of the viewport enable cursor look-ahead.
+    // Return to a player-centered target whenever the pointer leaves those
+    // regions. Compute the target every tick, including when aiming stops.
+    float verticalLead=0.f;
+    float horizontalLead=0.f;
+    if (pointerActive) {
+        const float cursorY=mouse.y-cameraY;
+        const float border=height*.10f;
+        float influence=0.f;
+        if (cursorY<border) influence=-clamp((border-cursorY)/border);
+        else if (cursorY>height-border)
+            influence=clamp((cursorY-(height-border))/border);
+        verticalLead=height*.23f*influence;
+        if (influence!=0.f)
+            horizontalLead=clamp((mouse.x-center.x)*.35f,-width*.20f,width*.20f)*std::abs(influence);
+    }
+    const float targetX=clamp(center.x-width*.5f+horizontalLead,0.f,maxX);
+    const float targetY=clamp(center.y-height*.5f+verticalLead,-560.f,260.f);
+    // Time-independent exponential damping also smooths the return to center.
+    const float blend=1.f-std::exp(-4.2f*std::max(0.f,dt));
+    camera=mix(camera,targetX,blend);
+    cameraY=mix(cameraY,targetY,blend);
+    // Keep the player visible even after a sudden teleport or very fast fall.
+    camera=clamp(camera,center.x-width*.77f,center.x-width*.23f);
+    camera=clamp(camera,0.f,maxX);
+    cameraY=clamp(cameraY,center.y-height*.90f,center.y-height*.10f);
+    cameraY=clamp(cameraY,-560.f,260.f);
+
 }
 }

@@ -25,7 +25,7 @@ Game& arena(Game& game, EnemyKind kind, float distance = 200.f, int hp = 100000)
 }
 
 void aimAt(Game& game, const Enemy& e) {
-    game.pointer({e.box.center().x - game.camera, e.box.center().y});
+    game.pointAt(e.box.center(), true); // Tests aim in world coordinates regardless of scrolling camera.
 }
 
 void woundsAndFeedback() {

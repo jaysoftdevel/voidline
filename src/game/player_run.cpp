@@ -1,6 +1,7 @@
 #include "game/game.hpp"
 #include "game/detail.hpp"
 #include "content/skeleton.hpp"
+#include "game/stairs.hpp"
 
 namespace vl {
 // Acceleration toward the wanted speed, then the world edges.
@@ -60,7 +61,27 @@ void Game::collideWalls(float oldX,bool grounded) {
         const auto& s=surface.box;
         const bool lowCeiling=grounded && p.box.bottom()>=s.bottom()-.5f;
         if ((!surface.ground && !surface.cover && !lowCeiling) || p.box.bottom()<=s.y+.5f || p.box.y>=s.bottom()) continue;
-        collide(s);
+        // A walkable staircase meets a solid deck at its surface. At the
+        // junction, the character's *leading edge* reaches the deck before
+        // their center/feet reach its height. Let the stair transition take
+        // precedence over the deck's vertical side collision; the one-way
+        // surface landing still prevents falling through the deck.
+        bool stairEntry=false;
+        if (grounded && p.jumpAge==0 && p.velocity.y>=-15.f && p.velocity.y<130.f &&
+            p.box.bottom()>s.y && p.box.bottom()-s.y<=45.f) {
+            const float center=p.box.center().x;
+            for (const Stair& stair:stage->stairs) {
+                if (!validStair(stair) || center<stair.from.x-8.f || center>stair.to.x+8.f) continue;
+                const Vec joining=(std::abs(stair.from.y-s.y)<.5f)?stair.from:stair.to;
+                if (std::abs(joining.y-s.y)>.5f || joining.x<s.x-2.f || joining.x>s.right()+2.f) continue;
+                if (std::abs(stairY(stair,clamp(center,stair.from.x,stair.to.x))-p.box.bottom())<=24.f &&
+                    std::abs(stairY(stair,clamp(center,stair.from.x,stair.to.x))-s.y)<=48.f) {
+                    stairEntry=true;
+                    break;
+                }
+            }
+        }
+        if (!stairEntry) collide(s);
     }
 }
 } // namespace vl

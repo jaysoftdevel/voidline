@@ -35,7 +35,10 @@ void Game::moveShots(float dt) {
             auto& e=enemies[hit];
             if (s.blast>0) { explode(s.p,s.blast,s.damage,s.color); s.life=0; break; }
             if (e.hit<=0) audio.event("hit-metal",.3f,(s.p.x-player.box.x)/590,.92f+random()*.23f);
-            damageEnemy(e,s.damage,s.p,normal(s.v),s.crit);
+            float impact=s.damage;
+            const float distance=length(e.box.center()-player.box.center());
+            if (distance<270.f) impact*=s.closeMultiplier;
+            damageEnemy(e,impact,s.p,normal(s.v),s.crit);
             if (s.pierce>0) { s.passed.push_back(hit); --s.pierce; }
             else s.life=0;
         }

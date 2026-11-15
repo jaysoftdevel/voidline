@@ -104,6 +104,7 @@ struct Shot {
     bool crit=false;
     int weapon=-1;
     uint32_t id=0;
+    float closeMultiplier=1.f; // Snapshot-side combat modifier, applied at impact.
 };
 struct Particle {
     Vec p,v;

@@ -123,7 +123,7 @@ void App::movePointer(Vec position) {
 
 Vec App::aimPoint() const {
     // Pick through the transform the player saw, including camera interpolation and shake.
-    return worldFrame?r.worldAt(mouse):mouse+Vec{game.camera,0};
+    return worldFrame?r.worldAt(mouse):mouse+Vec{game.camera,game.cameraY};
 }
 
 void App::event(const SDL_Event& e) {
@@ -227,7 +227,7 @@ void App::update(float dt) {
     accumulator+=dt*scale;
     while (accumulator>=step && game.mode==Mode::active) {
         previousPlayer=game.player;
-        previousCamera=game.camera;
+        previousCamera=game.camera; previousCameraY=game.cameraY;
         game.tick();
         accumulator-=step;
     }
@@ -257,7 +257,7 @@ void App::draw() {
     case View::failed: {
         const float alpha=coopStarted && !network.hosting()?netInterpolation:
             view==View::play?clamp(accumulator/step):1.f;
-        r.drawWorld(game,settings.motion,alpha,previousPlayer,previousCamera,
+        r.drawWorld(game,settings.motion,alpha,previousPlayer,previousCamera,previousCameraY,
                     game.coop?&previousPartner:nullptr,
                     coopStarted && !network.hosting()?&previousWorld:nullptr,cameraTilt.value());
         worldFrame=true;

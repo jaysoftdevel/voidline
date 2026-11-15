@@ -112,7 +112,7 @@ template<class IO,class T> void wounds(IO& io,T& enemies) {
 }
 
 template<class IO,class T> void operative(IO& io,T& op,int& character) {
-    io(character,op.gun,op.maxHealth,op.camera,op.player);
+    io(character,op.gun,op.maxHealth,op.camera,op.cameraY,op.player);
     for (auto& gun:op.guns) io(gun);
 }
 

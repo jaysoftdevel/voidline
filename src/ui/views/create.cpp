@@ -27,7 +27,7 @@ void App::create() {
     label({54,483},"DIFFICULTY");
     label({493,483},"SAVE SLOT");
     for (int i=0;i<3;++i) {
-        button({54.f+i*135,495,125,35},difficulties[i].name,[this,i]{newDifficulty=i;},true,i==newDifficulty);
+        button({54.f+i*135,495,125,35},std::string(difficulties[i].name)+" ("+std::to_string(startingLives(i))+")",[this,i]{newDifficulty=i;},true,i==newDifficulty);
         button({493.f+i*101,495,94,35},"Slot "+std::to_string(i+1)+(slots[i]?" *":""),[this,i]{newSlot=i+1;},true,newSlot==i+1);
     }
     button({54,549,119,38},"BACK",[this]{show(View::menu);});
