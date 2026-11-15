@@ -1,0 +1,16 @@
+Model Studio v0.0.16 (Linux only)
+
+Build game + editor: ./build.sh (from the game source root)
+Editor-only build:    cd model-studio && ./build.sh && cd ..
+Open editor:         ./run-model-studio.sh --open-workspace "$PWD"
+
+1. Open Game Workspace and select the game source root (CMakeLists.txt + assets/)
+   or a built runtime with assets/game.vpak. No game.vpak is required for source.
+2. Edit a character or enemy model and Save (Ctrl+S).
+3. Export Single Model creates only a JSON copy. Export Project Sources creates
+   generated C++ and baked assets in the editor cache but does not publish.
+4. Publish models updates source assets and any built game.vpak, retaining backups.
+5. If no runtime is built yet, run ./build.sh (Linux) or build.bat (Windows).
+6. Verify with ./build/voidline/voidline --model-report; restart to apply edits.
+
+Full instructions: ../MODEL-STUDIO-WORKFLOW.md

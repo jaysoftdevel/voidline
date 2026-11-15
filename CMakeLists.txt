@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(voidline VERSION 2.10.9 LANGUAGES CXX)
+project(voidline VERSION 2.10.12 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -106,6 +106,16 @@ if(WIN32)
     COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:voidline>/assets
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${VOIDLINE_ASSET_PACK} $<TARGET_FILE_DIR:voidline>/assets/game.vpak
     VERBATIM)
+endif()
+
+# Linux-only model authoring tool. It has its own version and workspace; it is
+# built alongside the game but never linked to VOIDLINE or staged into its runtime.
+# The Windows build ignores this entire directory, including its dependencies.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND EXISTS "${CMAKE_SOURCE_DIR}/model-studio/CMakeLists.txt")
+  option(VOIDLINE_BUILD_MODEL_STUDIO "Build native Linux Model Studio with VOIDLINE" ON)
+  if(VOIDLINE_BUILD_MODEL_STUDIO)
+    add_subdirectory(model-studio)
+  endif()
 endif()
 
 # Editable JSON stays in the offline Model Studio project. Only game.vpak

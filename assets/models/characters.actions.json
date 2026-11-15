@@ -1,0 +1,29 @@
+{
+  "schema":"voidline-actions-v1",
+  "models":[
+    {
+      "id":0,
+      "sequences":{}
+    },
+    {
+      "id":1,
+      "sequences":{}
+    },
+    {
+      "id":2,
+      "sequences":{}
+    },
+    {
+      "id":3,
+      "sequences":{}
+    },
+    {
+      "id":4,
+      "sequences":{}
+    },
+    {
+      "id":5,
+      "sequences":{}
+    }
+  ]
+}

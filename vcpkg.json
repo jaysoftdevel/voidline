@@ -1,11 +1,16 @@
 {
   "name": "voidline",
-  "version-string": "2.9.6",
+  "version-string": "2.10.11",
   "dependencies": [
     "json-c",
     "libpng",
     "libwebp",
-    { "name": "libsndfile", "features": ["external-libs"] },
+    {
+      "name": "libsndfile",
+      "features": [
+        "external-libs"
+      ]
+    },
     "sdl2"
   ]
 }

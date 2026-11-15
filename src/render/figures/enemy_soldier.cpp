@@ -31,6 +31,18 @@ void Renderer::drawSoldier(const EnemyView& v) {
     h.lean=clamp(e.vx/96*.15f,-.2f,.2f)-e.flinch*e.kick*.05f;
     h.run=pace*.55f; h.weight=pace; h.cycle=cycle;
     h.pelvis=std::cos(cycle*4*pi-.4f)*pace*1.3f;
+    if(!e.alive)h.action=ActionPose::death;
+    else if(e.flinch>.75f || e.buckle>.8f)h.action=ActionPose::stagger;
+    else if(e.flinch>.35f)h.action=ActionPose::hit;
+    else if(e.recoil>.1f)h.action=ActionPose::recoil;
+    else if(e.warning>0 && e.raise>.2f)h.action=ActionPose::fire;
+    else if(e.raise>.2f)h.action=ActionPose::alert;
+    else if(std::abs(e.vx)>4.f &&
+            std::abs(e.base-(e.origin.y+e.box.h))>8.f)h.action=ActionPose::stairs;
+    else if(std::abs(e.vx)>4.f && e.raise>.2f)h.action=ActionPose::chase;
+    else if(std::abs(e.vx)>4.f)h.action=ActionPose::patrol;
+    else h.action=ActionPose::idle;
+    h.actionWeight=e.alive?1.f:std::min(1.f,v.dead/.25f);
     h.time=v.time+e.phase; h.velocity={e.vx,0}; h.landed=0; h.flinch=e.flinch;
     h.headSnap=e.headSnap; h.buckle=e.buckle*.3f;
     h.scarf=false; h.gripFromChest=true; h.farFree=false;

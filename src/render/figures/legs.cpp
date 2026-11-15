@@ -27,7 +27,7 @@ void Renderer::drawLegs(const Humanoid& h,const Rig& g) {
         if(h.model){
             const auto& profile=*h.model;
             const auto shift=[&](SkeletonJoint joint){
-                const Vec d=skeletonOffset(profile,joint,h.shoulder*profile.aimRaise,std::max(h.run,h.weight*.84f));
+                const Vec d=skeletonOffset(profile,joint,h.shoulder*profile.aimRaise,std::max(h.run,h.weight*.84f),h.action,h.actionWeight);
                 return Vec{d.x*(h.turn<0?-1.f:1.f),d.y};
             };
             const bool near=i==1;

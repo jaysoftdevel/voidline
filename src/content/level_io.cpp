@@ -155,6 +155,39 @@ bool readLevel(const std::filesystem::path& file,const Stage& base,Stage& result
                 (g.operatorPlayer==0||g.operatorPlayer==1) && (int(a[7])==0||int(a[7])==1);
         })) return fail(error,"Invalid cooperative relay.");
     if (edit.relays.size()>24) return fail(error,"More than 24 relay gates exceed multiplayer snapshot limits.");
+    edit.structurePolygons.clear();
+    if(auto* outlines=field(root.get(),"structureVertices")){
+        if(!json_object_is_type(outlines,json_type_object) || json_object_object_length(outlines)>maximumObjects)
+            return fail(error,"Invalid structure outline container");
+        json_object_object_foreach(outlines,label,points) {
+            const std::string key(label);
+            const size_t separator=key.rfind(':');
+            if(separator==std::string::npos)return fail(error,"Invalid polygon structure identifier");
+            const auto group=key.substr(0,separator),number=key.substr(separator+1);
+            int layer=-1;
+            if(group=="ground")layer=0;
+            else if(group=="ledges")layer=1;
+            else if(group=="cover")layer=2;
+            else if(group=="relays")layer=3;
+            if(layer<0 || number.empty() || number.find_first_not_of("0123456789")!=std::string::npos)
+                return fail(error,"Unknown polygon structure reference");
+            int index=0;
+            try{index=std::stoi(number);}catch(...){return fail(error,"Invalid structure index");}
+            const size_t bound=layer==0?edit.ground.size():layer==1?edit.ledges.size():
+                    layer==2?edit.cover.size():edit.relays.size();
+            if(index<0 || static_cast<size_t>(index)>=bound || !json_object_is_type(points,json_type_array) ||
+                json_object_array_length(points)<3 || json_object_array_length(points)>32)
+                return fail(error,"Invalid polygon vertex count or reference");
+            StructurePolygon polygon{};polygon.layer=layer;polygon.index=index;
+            for(size_t i=0;i<json_object_array_length(points);++i){
+                Vec vertex{};
+                if(!parseVec(json_object_array_get_idx(points,i),vertex))
+                    return fail(error,"Invalid polygon vertex coordinate");
+                polygon.corners.push_back(vertex);
+            }
+            edit.structurePolygons.push_back(std::move(polygon));
+        }
+    }
     if (edit.exit.x<0 || edit.exit.x>edit.worldWidth || edit.insertion.x<0 ||
         edit.insertion.x>edit.worldWidth-48.f || edit.ground.front().x>100 ||
         edit.ground.front().w<200 ||
@@ -189,6 +222,16 @@ bool writeLevel(const std::filesystem::path& file,const Stage& s,int sector,
     putArray(root.get(),"supplies",s.supplies,[](const SupplyPlacement& v){return array({float(int(v.kind)),v.x,v.y});});
     putArray(root.get(),"crates",s.crates,[](const CratePlacement& c){return array({float(int(c.kind)),c.base.x,c.base.y});});
     putArray(root.get(),"relays",s.relays,[](const RelayGate& g){return array({g.barrier.x,g.barrier.y,g.barrier.w,g.barrier.h,g.pad.x,g.pad.y,float(g.operatorPlayer),float(int(g.control))});});
+    json_object* outlines=json_object_new_object();
+    static constexpr const char* names[]{"ground","ledges","cover","relays"};
+    for(const auto& polygon:s.structurePolygons){
+        if(polygon.layer<0 || polygon.layer>3 || polygon.corners.size()<3 || polygon.corners.size()>32)continue;
+        const auto key=std::string(names[polygon.layer])+":"+std::to_string(polygon.index);
+        json_object* vertices=json_object_new_array();
+        for(const auto& point:polygon.corners)json_object_array_add(vertices,array({point.x,point.y}));
+        json_object_object_add(outlines,key.c_str(),vertices);
+    }
+    json_object_object_add(root.get(),"structureVertices",outlines);
     const char* data=json_object_to_json_string_ext(root.get(),JSON_C_TO_STRING_PRETTY);
     std::error_code ec;
     std::filesystem::create_directories(file.parent_path(),ec);
@@ -223,6 +266,11 @@ uint32_t levelFingerprint(const Stage& s) {
     feed(uint32_t(s.crates.size()));for(auto& a:s.crates){feed(uint32_t(a.kind));vec(a.base);}
     feed(uint32_t(s.vents.size()));for(auto& a:s.vents){f(a.x);f(a.y);f(a.phase);}
     feed(uint32_t(s.relays.size()));for(auto& a:s.relays){rect(a.barrier);vec(a.pad);feed(uint32_t(a.operatorPlayer));feed(uint32_t(a.control));}
+    feed(uint32_t(s.structurePolygons.size()));
+    for(const auto& poly:s.structurePolygons){
+        feed(uint32_t(poly.layer));feed(uint32_t(poly.index));feed(uint32_t(poly.corners.size()));
+        for(auto point:poly.corners)vec(point);
+    }
     feed(modelFingerprint());
     return h;
 }

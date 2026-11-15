@@ -8,12 +8,17 @@
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <string>
 #include <system_error>
 
 namespace vl {
 namespace {
 using Json=std::unique_ptr<json_object,decltype(&json_object_put)>;
 std::array<std::array<char,8>,6> customColors{};
+// Pointers in Character remain valid for the entire lifetime of the process.
+std::array<std::array<std::string,6>,6> customTexts{};
+std::array<std::string,10> customEnemyNames{};
+
 bool fail(std::string* why,const char* message) {if(why) *why=message;return false;}
 json_object* get(json_object* o,const char* field) {
     json_object* value=nullptr;
@@ -82,7 +87,7 @@ bool readSkeleton(json_object* parent,SkeletonProfile& result){
             if(!xObj||!yObj||!(json_object_is_type(xObj,json_type_double)||json_object_is_type(xObj,json_type_int))||
                !(json_object_is_type(yObj,json_type_double)||json_object_is_type(yObj,json_type_int)))return false;
             const double xd=json_object_get_double(xObj),yd=json_object_get_double(yObj);
-            if(!std::isfinite(xd)||!std::isfinite(yd)||xd < -25||xd > 25||yd < -25||yd > 25)return false;
+            if(!std::isfinite(xd)||!std::isfinite(yd)||xd < -65536||xd > 65536||yd < -65536||yd > 65536)return false;
             x=static_cast<float>(xd);y=static_cast<float>(yd);
             result.offsets[pose][i]={x,y};
         }
@@ -96,7 +101,7 @@ bool readSkeleton(json_object* parent,SkeletonProfile& result){
                 auto* value=json_object_array_get_idx(items,joint);
                 if(!value || !(json_object_is_type(value,json_type_double)||json_object_is_type(value,json_type_int)))return false;
                 const double number=json_object_get_double(value);
-                if(!std::isfinite(number)||number< -25||number>25)return false;
+                if(!std::isfinite(number)||number< -65536||number>65536)return false;
                 result.depths[pose][joint]=static_cast<float>(number);
             }
         }
@@ -180,7 +185,31 @@ bool loadCharacterModelAt(const std::filesystem::path& file,int id,std::string* 
     if(modern && !readSkeleton(j.get(),profile))return fail(error,"Invalid skeleton vectors or motion multipliers.");
     if(v4 && !get(get(j.get(),"skeleton"),"depth"))return fail(error,"Missing v4 skeleton depth vectors.");
     if(v3 && !readDetails(j.get(),profile))return fail(error,"Invalid body dimensions or movement timing.");
+    // Editable identity/description strings are stored as owned text, not
+    // pointers into transient json-c buffers. Missing legacy fields retain defaults.
+    constexpr const char* keys[]{"name","role","art","trait","description"};
+    constexpr size_t maxLengths[]{96,96,96,256,1024};
+    std::array<std::string,5> newStrings{};
+    std::array<bool,5> present{};
+    for(size_t k=0;k<5;++k){
+        if(auto* value=get(j.get(),keys[k])){
+            if(!json_object_is_type(value,json_type_string))return fail(error,"Invalid character text property.");
+            const char* text=json_object_get_string(value);
+            const auto size=std::strlen(text);
+            if(size>maxLengths[k] || (k==0 && size==0))return fail(error,"Invalid character text length.");
+            newStrings[k]=text;present[k]=true;
+        }
+    }
     if(!setCharacterColor(id,json_object_get_string(color)))return false;
+    // setCharacterColor changes the pointer in the catalog, not in the temporary copy.
+    c.color=characters[static_cast<size_t>(id)].color;
+    auto& slots=customTexts[static_cast<size_t>(id)];
+    for(size_t k=0;k<5;++k)if(present[k])slots[k]=std::move(newStrings[k]);
+    if(present[0])c.name=slots[0].c_str();
+    if(present[1])c.role=slots[1].c_str();
+    if(present[2])c.art=slots[2].c_str();
+    if(present[3])c.trait=slots[3].c_str();
+    if(present[4])c.description=slots[4].c_str();
     characters[static_cast<size_t>(id)]=c;
     characterSkeletons[static_cast<size_t>(id)]=profile;
     return true;
@@ -202,6 +231,7 @@ bool saveCharacterModelAt(const std::filesystem::path& file,int id,std::string* 
     const auto& c=characters[static_cast<size_t>(id)];Json j(json_object_new_object(),json_object_put);
     put(j.get(),"schema","voidline-character-v4");put(j.get(),"id",id);
     put(j.get(),"name",c.name);put(j.get(),"role",c.role);
+    put(j.get(),"art",c.art);put(j.get(),"trait",c.trait);put(j.get(),"description",c.description);
     put(j.get(),"color",c.color);put(j.get(),"rig",c.rig);
     put(j.get(),"health",c.health);put(j.get(),"speed",c.speed);
     put(j.get(),"jump",c.jump);put(j.get(),"ammo",c.ammo);
@@ -249,19 +279,27 @@ uint32_t modelFingerprint() {
     auto f=[&](float n){push(std::bit_cast<uint32_t>(n));};
     for(size_t i=0;i<characters.size();++i){const auto& c=characters[i];
         push(uint32_t(c.health));f(c.speed);f(c.jump);f(c.ammo);push(uint32_t(c.rig));
-        for(const char* p=c.color;*p;++p)push(uint32_t(static_cast<unsigned char>(*p)));
+        for(const char* value:{c.name,c.role,c.art,c.color,c.trait,c.description})
+            for(const unsigned char* p=reinterpret_cast<const unsigned char*>(value);*p;++p)push(uint32_t(*p));
         for(const auto& layer:characterSkeletons[i].offsets)for(const Vec joint:layer){f(joint.x);f(joint.y);}
         for(const auto& layer:characterSkeletons[i].depths)for(float z:layer)f(z);
+        for(const auto& layer:characterSkeletons[i].actionOffsets)for(const Vec joint:layer){f(joint.x);f(joint.y);}
         for(float n:{characterSkeletons[i].stride,characterSkeletons[i].armSwing,characterSkeletons[i].aimRaise,
             characterSkeletons[i].bodyHeight,characterSkeletons[i].bodyWidth,characterSkeletons[i].headScale,
             characterSkeletons[i].armLength,characterSkeletons[i].legLength,characterSkeletons[i].weaponSeat,
             characterSkeletons[i].walkCycle,characterSkeletons[i].acceleration,characterSkeletons[i].braking,
             characterSkeletons[i].recoil,characterSkeletons[i].idleBreath})f(n);
     }
-    for(const auto& e:specs){f(e.w);f(e.h);f(e.speed);f(e.reach);f(e.delay);push(uint32_t(e.hp));push(uint32_t(e.damage));push(uint32_t(e.score));}
+    for(size_t i=0;i<specs.size();++i){
+        const auto& e=specs[i];
+        for(const unsigned char* p=reinterpret_cast<const unsigned char*>(enemyNames[i]);*p;++p)push(*p);
+        f(e.w);f(e.h);f(e.speed);f(e.reach);f(e.delay);
+        push(uint32_t(e.hp));push(uint32_t(e.damage));push(uint32_t(e.score));
+    }
     for(const auto& profile:enemySkeletons){
         for(const auto& pose:profile.offsets)for(Vec p:pose){f(p.x);f(p.y);}
         for(const auto& pose:profile.depths)for(float z:pose)f(z);
+        for(const auto& pose:profile.actionOffsets)for(const Vec joint:pose){f(joint.x);f(joint.y);}
         for(float n:{profile.stride,profile.armSwing,profile.aimRaise,profile.bodyHeight,profile.bodyWidth,
             profile.headScale,profile.armLength,profile.legLength,profile.weaponSeat,profile.walkCycle,
             profile.acceleration,profile.braking,profile.recoil,profile.idleBreath})f(n);

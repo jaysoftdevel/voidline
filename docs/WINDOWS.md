@@ -1,3 +1,14 @@
+# Current full source release: VOIDLINE v2.10.12
+
+Use the same `src/` and `assets/` as Linux. Set `VCPKG_ROOT` and run `build.bat`.
+The asset archive is deterministically generated with `scripts/pack-assets.py`
+and includes both character and enemy rigs, metadata, and action sequences.
+`model-studio/` is **Linux-only** and is skipped by the Windows CMake build.
+See [cross-platform build guide](../BUILD-CROSS-PLATFORM.md).
+A native Windows build and mixed-platform session are not verified here.
+
+---
+
 # Windows 11 compatibility
 
 For cross-platform LAN sessions, use matching clients with the VL5 protocol and approval handshake in VOIDLINE 2.9.6. Older VL4 keys are rejected.

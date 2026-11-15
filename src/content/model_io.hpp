@@ -19,7 +19,7 @@ inline std::array<EnemySpec,10> specs{{
     {70,74,55,470,1.65f,365,27,108}
 }};
 inline const EnemySpec& spec(EnemyKind kind) { return specs[static_cast<size_t>(kind)]; }
-inline constexpr const char* enemyNames[]{"drone","ranger","turret","stalker","guardian","scavenger","sniper","bulwark","interceptor","juggernaut"};
+inline std::array<const char*,10> enemyNames{"drone","ranger","turret","stalker","guardian","scavenger","sniper","bulwark","interceptor","juggernaut"};
 
 std::filesystem::path characterModelFile(const std::filesystem::path&,int id);
 std::filesystem::path enemyModelFile(const std::filesystem::path&,int id);

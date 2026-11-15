@@ -8,6 +8,23 @@ namespace vl {
 void Renderer::terrain(const Game& g) {
     material(g);
     const Color tone=metal(g.stage->biome), accent=hex(g.stage->accent), cold=hex(g.stage->cold);
+    // Per-structure corner outlines from Model Studio. The visible facets
+    // follow edited vertices. Rectangular collision and AI support stays
+    // attached to the original structure footprint.
+    for(const auto& poly:g.stage->structurePolygons){
+        if(poly.corners.size()<3 || poly.corners.size()>32)continue;
+        const Color shade=poly.layer==0?tone.energy(.8f):
+                          poly.layer==1?cold.energy(.9f):accent.energy(.75f);
+        // Light fan fill for convex outlines; always render each edge.
+        // No claim is made that the polygon replaces the physical collider.
+        const Vec first=poly.corners[0]+offset;
+        for(size_t j=1;j+1<poly.corners.size();++j)
+            triangle(first,poly.corners[j]+offset,poly.corners[j+1]+offset,shade.alpha(.10f));
+        for(size_t j=0;j<poly.corners.size();++j){
+            const Vec a=poly.corners[j]+offset,b=poly.corners[(j+1)%poly.corners.size()]+offset;
+            line(a,b,2.f,shade.energy(1.1f).alpha(.85f));
+        }
+    }
     for (const auto& stair:g.stage->stairs) {
         if (!visible(stair.from.x,stair.to.x-stair.from.x)) continue;
         const auto side=Vec{stair.to.x-stair.from.x,stair.to.y-stair.from.y};

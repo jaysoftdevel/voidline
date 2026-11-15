@@ -2,6 +2,7 @@
 #include "render/figures/gun_art.hpp"
 #include "render/figures/humanoid.hpp"
 #include "content/skeleton.hpp"
+#include "game/stairs.hpp"
 
 using namespace vl::figures;
 
@@ -46,6 +47,22 @@ void Renderer::drawPlayer(const Game& g,const Operative& op) {
     h.grounded=p.support>=0;
     h.lean=pose.lean; h.crouch=pose.crouch; h.run=pose.run; h.weight=pose.weight; h.cycle=pose.cycle;
     h.compression=pose.compression; h.pelvis=pose.pelvis; h.tuck=pose.tuck;
+    // Deterministic simulation-driven animation selection. Every state maps to
+    // one optional editable pose layer; transitions are eased by the rig's
+    // existing gait/aim/crouch blends rather than snapping the whole body.
+    if (p.hp<=0) h.action=ActionPose::death;
+    else if (p.flash>.12f) h.action=ActionPose::hit;
+    else if (op.guns[op.gun].reload>0) h.action=ActionPose::reload;
+    else if (p.muzzle>0) h.action=ActionPose::fire;
+    else if (p.support<0) h.action=p.velocity.y<0?ActionPose::jump:ActionPose::fall;
+    else if (p.landed>.1f) h.action=ActionPose::land;
+    else if (p.crouched) h.action=ActionPose::crouch;
+    else if (moving && g.stage && stairFooting(*g.stage,p.box.center().x,p.box.bottom(),8.f))
+        h.action=ActionPose::stairs;
+    else if (moving) h.action=p.sprinting?ActionPose::sprint:ActionPose::walk;
+    else if (p.aiming) h.action=ActionPose::alert;
+    else h.action=ActionPose::idle;
+    h.actionWeight=(h.action==ActionPose::walk||h.action==ActionPose::sprint||h.action==ActionPose::stairs)?std::clamp(h.weight,0.f,1.f):1.f;
     h.time=g.time; h.velocity=p.velocity; h.landed=p.landed;
     h.flinch=smooth((p.flash-.45f)/.24f);
     h.spin=p.flip>0?p.flipDirection*2*pi*smooth(1-p.flip/flipSeconds):0.f;

@@ -1,0 +1,6 @@
+Packed 109 resources into /tmp/tmp2do_z6fi/game.vpak: 8,222,743 bytes
+VOIDLINE asset compatibility report
+Source asset files: 109
+Packed size: 8222743 bytes
+Packed SHA256: b1e2daedf912a573b7379a1bfdda809caa0d0b51f92a7c307574a1884af5d43a
+Includes: characters.actions.json, characters.info.json, characters.vlrm, enemies.actions.json, enemies.info.json, enemies.vlem

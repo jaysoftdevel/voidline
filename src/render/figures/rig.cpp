@@ -45,7 +45,7 @@ Renderer::Rig Renderer::buildRig(const Humanoid& h) const {
         // procedural gait. Mirroring is applied only at draw time, never in JSON.
         const auto& profile=*model;
         const auto shift=[&](SkeletonJoint j){
-            const Vec d=skeletonOffset(profile,j,h.shoulder*profile.aimRaise,std::max(h.run,h.weight*.84f));
+            const Vec d=skeletonOffset(profile,j,h.shoulder*profile.aimRaise,std::max(h.run,h.weight*.84f),h.action,h.actionWeight);
             return Vec{d.x*(h.turn<0?-1.f:1.f),d.y};
         };
         g.hip+=shift(SkeletonJoint::pelvis);

@@ -48,6 +48,14 @@ struct RelayGate {
     int operatorPlayer=0;
     RelayControl control=RelayControl::pressurePlate;
 };
+// Optional authored outline around an existing rectangular structure. This
+// controls its visual silhouette; the underlying rectangular collision remains
+// authoritative until polygon collider support is added.
+struct StructurePolygon {
+    int layer=0; // 0 ground, 1 ledges, 2 cover, 3 relay doors
+    int index=0;
+    std::vector<Vec> corners;
+};
 struct Stage {
     const char *name,*art,*location,*threat,*accent,*cold,*briefing,*boss;
     Biome biome;
@@ -60,6 +68,7 @@ struct Stage {
     std::vector<CratePlacement> crates{};
     std::vector<RelayGate> relays{};
     std::vector<Stair> stairs{};
+    std::vector<StructurePolygon> structurePolygons{};
     Vec insertion{}; // Zero y: initial floor elevation. Editable per-level operative spawn.
 };
 struct Record { float time=0; int score=0; };

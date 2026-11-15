@@ -3,6 +3,7 @@
 #include "content/skeleton.hpp"
 #include "content/enemy_motion.hpp"
 #include "content/characters.hpp"
+#include "content/model_io.hpp"
 #include "platform/paths.hpp"
 #include <iomanip>
 #include <iostream>
@@ -26,7 +27,16 @@ int run(int argc,char** argv) try {
                      <<": bodyHeight="<<model.bodyHeight
                      <<", bodyWidth="<<model.bodyWidth
                      <<", base.head=("<<model.offsets[0][3].x<<','<<model.offsets[0][3].y<<')'
-                     <<", run.hand=("<<model.offsets[2][8].x<<','<<model.offsets[2][8].y<<')'<<'\n';
+                     <<", run.hand=("<<model.offsets[2][8].x<<','<<model.offsets[2][8].y<<')'
+                     <<", walk.head=("<<model.actionOffsets[1][3].x<<','<<model.actionOffsets[1][3].y<<')'<<'\n';
+        }
+        for(size_t id=0;id<vl::specs.size();++id){
+            const auto& spec=vl::specs[id];
+            std::cout<<"Enemy "<<id<<" "<<vl::enemyNames[id]
+                     <<": speed="<<spec.speed<<", health="<<spec.hp
+                     <<", dimensions=("<<spec.w<<','<<spec.h<<")"
+                     <<", fire.hand=("<<vl::enemySkeletons[id].actionOffsets[7][8].x<<','
+                     <<vl::enemySkeletons[id].actionOffsets[7][8].y<<")"<<'\n';
         }
         return 0;
     }

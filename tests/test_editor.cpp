@@ -40,6 +40,50 @@ void runEditorTests() {
             CHECK(loaded.insertion.x==110.f);
         }
     }
+    // Optional user-authored angled structure outline persists through the
+    // level model and affects its compatibility hash (collision stays rectangular).
+    {
+        Stage input=cooperativeStages[1];
+        CHECK(!input.cover.empty());
+        const Rect cover=input.cover.front();
+        StructurePolygon poly{};
+        poly.layer=2;poly.index=0;
+        poly.corners={{cover.x,cover.y},{cover.x+cover.w,cover.y},
+                      {cover.x+cover.w+8,cover.y+cover.h*.5f},
+                      {cover.x+cover.w,cover.y+cover.h},{cover.x,cover.y+cover.h}};
+        input.structurePolygons.push_back(poly);
+        const auto file=levelFile(folder/"levels",1,true);
+        std::string error;
+        CHECK(writeLevel(file,input,1,true,&error));
+        Stage roundtrip{};
+        CHECK(readLevel(file,cooperativeStages[1],roundtrip,1,true,&error));
+        CHECK(roundtrip.structurePolygons.size()==1);
+        CHECK(roundtrip.structurePolygons[0].corners.size()==5);
+        CHECK(levelFingerprint(input)==levelFingerprint(roundtrip));
+        CHECK(levelFingerprint(roundtrip)!=levelFingerprint(cooperativeStages[1]));
+    }
+    // Author action vectors blend on top of the legacy base/aim/run rig;
+    // an archive without action layers must preserve its previous appearance.
+    {
+        SkeletonProfile profile{};
+        profile.offsets[0][3]={2.f,-3.f};
+        profile.offsets[2][3]={4.f,-1.f};
+        profile.actionOffsets[static_cast<size_t>(ActionPose::walk)][3]={10.f,-6.f};
+        const auto idle=skeletonOffset(profile,SkeletonJoint::head,0.f,.5f);
+        CHECK(idle.x==4.f && idle.y==-3.5f);
+        const auto walking=skeletonOffset(profile,SkeletonJoint::head,0.f,.5f,ActionPose::walk,.5f);
+        CHECK(walking.x==9.f && walking.y==-6.5f);
+        CHECK(skeletonOffset(profile,SkeletonJoint::head,0.f,.5f,ActionPose::walk,0.f).x==idle.x);
+    }
+    // Client/server compatibility must also detect user-published action layers.
+    {
+        const auto old=characterSkeletons[2].actionOffsets[static_cast<size_t>(ActionPose::walk)][3];
+        const uint32_t before=modelFingerprint();
+        characterSkeletons[2].actionOffsets[static_cast<size_t>(ActionPose::walk)][3].x+=3;
+        CHECK(modelFingerprint()!=before);
+        characterSkeletons[2].actionOffsets[static_cast<size_t>(ActionPose::walk)][3]=old;
+        CHECK(modelFingerprint()==before);
+    }
     // One character file and one enemy file per archetype. Edits affect the
     // simulation values and change the multiplayer compatibility fingerprint.
     const auto originalCharacters=characters;

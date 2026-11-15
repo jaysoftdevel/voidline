@@ -1,3 +1,38 @@
+## Complete v2.10.12 source release (Linux / Windows)
+
+This release has a **single shared game source and asset tree** for Linux and Windows.
+On Linux run `./build.sh`; on Windows use `build.bat` with Visual Studio 2022 and vcpkg.
+The editor is in `model-studio/` and is built **only on Linux**. Both game builds
+consume the same baked model files and the same deterministic `game.vpak` packer.
+See [BUILD-CROSS-PLATFORM.md](BUILD-CROSS-PLATFORM.md) and verify content parity with
+`python3 scripts/check-source-assets.py`. Native Windows compilation still needs
+testing on a Windows host.
+
+## v2.10.12 — Open source workspaces without a built game.vpak
+
+Model Studio v0.0.16 now recognizes the VOIDLINE source root and automatically
+loads raw `assets/` and the baked character/enemy models even before the game
+has been built. **File > Open Game Workspace** accepts the source root or a
+runtime containing `assets/game.vpak`. The **Publish models** action installs
+new baked model data into source assets, generates an archive for source-only
+workspaces, and refreshes existing built runtime archives with backups.
+The Windows game source and asset formats remain shared; the editor stays Linux-only.
+
+See [the short load/export/integration guide](MODEL-STUDIO-WORKFLOW.md).
+
+The combined full-game ZIP also supplies a prebuilt Linux tester runtime under
+`linux-runtime/VOIDLINE/` (launch with `./linux-runtime/VOIDLINE/run.sh`) and a
+Linux editor backend under `model-studio/bin/linux/`. Windows binaries must be
+built on Windows using `build.bat`. The source-only ZIP excludes prebuilt binaries.
+
+## v2.10.11 — Model Studio integrated into the Linux source workspace
+
+Linux source builds include the separately versioned Model Studio v0.0.15 under `model-studio/` (disabled with `-DVOIDLINE_BUILD_MODEL_STUDIO=OFF`). Build the game with `./build.sh`, then launch the editor using `./run-model-studio.sh`; or build it independently from `model-studio/build.sh`. The Windows CMake build ignores `model-studio/` entirely.
+
+The game loads supplemental per-action pose catalogs (`models/characters.actions.json` and `models/enemies.actions.json`) from `game.vpak` at startup. On humanoid characters/enemies, these are blended with the procedural skeletal system for live movement/combat states. Old archives lacking the action catalogs continue using the legacy rigs. Polygon corner outlines from stage JSON are rendered but **do not change rectangular collision physics**. Custom editor prototypes can replace fixed slots; the runtime catalog still has six character and ten enemy slots.
+
+---
+
 # VOIDLINE v2.10.9 — Baked model integration and verification fix
 
 The game now exposes `--model-report` to verify the exact `game.vpak` loaded by the launched executable and all six character rigs. Model Studio v0.0.12 fixes publishing to both the installed archive and the source asset files, so rebuilding no longer silently restores old models.
@@ -14,7 +49,7 @@ Look for `Character 2 Kade Vale` and compare the `bodyHeight`, `base.head`, and 
 
 ---
 
-# VOIDLINE 2.10.9
+# VOIDLINE 2.10.10
 
 VOIDLINE is a native C++ 2D shooter for Linux and Windows 11 with 20 sectors, six operatives, difficulty levels and an armory. Destroy the guardian in each sector and reach extraction to turn mission score into upgrade points and see the next part of the Vega-9 rescue story.
 
@@ -281,3 +316,23 @@ existing defaults, while a corrupt binary causes a clear startup error.
 
 The game's display is still 2D; Z/depth vectors remain preserved in models
 but do not produce full 3D geometry inside gameplay.
+
+## Model Studio v0.0.14 compatibility (VOIDLINE v2.10.10)
+
+New character metadata in `assets/game.vpak` is loaded at startup alongside the VLRM rig.
+Edited names, roles, traits, dimensions, appearance rig selection, health, speed, jump and ammo update without recompilation. Restart the game after Update PAK.
+Wider valid skeleton vector ranges permit more extensive model geometry, with finite-value validation.
+Check the active executable and archive with `./build/voidline/voidline --model-report`.
+
+
+### Linux Model Studio (separate v0.0.15 tool)
+
+The Linux source workspace includes `model-studio/` with its independent GUI,
+C++ packer and tests. A normal Linux CMake build produces `build/model-studio/voidline-editor-core`.
+Run `./run-model-studio.sh` or `./model-studio/run.sh` to start the native Tk UI.
+Windows ignores the entire folder; the game does not link to the editor.
+Optional: `cmake -S . -B build -DVOIDLINE_BUILD_MODEL_STUDIO=OFF` disables its build.
+The editor's New Model command adds an authoring prototype. Choose **Assign Model to
+Existing Game Slot** to publish it to one of the currently supported six player
+or ten enemy slots. Additional standalone prototype files are not selectable
+by VOIDLINE until its runtime catalog is expanded.

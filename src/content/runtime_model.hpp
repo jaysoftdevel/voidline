@@ -33,9 +33,9 @@ inline uint32_t readU32(std::span<const uint8_t> bytes,size_t& at) {
 inline bool valid(const SkeletonProfile& p) {
     auto range=[](float n,float lo,float hi){return std::isfinite(n)&&n>=lo&&n<=hi;};
     for (auto layer:p.offsets)for(auto point:layer)
-        if(!range(point.x,-25.f,25.f)||!range(point.y,-25.f,25.f))return false;
+        if(!range(point.x,-65536.f,65536.f)||!range(point.y,-65536.f,65536.f))return false;
     for (auto layer:p.depths)for(float depth:layer)
-        if(!range(depth,-25.f,25.f))return false;
+        if(!range(depth,-65536.f,65536.f))return false;
     for(float n:{p.stride,p.armSwing,p.aimRaise,p.bodyHeight,p.bodyWidth,p.headScale,
         p.armLength,p.legLength,p.walkCycle,p.acceleration,p.braking,p.recoil,p.idleBreath})
         if(!range(n,.5f,1.8f))return false;

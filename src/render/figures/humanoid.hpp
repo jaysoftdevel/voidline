@@ -17,6 +17,8 @@ struct Renderer::Humanoid {
     bool grounded=true;
     float lean=0,crouch=0,run=0,weight=0,cycle=0,compression=0,pelvis=0,tuck=0;
     float time=0,flinch=0,landed=0,recoil=0,spin=0,speech=0,blink=0,shoulder=0;
+    ActionPose action=ActionPose::idle;
+    float actionWeight=1.f;
     bool cinematic=false;
     Vec velocity,aim{1,0},nearHand,farHand;
     bool farFree=false,gripFromChest=false,scarf=true;
