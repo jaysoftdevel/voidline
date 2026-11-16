@@ -34,8 +34,8 @@ Audio::Audio(const std::filesystem::path& root)
     if (!device) { std::cerr<<"Audio device unavailable: "<<SDL_GetError()<<'\n'; return; }
     hz=result.freq;
     for (auto* name:{"arc","carbine","checkpoint","cloth","complete","destroy","empty","enemy","failure","guardian","hit-metal","hit-concrete","hit-rock","hurt",
-        "jump","land","launch","pickup","pistol","reload","shotgun","step-deck","step-grate","step-rock","boot-deck","boot-grate","boot-rock","switch","upgrade",
-        "smg","launcher","railgun","reload-carbine","reload-shotgun","reload-arc","reload-pistol","reload-smg","reload-launcher","reload-railgun"}) {
+        "jump","jump-air","land","launch","pickup","pistol","reload","shotgun","step-deck","step-grate","step-rock","boot-deck","boot-grate","boot-rock","switch","upgrade",
+        "smg","launcher","launcher-impact","railgun","reload-carbine","reload-shotgun","reload-arc","reload-pistol","reload-smg","reload-launcher","reload-railgun"}) {
         auto& group=variations[name];
         if (auto* sample=load(name)) group.push_back(sample);
         for (int i=2;i<=4;++i) {

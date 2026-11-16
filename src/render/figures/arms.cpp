@@ -71,7 +71,15 @@ Renderer::ArmPose Renderer::gripArm(const Humanoid& h,Vec s,Vec hand,bool near) 
     auto score=[&](Vec e) { return e.y-facing*e.x*.8f; };
     ArmPose arm;
     arm.shoulder=s;
-    arm.elbow=score(a)>score(b)?a:b;
+    if (h.ladder && !h.ladderAiming) {
+        // The hands reach forward to the rungs while the elbows bend toward
+        // the ladder's center line, between the chest and the rung assembly.
+        // Keep the two-bone IK lengths intact; simply choose the inner of
+        // the two valid elbow solutions rather than the usual weapon bend.
+        arm.elbow=std::abs(a.x-h.ground.x)<std::abs(b.x-h.ground.x)?a:b;
+    } else {
+        arm.elbow=score(a)>score(b)?a:b;
+    }
     arm.hand=target;
     arm.wrist=arm.elbow+normal(target-arm.elbow)*std::max(4.f,length(target-arm.elbow)-2.8f);
     arm.flexion=bendBetween(s,arm.elbow,arm.wrist);

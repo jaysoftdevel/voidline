@@ -126,9 +126,17 @@ void Renderer::objects(const Game& g) {
         gradient({exit.x-45,exit.y-109,90,109},tone.energy(.8f),tone.energy(.42f));
         rect({exit.x-32,exit.y-90,64,90},hex(0x101b26));
         rect({exit.x-29,exit.y-84,58,84},hex(0x06121b));
-        for (int i=0;i<8;++i) {
-            rect({exit.x-29,exit.y-82+i*9.f,58,2},tone.energy(.38f));
-            if (g.bossDead) rect({exit.x-26,exit.y-81+i*9.f,52,1},status.alpha(.33f));
+        if (!g.bossDead) {
+            // Solid powered shutter until the boss falls. The player may
+            // still reach the outside of the gate and inspect its status.
+            for (int i=0;i<8;++i) {
+                rect({exit.x-29,exit.y-82+i*9.f,58,5},tone.energy(.66f));
+                rect({exit.x-26,exit.y-81+i*9.f,52,1},status.alpha(.36f));
+            }
+        } else {
+            // Clear aperture and retracted shutters after the boss defeat.
+            rect({exit.x-29,exit.y-84,4,84},status.alpha(.36f));
+            rect({exit.x+25,exit.y-84,4,84},status.alpha(.36f));
         }
         rect({exit.x-32,exit.y-89,3,85},status.energy(1.8f));
         rect({exit.x+29,exit.y-89,3,85},status.energy(1.8f));

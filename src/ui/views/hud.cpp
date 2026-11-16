@@ -1,4 +1,5 @@
 #include "ui/app.hpp"
+#include "game/weapon_selection.hpp"
 #include "ui/common.hpp"
 
 using namespace vl::ui;
@@ -77,7 +78,7 @@ void App::hud() {
         covered?teal:p.crouched||p.sprinting||p.flip>0?trim:game.activeBeacon>=0?teal:muted);
     r.text({243,570},timeText(game.time),13,white,true);
     // The quick bar lists only owned/equipped-in-loadout guns, with pistol first.
-    // Hotkey labels stay stable even when some guns have not been purchased.
+    // Numeric keys match the compact displayed order, with no gaps for locked guns.
     int available=0;
     for (int id:weaponDisplayOrder) if (game.guns[id].available) ++available;
     constexpr float cellWidth=74.f;
@@ -85,9 +86,9 @@ void App::hud() {
     const float start=1181.f-barWidth;
     panel({start,547,barWidth,36},ammo);
     int shown=0;
-    for (int hotkey=0;hotkey<static_cast<int>(weaponCount);++hotkey) {
-        const int id=weaponDisplayOrder[hotkey];
-        if (!game.guns[id].available) continue;
+    for (int hotkey=0;hotkey<available;++hotkey) {
+        const int id=visibleWeaponAt(game.guns,hotkey);
+        if (id<0) continue;
         const float x=start+13.f+shown++*cellWidth;
         if (id==game.gun) r.slab({x-5,553,72,24},5,hex(0x29404b),hex(0x1c2d37));
         r.text({x,569},std::to_string(hotkey+1)+" "+weapons[id].shortName,11.5f,

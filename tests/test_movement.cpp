@@ -3,6 +3,7 @@
 #include "game/enemy_ground.hpp"
 #include "game/detail.hpp"
 #include "game/running_cycle.hpp"
+#include "game/ladder_gait.hpp"
 #include "game/boss_tactics.hpp"
 #include "game/geometry.hpp"
 #include "game/stairs.hpp"
@@ -356,6 +357,35 @@ void testHumanLimbKinematics() {
 }
 
 namespace {
+void ladderRungStepping() {
+    constexpr float top=350.f,bottom=500.f;
+    const auto at=[&](float step) {
+        return ladder_gait::sample(bottom-18.f*step,top,bottom);
+    };
+    const auto start=at(0.f);
+    const auto quarter=at(.25f),middle=at(.5f),end=at(.99f);
+    const auto next=at(1.f),after=at(1.5f);
+    CHECK(start.stepping==0 && next.stepping==1);
+    // Left foot moves first; right foot and the supporting hand stay on the
+    // same world rung, not a sine-wave position attached to the torso.
+    CHECK(start.feet[1]==quarter.feet[1]);
+    CHECK(start.feet[1]==middle.feet[1]);
+    CHECK(start.feet[1]==end.feet[1]);
+    CHECK(start.feet[0]>middle.feet[0]);
+    CHECK(middle.feet[0]>end.feet[0]);
+    CHECK(start.hands[0]==end.hands[0]);
+    CHECK(next.feet[0]==after.feet[0]);
+    CHECK(next.feet[1]>after.feet[1]);
+    CHECK(next.hands[1]==after.hands[1]);
+    // Standing still produces the same pose; descending reverses the same
+    // path continuously with no phase reset or leg switching jump.
+    CHECK(at(.33f).feet==at(.33f).feet);
+    const auto boundary=at(.99999f);
+    CHECK(std::abs(boundary.feet[0]-next.feet[0])<.01f);
+    CHECK(std::abs(boundary.feet[1]-next.feet[1])<.01f);
+    CHECK(at(-.01f).feet[0]>at(0.f).feet[0]-1.f);
+}
+
 void ladderTraversalAndDropThrough() {
     Silent audio;
     Game game(audio);
@@ -375,7 +405,7 @@ void ladderTraversalAndDropThrough() {
     run(game,8);
     CHECK(player.ladder==0 && player.support==-1);
     const float feet=player.box.bottom();
-    run(game,36);
+    run(game,75);
     CHECK(player.box.bottom()<feet-30.f); // climbing, not free-falling
     const int loaded=game.guns[game.gun].ammo;
     game.input(Key::fire,true);
@@ -383,15 +413,15 @@ void ladderTraversalAndDropThrough() {
     CHECK(game.guns[game.gun].ammo<loaded); // upper body can shoot on rungs
     CHECK(player.ladder==0);
     game.input(Key::fire,false);
-    run(game,115);
+    run(game,260);
     CHECK(player.ladder==-1 && player.support==1);
     CHECK(std::abs(player.box.bottom()-350.f)<2.f);
     game.input(Key::jump,false);
     game.input(Key::crouch,true);
-    run(game,18);
+    run(game,45);
     CHECK(player.ladder==0 && player.dropThrough>0.f);
     CHECK(player.box.bottom()>366.f); // controlled descent through top deck
-    run(game,155);
+    run(game,350);
     CHECK(player.ladder==-1 && player.support==0); // steps off at bottom
     CHECK(std::abs(player.box.bottom()-500.f)<2.f);
     game.input(Key::crouch,false);
@@ -410,6 +440,43 @@ void ladderTraversalAndDropThrough() {
 }
 
 namespace {
+void directionalStandingTakeoff() {
+    // Simultaneous Jump+direction must produce a decisive take-off impulse,
+    // not just the tiny velocity accumulated during the short wind-up.
+    for (int direction : {-1,1}) {
+        Silent audio;
+        Game game(audio);
+        game.start(0,startSave()); game.entry=0;
+        Stage field=*game.stage;
+        field.ground={{0,500,1200,100}};
+        field.ledges.clear();field.stairs.clear();field.ladders.clear();
+        field.lifts.clear();field.enemies.clear();field.supplies.clear();
+        game.stage=&field;
+        game.platforms={{{0,500,1200,100},{},true}};
+        auto& p=game.player;
+        p.box={550,444,32,56};p.velocity={};p.support=0;
+        game.resetPose();
+        game.input(Key::jump,true);
+        game.input(direction>0?Key::right:Key::left,true);
+        run(game,8);
+        CHECK(p.support<0 && p.velocity.y<0.f);
+        const float takeoff=p.velocity.x;
+        CHECK(takeoff*direction>game.character->speed*.70f);
+        // Press the opposite direction while airborne; horizontal momentum
+        // must stay on the original trajectory (apart from tiny air drag).
+        game.input(direction>0?Key::right:Key::left,false);
+        game.input(direction>0?Key::left:Key::right,true);
+        run(game,10);
+        CHECK(p.velocity.x*direction>takeoff*direction-2.f);
+    }
+    Silent audio;
+    Game game(audio);
+    game.start(0,startSave());game.entry=0;
+    game.input(Key::jump,true);
+    run(game,8);
+    CHECK(std::abs(game.player.velocity.x)<1.f);
+}
+
 void airborneMomentumAndStairDrop() {
     Silent audio;
     Game game(audio);
@@ -452,6 +519,56 @@ void airborneMomentumAndStairDrop() {
     CHECK(game.player.ladder<0);
 }
 
+void exitGateApproachableBeforeBoss() {
+    Silent audio;
+    Game game(audio);
+    game.start(0,startSave()); game.entry=0;
+    Stage field=*game.stage;
+    field.worldWidth=900;
+    field.exit={530,500};
+    field.ground={{0,500,900,100}};
+    field.ledges.clear(); field.stairs.clear(); field.ladders.clear();
+    field.lifts.clear(); field.enemies.clear(); field.supplies.clear();
+    field.vents.clear(); field.beacons.clear(); field.relays.clear();
+    game.stage=&field;
+    game.platforms={{{0,500,900,100},{},true}};
+    game.enemies.clear();
+    game.player.box={field.exit.x-170.f,444,32,56};
+    game.player.velocity={};game.player.support=0;
+    game.bossDead=false;
+    game.input(Key::right,true);
+    run(game,90);
+    const float doorway=field.exit.x-29.f-32.f;
+    CHECK(game.player.box.x>=field.exit.x-65.f); // Approachable, not blocked 106px early.
+    CHECK(game.player.box.x<=doorway+.1f);       // Boss still locks actual shutter.
+    CHECK(game.mode==Mode::active);
+    game.bossDead=true;
+    run(game,20);
+    CHECK(game.player.box.x>doorway+1.f);       // Door opens when the boss is dead.
+    CHECK(game.mode==Mode::complete);
+}
+
+void jumpDirectionUsesLastGroundedInput() {
+    Silent audio;
+    Game game(audio);
+    game.start(0,startSave());game.entry=0;
+    Stage field=*game.stage;
+    field.ground={{0,500,900,100}};
+    field.ledges.clear(); field.stairs.clear(); field.ladders.clear();
+    field.lifts.clear(); field.enemies.clear(); field.supplies.clear();
+    game.stage=&field;
+    game.platforms={{{0,500,900,100},{},true}};
+    game.player.box={190,444,32,56};game.player.velocity={};game.player.support=0;
+    game.input(Key::jump,true); run(game,1); // Begins the takeoff windup.
+    game.input(Key::left,true); run(game,8);
+    CHECK(game.player.support<0);
+    CHECK(game.player.velocity.x < -50.f);
+    const float launched=game.player.velocity.x;
+    game.input(Key::left,false);game.input(Key::right,true);
+    run(game,15);
+    CHECK(game.player.velocity.x < launched+2.f); // No midair steering reversal.
+}
+
 void clearExtractionGates() {
     for(const Stage& field:stages)
         for(const Stair& stair:field.stairs)
@@ -482,9 +599,13 @@ void runMovementTests() {
     CHECK(eighth.x==1.f && eighth.y==-5.f);
     CHECK(skeletonOffset(authored,SkeletonJoint::nearKnee,0,0,ActionPose::jump,.5f,.5f).y==-3.f);
     testHumanLimbKinematics();
+    ladderRungStepping();
     ladderTraversalAndDropThrough();
+    directionalStandingTakeoff();
     airborneMomentumAndStairDrop();
     clearExtractionGates();
+    exitGateApproachableBeforeBoss();
+    jumpDirectionUsesLastGroundedInput();
     runningStrideFootfallSequence();
     testEnemyGapSafety();
     cameraFollowsCursorButNeverLosesPlayer();

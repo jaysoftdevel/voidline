@@ -14,6 +14,14 @@ void Renderer::humanoid(const Humanoid& h) {
     drawLegs(h,rig);
     if (h.scarf) drawScarf(h,rig);
     drawPack(h,rig);
+    if (h.ladder && !h.ladderAiming) {
+        // The ladder itself is behind the figure (scene terrain pass). While
+        // facing the rungs, both gripping arms belong BETWEEN that ladder
+        // and the upper body, not painted over the chest/helmet. This also
+        // keeps the elbows tucked into the body silhouette as the hands
+        // alternate on the rungs. Shooting restores the foreground arm pass.
+        drawArms(h,rig);
+    }
     drawTorso(h,rig);
     drawHead(h,rig);
     Rig arms=rig;
@@ -22,6 +30,6 @@ void Renderer::humanoid(const Humanoid& h) {
         arms.farShoulder=transform(rig.farShoulder);
         endSpin();
     }
-    drawArms(h,arms);
+    if (!h.ladder || h.ladderAiming) drawArms(h,arms);
 }
 } // namespace vl

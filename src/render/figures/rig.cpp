@@ -33,7 +33,7 @@ Renderer::Rig Renderer::buildRig(const Humanoid& h) const {
            h.ground.y-33.2f*(model?model->bodyHeight:1.f)+h.run*2.2f+h.pelvis+bend+crouch*17.f};
     // A grounded pelvis follows planted feet to avoid stretching the thigh.
     // Airborne feet are allowed to tuck up instead of dragging the pelvis down.
-    if (h.grounded) for (const Vec& heel:h.heels) {
+    if (h.grounded && !h.ladder) for (const Vec& heel:h.heels) {
         const float legReach=29.9f*(model?model->legLength*model->bodyHeight:1.f);
         const float x=std::min(legReach*.96f,std::abs(g.hip.x-heel.x));
         g.hip.y=std::max(g.hip.y,heel.y-4.5f-std::sqrt(legReach*legReach-x*x));
@@ -69,11 +69,14 @@ Renderer::Rig Renderer::buildRig(const Humanoid& h) const {
     g.farShoulder=center+Vec{-staticOffset+swing.far*travelAxis,
                              -.17f*swing.far+.4f};
     if (h.ladder) {
-        // Project the chest square toward the ladder instead of leaving the
-        // two shoulder joints layered together inside the rung plane.
-        const float faceTurn=h.ladderAiming?1.f:0.f;
-        g.shoulder=mix(center+Vec{-7.f*widthScale,1.2f},g.shoulder,faceTurn);
-        g.farShoulder=mix(center+Vec{7.f*widthScale,1.2f},g.farShoulder,faceTurn);
+        // Square shoulders about a vertical spine when facing the ladder.
+        // Even during shooting the pelvis stays centered on its axis; only
+        // the upper chest and weapon arms are allowed to turn toward aim.
+        const float aimTurn=h.ladderAiming?.52f:0.f;
+        g.shoulder=mix(center+Vec{-7.f*widthScale,1.2f},g.shoulder,aimTurn);
+        g.farShoulder=mix(center+Vec{7.f*widthScale,1.2f},g.farShoulder,aimTurn);
+        g.neck.x=g.hip.x+(g.neck.x-g.hip.x)*aimTurn;
+        g.head.x=g.neck.x+(g.head.x-g.neck.x)*aimTurn;
     }
     if(model){
         // Blend authored base / shouldered-aim / run joint vectors into the original

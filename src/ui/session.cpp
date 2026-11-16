@@ -1,4 +1,5 @@
 #include "ui/app.hpp"
+#include "game/weapon_selection.hpp"
 #include "ui/common.hpp"
 #include "ui/sector_story.hpp"
 #include "ui/level_access.hpp"
@@ -210,11 +211,8 @@ int App::upgradePrice(int rank) const {
 }
 
 void App::cycleWeapon(int direction) {
-    for (int hop=1;hop<=static_cast<int>(weaponCount);++hop) {
-        const int count=static_cast<int>(weaponCount);
-        const int index=((game.gun+direction*hop)%count+count)%count;
-        if (game.guns[index].available) { game.select(index); return; }
-    }
+    const int next=nextVisibleWeapon(game.guns,game.gun,direction);
+    if (next>=0) game.select(next);
 }
 
 // Translates polled input into game state. Every action is evaluated each frame so any chord works.
@@ -228,7 +226,11 @@ void App::driveGame(float dt) {
     apply(Key::crouch,Act::crouch); apply(Key::slow,Act::slow); apply(Key::interact,Act::interact);
     if (input.pressed(Act::reload)) game.input(Key::reload,true);
     game.hold(Key::reload,false);
-    for (int i=0;i<static_cast<int>(weaponCount);++i) if (input.pressed(static_cast<Act>(static_cast<int>(Act::weapon1)+i))) game.select(weaponDisplayOrder[i]);
+    for (int i=0;i<static_cast<int>(weaponCount);++i) {
+        if (!input.pressed(static_cast<Act>(static_cast<int>(Act::weapon1)+i))) continue;
+        const int id=visibleWeaponAt(game.guns,i);
+        if (id>=0) game.select(id);
+    }
     if (input.pressed(Act::next)) cycleWeapon(1);
     if (input.pressed(Act::previous)) cycleWeapon(-1);
     if (mouseAiming) game.pointAt(aimPoint(),mouseMoved);

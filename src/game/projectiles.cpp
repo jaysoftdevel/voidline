@@ -6,7 +6,10 @@ void Game::moveShots(float dt) {
     for (auto& s:shots) {
         s.life-=dt;
         if (s.life<=0) {
-            if (s.blast>0) explode(s.p,s.blast,s.damage,s.color);
+            if (s.blast>0) {
+                if (s.weapon==5) audio.event("launcher-impact",.65f,(s.p.x-player.box.x)/width);
+                explode(s.p,s.blast,s.damage,s.color);
+            }
             continue;
         }
         s.v.y+=s.gravity*dt;
@@ -37,11 +40,17 @@ void Game::moveShots(float dt) {
                     audio.event(impactSound(platforms[hitSurface],stage->biome),.43f,
                         (s.p.x-player.box.x)/width,.95f+random()*.12f);
                 }
-                if (s.blast>0) explode(s.p,s.blast,s.damage,s.color);
+                if (s.blast>0) {
+                    if (s.weapon==5) audio.event("launcher-impact",.65f,(s.p.x-player.box.x)/width);
+                    explode(s.p,s.blast,s.damage,s.color);
+                }
                 s.life=0; break;
             }
             auto& e=enemies[hit];
-            if (s.blast>0) { explode(s.p,s.blast,s.damage,s.color); s.life=0; break; }
+            if (s.blast>0) {
+                if (s.weapon==5) audio.event("launcher-impact",.65f,(s.p.x-player.box.x)/width);
+                explode(s.p,s.blast,s.damage,s.color); s.life=0; break;
+            }
             if (e.hit<=0) audio.event("hit-metal",.3f,(s.p.x-player.box.x)/590,.92f+random()*.23f);
             float impact=s.damage;
             const float distance=length(e.box.center()-player.box.center());

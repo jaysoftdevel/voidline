@@ -29,9 +29,16 @@ void Game::runHorizontal(float dt,int direction,bool grounded) {
         // A flip is an animation/vertical impulse, not an air-brake or air-dash.
         p.velocity.x=approach(p.velocity.x,0.f,9.f*dt);
     }
-    const float edge=bossDead?stage->worldWidth-playerW:stage->exit.x-106;
+    const float edge=std::max(12.f,stage->worldWidth-playerW);
+    const float oldX=p.box.x;
     const float nextX=p.box.x+p.velocity.x*dt;
-    p.box.x=clamp(nextX,12,edge);
+    p.box.x=clamp(nextX,12.f,edge);
+    // The extraction approach remains walkable before defeating the boss.
+    // Block the actual doorway, not the preceding 100+ pixels of level.
+    if (!bossDead) {
+        const float shutter=stage->exit.x-29.f-playerW;
+        if (oldX<=shutter && p.box.x>shutter) p.box.x=shutter;
+    }
     if (p.box.x!=nextX) p.velocity.x=0;
 }
 

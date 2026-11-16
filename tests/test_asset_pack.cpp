@@ -28,6 +28,18 @@ void runAssetPackTests() {
             CHECK(bytes.size()>1500 && std::string(bytes.begin(),bytes.begin()+4)=="OggS");
         }
     }
+    // The user's launcher recording contains a separate projectile detonation.
+    // Its sample must be packaged independently from the firing report.
+    // Distinct grounded takeoff and fabric-only midair flip sounds.
+    for (const char* jump : {"jump.ogg","jump-2.ogg","jump-3.ogg","jump-air.ogg","jump-air-2.ogg"}) {
+        const auto file=std::string("audio/")+jump;
+        CHECK(pack.contains(file));
+        const auto bytes=pack.read(file);
+        CHECK(bytes.size()>1500 && std::string(bytes.begin(),bytes.begin()+4)=="OggS");
+    }
+    CHECK(pack.contains("audio/launcher-impact.ogg"));
+    const auto launcherImpact=pack.read("audio/launcher-impact.ogg");
+    CHECK(launcherImpact.size()>1500 && std::string(launcherImpact.begin(),launcherImpact.begin()+4)=="OggS");
     for (const char* name : {"pistol","carbine","smg","shotgun","arc","launcher","railgun"}) {
         CHECK(pack.contains(std::string("audio/reload-")+name+".ogg"));
     }

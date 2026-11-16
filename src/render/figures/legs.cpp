@@ -16,12 +16,16 @@ void Renderer::drawLegs(const Humanoid& h,const Rig& g) {
             contact.x=h.ground.x+(contact.x-h.ground.x)*(1.f+(profile.stride-1.f)*h.weight);
         }
         const Vec toeRay=ray(h.footAngle[i]);
-        const Vec forward{toeRay.x*dir,-toeRay.y};
+        // From behind on a ladder, both boots point toward their own rung
+        // rather than sideways in the same walking direction.
+        const Vec forward=h.ladder?Vec{i==0?-.45f:.45f,0.f}:
+            Vec{toeRay.x*dir,-toeRay.y};
         const float lift=h.grounded?std::max(0.f,std::max(contact.y,(contact+forward*8).y)-h.ground.y):0.f;
         Vec heel=contact-Vec{0,2.4f+lift};
         Vec toe=contact+forward*8-Vec{0,2.4f+lift};
         const float rotation=g.pelvisRoll*(i==0?-.65f:.65f);
-        const Vec socket=g.hip+Vec{i==0?-2.f:2.f,(i==0?-1.f:.5f)+rotation};
+        const Vec socket=g.hip+Vec{i==0?(h.ladder?-5.f:-2.f):(h.ladder?5.f:2.f),
+                                       (i==0?-1.f:.5f)+rotation};
         const float scale=h.model?h.model->legLength*h.model->bodyHeight:1.f;
         const float thigh=15.6f*scale,shin=14.6f*scale;
         Vec ankleShift{},kneeShift{};

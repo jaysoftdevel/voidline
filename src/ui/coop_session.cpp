@@ -1,4 +1,5 @@
 #include "ui/app.hpp"
+#include "game/weapon_selection.hpp"
 #include "ui/common.hpp"
 #include "ui/coop_story.hpp"
 #include "ui/sector_story.hpp"
@@ -402,8 +403,10 @@ Controls App::readCoopControls() const {
     map(Key::fire,Act::fire); map(Key::automatic,Act::assist); map(Key::sprint,Act::sprint);
     map(Key::crouch,Act::crouch); map(Key::slow,Act::slow); map(Key::interact,Act::interact);
     if (input.pressed(Act::reload)) result.pressed|=keyBit(Key::reload);
-    for (int i=0;i<static_cast<int>(weaponCount);++i)
-        if (input.pressed(static_cast<Act>(static_cast<int>(Act::weapon1)+i))) result.weapon=weaponDisplayOrder[i];
+    for (int i=0;i<static_cast<int>(weaponCount);++i) {
+        if (!input.pressed(static_cast<Act>(static_cast<int>(Act::weapon1)+i))) continue;
+        result.weapon=visibleWeaponAt(game.guns,i);
+    }
     result.cycle=int(input.pressed(Act::next))-int(input.pressed(Act::previous));
     if (input.aimStickActive()) {
         result.aimMode=AimMode::stick; result.aim=input.aimStick();

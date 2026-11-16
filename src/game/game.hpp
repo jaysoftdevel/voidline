@@ -152,7 +152,7 @@ private:
     Landing moveVertical(float dt,float oldX);
     void recoverFromFall();
     void updateGait(float dt,float travel,float accel,int priorSupport,float landing);
-    void jumpFrom(int support);
+    void jumpFrom(int support,int takeoffDirection);
     bool headroom(float x,float feet) const;
     void aimPlayer(int direction);
     bool blocked(Vec start,Vec end) const;

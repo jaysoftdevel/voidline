@@ -1,4 +1,5 @@
 #include "game/game.hpp"
+#include "game/weapon_selection.hpp"
 #include "game/detail.hpp"
 #include <utility>
 
@@ -52,11 +53,8 @@ void Game::applyControls(const Controls& controls,bool second,bool pointerMoved)
     }
     if (controls.weapon>=0 && controls.weapon<static_cast<int>(weaponCount)) select(controls.weapon);
     if (controls.cycle) {
-        for (int hop=1;hop<static_cast<int>(weaponCount);++hop) {
-            const int count=static_cast<int>(weaponCount);
-            const int next=(gun+controls.cycle*hop+count)%count;
-            if (guns[next].available) { select(next); break; }
-        }
+        const int next=nextVisibleWeapon(guns,gun,controls.cycle);
+        if (next>=0) select(next);
     }
     if (controls.aimMode==AimMode::pointer) pointAt(controls.aim,pointerMoved && length(controls.aim-mouse)>2.5f);
     else pointerActive=false;
@@ -65,7 +63,9 @@ void Game::applyControls(const Controls& controls,bool second,bool pointerMoved)
 }
 
 bool Game::atExtraction(const Player& body) const {
-    return std::abs(body.box.center().x-stage->exit.x)<48 && std::abs(body.box.bottom()-stage->exit.y)<45;
+    // Require the player to enter the doorway, not just touch its closed shutter.
+    return std::abs(body.box.center().x-stage->exit.x)<22.f &&
+        std::abs(body.box.bottom()-stage->exit.y)<45.f;
 }
 
 void Game::updateCamera(float dt) {

@@ -1,5 +1,6 @@
 // Upgrades, perks and campaign data.
 #include "game/detail.hpp"
+#include "game/weapon_selection.hpp"
 #include "support.hpp"
 #include "services/storage.hpp"
 #include "ui/level_access.hpp"
@@ -182,6 +183,31 @@ void authoredLevelSources() {
             CHECK(modified.relays.size()==original.relays.size());
         }
     }
+}
+
+void compactWeaponCycleOrder() {
+    std::array<Gun,weaponCount> loadout{};
+    CHECK(visibleWeaponAt(loadout,0)==-1);
+    CHECK(nextVisibleWeapon(loadout,3,1)==-1);
+    loadout[3].available=true;  // pistol, first visible slot
+    CHECK(visibleWeaponAt(loadout,0)==3);
+    CHECK(visibleWeaponAt(loadout,1)==-1);
+    CHECK(nextVisibleWeapon(loadout,3,1)==3);
+    loadout[4].available=true;  // SMG is last in the visible pair
+    loadout[0].available=true;  // Carbine is between them in display order
+    CHECK(visibleWeaponAt(loadout,0)==3);
+    CHECK(visibleWeaponAt(loadout,1)==0);
+    CHECK(visibleWeaponAt(loadout,2)==4);
+    CHECK(visibleWeaponAt(loadout,3)==-1);
+    CHECK(nextVisibleWeapon(loadout,3,1)==0);
+    CHECK(nextVisibleWeapon(loadout,0,1)==4);
+    CHECK(nextVisibleWeapon(loadout,4,1)==3);
+    CHECK(nextVisibleWeapon(loadout,3,-1)==4);
+    CHECK(nextVisibleWeapon(loadout,4,-1)==0);
+    CHECK(nextVisibleWeapon(loadout,0,-1)==3);
+    // Missing internal current gun recovers to first available visible entry.
+    CHECK(nextVisibleWeapon(loadout,6,1)==3);
+    CHECK(nextVisibleWeapon(loadout,4,0)==4);
 }
 
 void livesAndWeaponDisplayOrder() {
@@ -441,6 +467,7 @@ void runProgressionTests() {
     upgradesAndPerks();
     rosterAndCharacters();
     purchaseAndSpecialization();
+    compactWeaponCycleOrder();
     livesAndWeaponDisplayOrder();
     authoredLevelSources();
     stageData();

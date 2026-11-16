@@ -78,7 +78,8 @@ void Game::movePlayer(float dt) {
             p.box.x=approach(p.box.x,l.x-p.box.w*.5f,dt*300.f);
             const float before=p.box.bottom();
             const float climb=(held(Key::jump)?1.f:0.f)-(held(Key::crouch)?1.f:0.f);
-            const float speed=136.f*climb;
+            // Climb deliberately: each rung takes time for a full foot transfer.
+            const float speed=58.f*climb;
             p.box.y=clamp(p.box.y-speed*dt,l.top-p.box.h,l.bottom-p.box.h);
             p.velocity={}; p.support=-1; p.crouched=false;
             p.gait.cycle=std::fmod(p.gait.cycle+std::abs(before-p.box.bottom())/82.f,1.f);

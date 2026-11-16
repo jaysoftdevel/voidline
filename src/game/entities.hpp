@@ -47,6 +47,8 @@ struct Player {
     Rect box;
     Vec velocity,safe;
     int support=-1, facing=1, hp=0, sprintDirection=0;
+    // Ground take-off direction, refreshed through the wind-up and fixed at liftoff.
+    int jumpTakeoffDirection=0;
     int ladder=-1,dropPlatform=-1;
     float dropThrough=0.f;
     float aim=0,coyote=0,jumpBuffer=0,jumpAge=0,windup=0,flash=0,muzzle=0,fireDelay=0,fireBuffer=0;

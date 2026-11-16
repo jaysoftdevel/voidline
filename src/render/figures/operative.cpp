@@ -3,6 +3,7 @@
 #include "render/figures/humanoid.hpp"
 #include "content/skeleton.hpp"
 #include "game/stairs.hpp"
+#include "game/ladder_gait.hpp"
 
 using namespace vl::figures;
 
@@ -45,7 +46,7 @@ void Renderer::drawPlayer(const Game& g,const Operative& op) {
     h.ladderAiming=h.ladder && (p.aiming || p.muzzle>0 || p.fireBuffer>0);
     // Face the rungs square-on while gripping them. Firing rotates just the
     // upper torso back into the aim-facing profile, without twisting the feet.
-    if (h.ladder) h.turn=h.ladderAiming?float(p.facing)*.88f:0.f;
+    if (h.ladder) h.turn=h.ladderAiming?float(p.facing)*.72f:0.f;
     const bool moving=std::abs(p.velocity.x)>25;
     const bool backwards=moving && p.velocity.x*float(p.facing)<0;
     // The gait is measured relative to facing: downhill backsteps must not
@@ -66,16 +67,29 @@ void Renderer::drawPlayer(const Game& g,const Operative& op) {
     // Deterministic simulation-driven animation selection. Every state maps to
     // one optional editable pose layer; transitions are eased by the rig's
     // existing gait/aim/crouch blends rather than snapping the whole body.
-    if (p.ladder>=0) {
-        h.action=ActionPose::stairs; h.actionPhase=p.gait.cycle;
-        h.run=0; h.stride=1; h.weight=p.gait.weight; h.crouch=0;
-        h.lean=0; h.pelvis=0;
+    if (p.ladder>=0 && g.stage) {
+        // The full spine and pelvis face the ladder; the shoulders remain
+        // square and the legs alternate between a planted and a stepping foot.
+        // Rung contacts are anchored in world space, so releasing the key does
+        // not leave the boots cycling in place.
+        const Ladder& ladder=g.stage->ladders[static_cast<size_t>(p.ladder)];
+        const auto climb=ladder_gait::sample(p.box.bottom(),ladder.top,ladder.bottom);
+        h.ground.x=ladder.x+shift.x;
+        h.action=ActionPose::stairs;
+        h.actionPhase=0.f;
+        h.actionWeight=0.f; // Sloped-stair keyframes are not a ladder climb.
+        h.run=0; h.weight=0; h.stride=1;
+        h.crouch=0; h.lean=0; h.pelvis=0; h.tuck=0; h.compression=0;
         for (int i=0;i<2;++i) {
-            const float phase=p.gait.cycle+i*.5f;
-            const float rungStep=std::sin(phase*2*pi);
-            h.heels[i]={ground.x+(i==0?-7.f:7.f),ground.y-8.f-std::max(0.f,rungStep)*14.f};
+            h.heels[i]={h.ground.x+(i==0?-7.f:7.f),climb.feet[i]+shift.y};
+            h.footAngle[i]=0.f;
         }
+        // Diagonal hand/foot coordination. The support hand stays anchored
+        // to a rung until the opposite foot finishes its step.
+        h.nearHand={h.ground.x-8.f,climb.hands[0]+shift.y};
+        h.farHand={h.ground.x+8.f,climb.hands[1]+shift.y};
     }
+
     if (p.hp<=0) h.action=ActionPose::death;
     else if (p.ladder>=0) h.action=ActionPose::stairs;
     else if (p.flash>.12f) h.action=ActionPose::hit;
@@ -89,7 +103,9 @@ void Renderer::drawPlayer(const Game& g,const Operative& op) {
     else if (moving) h.action=p.sprinting?ActionPose::sprint:ActionPose::walk;
     else if (p.aiming) h.action=ActionPose::alert;
     else h.action=ActionPose::idle;
-    h.actionWeight=(h.action==ActionPose::walk||h.action==ActionPose::sprint||h.action==ActionPose::stairs)?std::clamp(h.weight,0.f,1.f):1.f;
+    h.actionWeight=p.ladder>=0?0.f:
+        (h.action==ActionPose::walk||h.action==ActionPose::sprint||h.action==ActionPose::stairs)?
+            std::clamp(h.weight,0.f,1.f):1.f;
     // Authoring timeline: poseFrames are the same five normalized keyframes
     // visible in Model Studio. Sample jumps by upward velocity, falls by fall
     // velocity, crouch by stance blending, and land by recovery time. The
@@ -147,9 +163,12 @@ void Renderer::drawPlayer(const Game& g,const Operative& op) {
     if (h.ladder && !h.ladderAiming) {
         // The weapon is slung while both hands alternate on the rungs.
         // The legs and pelvis stay on the ladder's axis, not inside it.
-        const float stride=std::sin(p.gait.cycle*2*pi);
-        h.nearHand=ground+Vec{-9.f,-30.f-8.f*std::max(0.f,stride)};
-        h.farHand=ground+Vec{9.f,-31.f-8.f*std::max(0.f,-stride)};
+        // Grips were calculated from actual rung heights above. Keep them
+        // instead of generating a second, unrelated sine-wave arm animation.
+        const Ladder& ladder=g.stage->ladders[static_cast<size_t>(p.ladder)];
+        const auto climb=ladder_gait::sample(p.box.bottom(),ladder.top,ladder.bottom);
+        h.nearHand={h.ground.x-8.f,climb.hands[0]+shift.y};
+        h.farHand={h.ground.x+8.f,climb.hands[1]+shift.y};
         h.relax=0; h.nearRelax=0; h.shoulder=0;
     }
     // The support hand must reach the foregrip with a bent elbow. If the weapon is held too far out, it slides
