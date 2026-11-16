@@ -27,7 +27,8 @@ from editor_logic import (can_edit_joint, rig_status, run_cycles_per_second, run
                           assign_model_to_slot, polygon_vertices, edit_structure_vertex,
                           add_structure_vertex, remove_structure_vertex,
                           copy_model_payload, paste_model_payload,
-                          copy_movement_payload, paste_movement_payload)
+                          copy_movement_payload, paste_movement_payload,
+                          discover_game_workspace, running_foot, running_hip_offset)
 from studio_dialogs import StudioDialog, DIALOG_FONT
 
 try:
@@ -41,7 +42,7 @@ if not CORE.exists():
     CORE = ROOT / "bin" / "linux" / "voidline-editor-core"
 if not CORE.exists():
     CORE = ROOT.parent / "build" / "model-studio" / "voidline-editor-core"
-VERSION = "0.0.19"
+VERSION = "0.0.23"
 NAMES = ("pelvis", "waist", "neck", "head", "near shoulder", "far shoulder",
          "near elbow", "far elbow", "near hand", "far hand", "near knee", "far knee", "near ankle", "far ankle")
 BASE = ((0,-33),(0,-41),(2,-49),(4,-59),(6,-46),(-5,-46),(14,-35),(-13,-35),
@@ -86,13 +87,32 @@ def prepare_motion(doc, catalog=None):
             data.setdefault(k, value)
     if doc.get("schema") == "voidline-enemy-v1":
         doc["schema"] = "voidline-enemy-v2"
-    ensure_sequences(doc, catalog)
     return doc
 
 
-def active_layer(doc, pose):
+def pose_frame_index(frame):
+    """Nearest keyframe on the editor timeline (five keys at 0,15,30,44,59)."""
+    return max(0,min(4,round((int(frame)%60)/59*4)))
+
+
+def pose_frame_offset(rig, pose, index, frame):
+    """Interpolate exactly like game skeletonOffset using the authored XY keys."""
+    frames=rig.get("poseFrames",{}).get(pose)
+    if not isinstance(frames,list) or len(frames)!=5:return (0.0,0.0)
+    value=max(0.,min(1.,(frame%60)/59.))*4
+    first=min(4,int(value));last=min(4,first+1)
+    alpha=value-first
+    return tuple(frames[first][index][axis]*(1-alpha)+frames[last][index][axis]*alpha
+                 for axis in range(2))
+
+
+def active_layer(doc, pose, frame=None):
     rig=doc["skeleton"]
     if pose in POSES:return rig[pose],rig["depth"][pose]
+    tracks=rig.get("poseFrames",{}).get(pose)
+    if frame is not None and isinstance(tracks,list) and len(tracks)==5:
+        # Manipulating an action edits its keyframe in the actual input JSON.
+        return tracks[pose_frame_index(frame)],rig["sequenceDepth"][pose]
     return rig["sequences"][pose],rig["sequenceDepth"][pose]
 
 
@@ -114,44 +134,77 @@ def sample_joint(doc, idx, pose, frame, kind="character", speed_percent=100):
     if pose != "base":
         offsets,depth=active_layer(d,pose)
         x += offsets[idx][0];y += offsets[idx][1];z += depth[idx]
+    tracks=d["skeleton"].get("poseFrames",{})
+    authored_action=pose in tracks and len(tracks[pose])==5
+    if authored_action:
+        tx,ty=pose_frame_offset(rig,pose,idx,frame)
+        x+=tx;y+=ty
     locomotion = pose in ("run","walk","sprint","patrol","chase","stairs")
     phase = run_phase(d, kind, frame, speed_percent) if locomotion else math.tau * (frame % 60) / 60
     if locomotion:
-        # 100% advances at the in-game running gait (distance / stride).
-        # The slider changes only preview playback time; it is not exported.
-        swing = math.sin(phase * float(d["motion"]["walkCycle"]))
-        bounce = (1 - math.cos(phase * 2)) * 2.0
-        effort={"walk":.55,"patrol":.55,"stairs":.65,"run":1.,"sprint":1.22,"chase":1.12}.get(pose,1.)
-        step = 12.0 * float(rig["stride"]) * effort
-        if idx in (10,12):
-            x += step*swing; y -= max(0, swing)*10*float(rig["stride"])*effort
-        elif idx in (11,13):
-            x -= step*swing; y -= max(0,-swing)*10*float(rig["stride"])
-        elif idx in (6,8): x -= 9*swing*float(rig["armSwing"])*effort
-        elif idx in (7,9): x += 9*swing*float(rig["armSwing"])*effort
-        elif idx in (0,1,2,3): y += bounce
-        if idx in (4,5): x += .8*swing
-    elif pose in ("aim","alert","fire","reload","interact","recoil"):
+        # Full 12-stage cycle with alternating heel-strike, load, toe-off,
+        # airborne recovery and forward knee drive. Source joint offsets are
+        # applied above this block, never replaced by this procedural preview.
+        phase01=phase/math.tau
+        effort={"walk":.55,"patrol":.55,"stairs":.65,"run":1.,"sprint":1.12,"chase":1.12}.get(pose,1.)
+        stance={"walk":.62,"patrol":.55,"stairs":.67,"run":.38,"sprint":.35,"chase":.38}.get(pose,.38)
+        leg=0 if idx in (10,12) else 1
+        foot_state=running_foot(phase01+(.5 if leg==0 else 0.),stance)
+        planted,progress,clearance,_pitch=foot_state
+        half_stride=15.*float(rig["stride"])*effort
+        rel_x=(half_stride*(1.-2.*progress) if planted else
+               half_stride*(-1.+2.*progress))
+        lift=clearance*20.*effort
+        # Articulated knees, solved from hip-to-foot geometry. The knee bends
+        # toward travel; neither knee can snap backward through the thigh.
+        if idx in (12,13):
+            x+=rel_x-BASE[idx][0]
+            y-=lift
+        elif idx in (10,11):
+            hip_x,hip_y=0.,-33.
+            foot_x,foot_y=rel_x,-5.-lift
+            dx,dy=foot_x-hip_x,foot_y-hip_y
+            leg_distance=math.hypot(dx,dy)
+            if leg_distance>29.9:
+                ratio=29.9/leg_distance
+                dx*=ratio;dy*=ratio
+            d=max(.001,math.hypot(dx,dy))
+            a=(16.*16.-15.*15.+d*d)/(2.*d)
+            bend=math.sqrt(max(0.,16.*16.-a*a))
+            knee_x=hip_x+dx/d*a+dy/d*bend
+            knee_y=hip_y+dy/d*a-dx/d*bend
+            x+=knee_x-BASE[idx][0]
+            y+=knee_y-BASE[idx][1]
+        elif idx in (6,8,7,9):
+            # Arms counter-rotate with the opposite leg, with flexed elbows.
+            counter=math.sin(phase01*math.tau)
+            arm_sign=-1. if idx in (6,8) else 1.
+            x+=9.*counter*arm_sign*float(rig["armSwing"])*effort
+            if idx in (6,7):y-=max(0.,counter*arm_sign)*4.*effort
+        elif idx in (0,1,2,3):
+            y+=running_hip_offset(phase01)*effort
+        if idx in (4,5): x+=.8*math.sin(phase)
+    elif not authored_action and pose in ("aim","alert","fire","reload","interact","recoil"):
         # Visibly raise/lower both hands over the shot sequence and recoil in bursts.
         ready = min(1.0, frame / 12.0, max(0.0, (60-frame) / 12.0))
         recoil = max(0, math.sin(phase*4)) * float(d["motion"]["recoil"]) * (5.0 if pose in ("fire","recoil") else 2.6) * ready
         if idx in (8,9): x -= recoil; y -= ready*4.0*float(rig["aimRaise"])
         elif idx in (6,7): x -= recoil*.55; y -= ready*2.4
         elif idx in (4,5): x -= recoil*.3
-        elif idx in (1,2,3): y += .65 * math.sin(phase)
-    elif pose in ("jump","fall","land"):
+        elif not authored_action and idx in (1,2,3): y += .65 * math.sin(phase)
+    elif not authored_action and pose in ("jump","fall","land"):
         flex={"jump":-.9,"fall":.8,"land":1.2}[pose]
         if idx in (10,11):x += 4.5*flex
         if idx in (12,13):y -= 8*flex
         if idx in (0,1,2,3):y += 3*max(0,flex)
-    elif pose in ("hit","stagger","death"):
+    elif not authored_action and pose in ("hit","stagger","death"):
         impact={"hit":2,"stagger":5,"death":10}[pose]
         if idx in (1,2,3): x -= impact * max(0,math.sin(phase/2))
         if idx in (8,9): y += impact*.6
-    elif pose == "crouch":
+    elif not authored_action and pose == "crouch":
         if idx in (0,1,2,3):y += 8
         if idx in (10,11):x += 4
-    elif idx in (1,2,3):
+    elif not authored_action and idx in (1,2,3):
         y += 2.2*math.sin(phase)*float(d["motion"]["idleBreath"])
     return x, y, z
 
@@ -287,7 +340,7 @@ class RigViewport(ttk.Frame):
             c.create_line(midx+26*scale,midy-8*scale+move,midx+65*scale,midy-8*scale+move,
                           fill=color,width=max(2,round(7*scale)))
         c.create_text(w/2,20,text="PROCEDURAL ENEMY · JOINT EDITING NOT SUPPORTED",fill="#e3b977")
-        c.create_text(9,h-10,anchor="sw",fill="#aec3d9",text=f"{pose.upper()} · frame {int(frame)%60:02d}/59 · motion preview proxy")
+        c.create_text(9,h-10,anchor="sw",fill="#aec3d9",text=f"PROCEDURAL · frame {int(frame)%60:02d}/59 · no editable action poses")
 
     def start_drag(self,event):
         if not self.app.model_document() or not can_edit_joint(self.app.kind,self.app.doc):return
@@ -310,7 +363,7 @@ class RigViewport(ttk.Frame):
         delta=[(right[i]*dx+down[i]*dy)/max(.2,scale) for i in range(3)]
         pose=self.app.pose.get().lower();i=self.drag_joint
         rig=self.app.doc["skeleton"]
-        layer,depth=active_layer(self.app.doc,pose)
+        layer,depth=active_layer(self.app.doc,pose,self.app.preview_frame())
         # Mouse motion is intentionally unconstrained by the old +/-25 rig limit.
         # Preserve sensible numerical limits for binary float32 interchange only.
         for axis in range(2):
@@ -337,6 +390,14 @@ class Studio(tk.Tk):
     def __init__(self, options):
         super().__init__()
         self.title(f"VOIDLINE Model Studio {VERSION} · Linux")
+        self._window_icon = None
+        try:
+            icon_file = ROOT.parent / "icons" / "model-studio.png"
+            if icon_file.is_file():
+                self._window_icon = tk.PhotoImage(file=str(icon_file))
+                self.iconphoto(True, self._window_icon)
+        except tk.TclError:
+            pass
         style=ttk.Style(self)
         # Native ttk Treeview uses a 20px row on some distros, which overlaps
         # DejaVu Sans 11 on GNOME/KDE HiDPI configurations. Force usable rows.
@@ -386,6 +447,12 @@ class Studio(tk.Tk):
                 self.after(100,lambda:self.open_workspace(options[1]))
             elif options[0]=="--game-dir" and len(options)>1:
                 self.after(100,lambda:self.open_workspace(options[1]))
+        else:
+            # The source checkout, not a private Model Studio project, is the
+            # only persistent input. A CLI path always overrides autodetection.
+            checkout=discover_game_workspace(ROOT.parent, Path.cwd())
+            if checkout is not None:
+                self.after(100,lambda path=checkout:self.open_workspace(str(path)))
 
     def maximize_window(self):
         """Use the window manager's maximize state; maintain a usable fallback."""
@@ -746,8 +813,10 @@ class Studio(tk.Tk):
         self.info.config(text=f"{kind.title()}: {doc.get('name',self.path.name) if isinstance(doc,dict) else self.path.name}\n{self.path.name}")
         if kind in ("character","enemy"):
             choices=movement_sequences(kind,doc,self.project / "models/movement-descriptions.json" if self.project else None)
-            self.pose_combo.configure(values=[name.title() for name in choices])
-            if self.pose.get().lower() not in choices:self.pose.set("Run" if "run" in choices else choices[0].title())
+            self.pose_combo.configure(values=choices)
+            self.pose_combo.state(["!disabled"] if choices else ["disabled"])
+            if self.pose.get().lower() not in choices:
+                self.pose.set("run" if "run" in choices else choices[0] if choices else "")
         self.tabs.select({"level":self.level_page,"character":self.model_page,"enemy":self.model_page,"asset":self.asset_page}[kind])
         self.show_properties();self.draw_level();self.redraw_models()
         if kind=="asset":self.show_asset()
@@ -1000,15 +1069,17 @@ class Studio(tk.Tk):
     def update_joint_display(self):
         if not self.model_document():
             self.joint_info.config(text="");return
-        self.speed_slider.state(["!disabled"] if self.pose.get().lower() in ("run","walk","sprint","chase","patrol","stairs") else ["disabled"])
+        self.speed_slider.state(["!disabled"] if self.pose.get().lower() in ("run","walk","sprint","patrol","stairs") else ["disabled"])
         if not can_edit_joint(self.kind,self.doc):
             self.joint_info.config(text=rig_status(self.kind,self.doc)+"\nUse supported movement settings in the inspector.")
             return
         j=self.joint_index.get();pose=self.pose.get().lower()
         rig=self.doc["skeleton"]
-        layer,depth=active_layer(self.doc,pose)
+        layer,depth=active_layer(self.doc,pose,self.preview_frame())
         x,y=layer[j];z=depth[j]
-        self.joint_info.config(text=f"{rig_status(self.kind,self.doc)}\nSelected joint: {NAMES[j]}\nPose: {pose}  ·  X {x:+.2f}  Y {y:+.2f}  Z {z:+.2f}\nLeft drag: edit supported vectors · Right drag (3D): orbit")
+        animated=pose in rig.get("poseFrames",{})
+        key=f"  ·  Key {pose_frame_index(self.preview_frame())+1}/5" if animated else ""
+        self.joint_info.config(text=f"{rig_status(self.kind,self.doc)}\nSelected joint: {NAMES[j]}\nPose: {pose}{key}  ·  X {x:+.2f}  Y {y:+.2f}  Z {z:+.2f}\nLeft drag edits the selected source keyframe · Right drag (3D): orbit")
 
     def redraw_models(self):
         for view in self.views:view.paint()
@@ -1093,7 +1164,7 @@ class Studio(tk.Tk):
             self.frame.set(self._absolute_frame%60)
             self.redraw_models()
         pct=self.speed_percent.get()
-        self.play_status.config(text=f"Playing · {pct}%" if self.pose.get()=="Run" else "Playing · 30 FPS")
+        self.play_status.config(text=f"Playing · {pct}%" if self.pose.get().lower()=="run" else "Playing · 30 FPS")
         self._after=self.after(round(1000/self.fps),self._play_tick)
 
     def reset_orbit(self):

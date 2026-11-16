@@ -28,7 +28,9 @@ int run(int argc,char** argv) try {
                      <<", bodyWidth="<<model.bodyWidth
                      <<", base.head=("<<model.offsets[0][3].x<<','<<model.offsets[0][3].y<<')'
                      <<", run.hand=("<<model.offsets[2][8].x<<','<<model.offsets[2][8].y<<')'
-                     <<", walk.head=("<<model.actionOffsets[1][3].x<<','<<model.actionOffsets[1][3].y<<')'<<'\n';
+                     <<", walk.head=("<<model.actionOffsets[1][3].x<<','<<model.actionOffsets[1][3].y<<')'
+                     <<", jump.ankle.key2=("<<model.actionFrames[4][2][12].x<<','
+                     <<model.actionFrames[4][2][12].y<<')'<<'\n';
         }
         for(size_t id=0;id<vl::specs.size();++id){
             const auto& spec=vl::specs[id];

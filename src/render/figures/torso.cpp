@@ -106,7 +106,14 @@ void Renderer::drawTorso(const Humanoid& h,const Rig& g) {
     armor(g.waist,g.hip,5.9f*bodyWidth,5.4f*bodyWidth,h.suit.energy(.92f),h.edge,true);
     armor(g.neck,g.waist,(7.1f+breathe*.5f)*bodyWidth,6.1f*bodyWidth,h.suit,h.edge,true);
     const float wide=(1-g.fa)*4.5f;
-    const Vec p0=g.at(spine*.97f,-2.f*bodyWidth)-Vec{wide,0}, p1=g.at(spine*.92f,6.5f*bodyWidth)+Vec{wide,0};
+    // Let the upper chest follow the counter-rotating shoulder axis. Shift
+    // opposite top edges equally, leaving the waist and chest center fixed.
+    // This hints at a true yaw around the running axis in the 2D projection
+    // rather than just sliding both arms across a static, forward-facing body.
+    const float chestTwist=g.counter*float(h.facing)*mix(.45f,1.25f,clamp(h.run));
+    const Vec chestShear{chestTwist,.09f*chestTwist};
+    const Vec p0=g.at(spine*.97f,-2.f*bodyWidth)-Vec{wide,0}+chestShear;
+    const Vec p1=g.at(spine*.92f,6.5f*bodyWidth)+Vec{wide,0}-chestShear;
     const Vec p2=g.at(spine*.44f,6.f*bodyWidth)+Vec{wide,0}, p3=g.at(spine*.42f,-2.f*bodyWidth)-Vec{wide,0};
     polygon(p0,p1,p2,p3,h.shell.energy(1.04f));
     polygon(mix(p0,p3,.55f),mix(p1,p2,.55f),p2,p3,h.shell.energy(.78f));

@@ -18,22 +18,37 @@ void Renderer::drawLegs(const Humanoid& h,const Rig& g) {
         const Vec toeRay=ray(h.footAngle[i]);
         const Vec forward{toeRay.x*dir,-toeRay.y};
         const float lift=h.grounded?std::max(0.f,std::max(contact.y,(contact+forward*8).y)-h.ground.y):0.f;
-        const Vec heel=contact-Vec{0,2.4f+lift};
-        const Vec toe=contact+forward*8-Vec{0,2.4f+lift};
-        Vec ankle=heel-Vec{0,2.1f};
-        const Vec socket=g.hip+Vec{i==0?-2.f:2.f,i==0?-1.f:.5f};
+        Vec heel=contact-Vec{0,2.4f+lift};
+        Vec toe=contact+forward*8-Vec{0,2.4f+lift};
+        const float rotation=g.pelvisRoll*(i==0?-.65f:.65f);
+        const Vec socket=g.hip+Vec{i==0?-2.f:2.f,(i==0?-1.f:.5f)+rotation};
         const float scale=h.model?h.model->legLength*h.model->bodyHeight:1.f;
-        Vec knee=solveKnee(socket,ankle,15.6f*scale,14.6f*scale,dir);
+        const float thigh=15.6f*scale,shin=14.6f*scale;
+        Vec ankleShift{},kneeShift{};
         if(h.model){
             const auto& profile=*h.model;
             const auto shift=[&](SkeletonJoint joint){
-                const Vec d=skeletonOffset(profile,joint,h.shoulder*profile.aimRaise,std::max(h.run,h.weight*.84f),h.action,h.actionWeight);
+                const Vec d=skeletonOffset(profile,joint,h.shoulder*profile.aimRaise,std::max(h.run,h.weight*.84f),h.action,h.actionWeight,h.actionPhase);
                 return Vec{d.x*(h.turn<0?-1.f:1.f),d.y};
             };
             const bool near=i==1;
-            ankle+=shift(near?SkeletonJoint::nearAnkle:SkeletonJoint::farAnkle);
-            knee+=shift(near?SkeletonJoint::nearKnee:SkeletonJoint::farKnee);
+            ankleShift=shift(near?SkeletonJoint::nearAnkle:SkeletonJoint::farAnkle);
+            kneeShift=shift(near?SkeletonJoint::nearKnee:SkeletonJoint::farKnee);
         }
+        // Ankle, heel and boot always travel together. A springy jump can
+        // leave a simulated heel behind the airborne pelvis; pulling only
+        // the knee within reach would produce a visibly stretched shin.
+        const Vec desired=heel-Vec{0,2.1f}+ankleShift;
+        const Vec ankle=reachableAnkle(socket,desired,thigh,shin);
+        const Vec correction=ankle-desired+ankleShift;
+        heel+=correction;
+        toe+=correction;
+        Vec knee=solveKnee(socket,ankle,thigh,shin,dir);
+        // Authoring a knee pose changes its bend subtly, but cannot lengthen
+        // the bones substantially. Use the perpendicular component only.
+        const Vec ikAxis=normal(ankle-socket);
+        const Vec ikNormal{ikAxis.y,-ikAxis.x};
+        knee+=ikNormal*clamp(dot(kneeShift,ikNormal),-.5f,.5f);
         const Color cloth=far?h.shadow:h.suit;
         const Color plate=far?h.shadow.energy(1.4f):h.shell;
         const Color boot=far?h.leather.energy(.6f):h.leather;

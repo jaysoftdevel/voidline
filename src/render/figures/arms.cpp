@@ -20,9 +20,11 @@ float bendBetween(Vec shoulder,Vec elbow,Vec wrist) {
 Renderer::ArmPose Renderer::freeArm(const Humanoid& h,const Rig& g,Vec s,bool near) const {
     const int facing=g.tf<0?-1:1;
     const float armScale=h.model?h.model->armLength:1.f;
-    const float travel=float(g.dir*facing);
     const float authoredSwing=h.model?h.model->armSwing:1.f;
-    const float phase=(near?1.f:-1.f)*g.counter*travel*authoredSwing;
+    // g.counter already indicates which anatomical foot is in front, in
+    // travel-local coordinates. Multiplying by facing again would reverse
+    // the arm/leg relationship whenever the character turns around.
+    const float phase=(near?-1.f:1.f)*g.counter*authoredSwing;
     const float sway=std::sin(h.time*1.3f+(near?0.f:1.7f))*.07f*(1-h.weight);
     const float swing=clamp(phase+sway,-1.f,1.f);
     // Humans swing the arm further forward than back: about 40 degrees forward and 30 back at a run.
@@ -45,7 +47,7 @@ Renderer::ArmPose Renderer::freeArm(const Humanoid& h,const Rig& g,Vec s,bool ne
     if(h.model){
         const auto& profile=*h.model;
         const auto shift=[&](SkeletonJoint joint){
-            const Vec d=skeletonOffset(profile,joint,h.shoulder*profile.aimRaise,std::max(h.run,h.weight*.84f),h.action,h.actionWeight);
+            const Vec d=skeletonOffset(profile,joint,h.shoulder*profile.aimRaise,std::max(h.run,h.weight*.84f),h.action,h.actionWeight,h.actionPhase);
             return Vec{d.x*facing,d.y};
         };
         arm.elbow+=shift(near?SkeletonJoint::nearElbow:SkeletonJoint::farElbow);
@@ -76,7 +78,7 @@ Renderer::ArmPose Renderer::gripArm(const Humanoid& h,Vec s,Vec hand,bool near) 
     if(h.model){
         const auto& profile=*h.model;
         const auto shift=[&](SkeletonJoint joint){
-            const Vec d=skeletonOffset(profile,joint,h.shoulder*profile.aimRaise,std::max(h.run,h.weight*.84f),h.action,h.actionWeight);
+            const Vec d=skeletonOffset(profile,joint,h.shoulder*profile.aimRaise,std::max(h.run,h.weight*.84f),h.action,h.actionWeight,h.actionPhase);
             return Vec{d.x*facing,d.y};
         };
         arm.elbow+=shift(near?SkeletonJoint::nearElbow:SkeletonJoint::farElbow);
@@ -107,8 +109,8 @@ void Renderer::drawArms(const Humanoid& h,const Rig& g) {
     if(h.model){
         const auto& profile=*h.model;
         const float faced=h.turn<0?-1.f:1.f;
-        const Vec n=skeletonOffset(profile,SkeletonJoint::nearHand,h.shoulder*profile.aimRaise,std::max(h.run,h.weight*.84f),h.action,h.actionWeight);
-        const Vec f=skeletonOffset(profile,SkeletonJoint::farHand,h.shoulder*profile.aimRaise,std::max(h.run,h.weight*.84f),h.action,h.actionWeight);
+        const Vec n=skeletonOffset(profile,SkeletonJoint::nearHand,h.shoulder*profile.aimRaise,std::max(h.run,h.weight*.84f),h.action,h.actionWeight,h.actionPhase);
+        const Vec f=skeletonOffset(profile,SkeletonJoint::farHand,h.shoulder*profile.aimRaise,std::max(h.run,h.weight*.84f),h.action,h.actionWeight,h.actionPhase);
         nearHand+=Vec{n.x*faced,n.y};farHand+=Vec{f.x*faced,f.y};
     }
     // A collapsed figure drops the weapon and both arms go free.

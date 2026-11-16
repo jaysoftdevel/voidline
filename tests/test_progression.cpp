@@ -4,6 +4,7 @@
 #include "services/storage.hpp"
 #include "ui/level_access.hpp"
 #include "ui/debug_loadout.hpp"
+#include "ui/weapon_tabs.hpp"
 #include "content/level_io.hpp"
 #include "platform/paths.hpp"
 #include <filesystem>
@@ -418,8 +419,23 @@ void checkpointRestore() {
 }
 }
 
+namespace {
+void weaponMenuAvailability() {
+    CHECK(ui::weaponTabSelectable(3,0,false));  // Starting pistol
+    CHECK(ui::weaponTabSelectable(0,0,false));  // Carbine available to buy
+    CHECK(!ui::weaponTabSelectable(1,0,false)); // Shotgun requires sector 1
+    CHECK(ui::weaponTabSelectable(1,1,false));
+    CHECK(!ui::weaponTabSelectable(6,3,false)); // Railgun needs sector 4
+    CHECK(ui::weaponTabSelectable(6,4,false));
+    CHECK(ui::weaponTabSelectable(6,0,true));  // Debug unlocks all tabs
+    CHECK(!ui::weaponTabSelectable(-1,20,true));
+    CHECK(!ui::weaponTabSelectable(7,20,true));
+}
+}
+
 void runProgressionTests() {
     fpsSettings();
+    weaponMenuAvailability();
     debugLevelAccess();
     debugWeaponAndUpgradeCycles();
     upgradesAndPerks();

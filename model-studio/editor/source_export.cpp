@@ -44,15 +44,6 @@ bool writeBinary(const fs::path& file,const std::vector<uint8_t>& data,std::stri
     }
     return true;
 }
-json_object* defaultVector(bool depth){
-    json_object* out=json_object_new_array();
-    for(int i=0;i<14;++i){
-        if(depth)json_object_array_add(out,json_object_new_double(0.));
-        else {json_object* xyz=json_object_new_array();json_object_array_add(xyz,json_object_new_double(0.));
-              json_object_array_add(xyz,json_object_new_double(0.));json_object_array_add(out,xyz);}
-    }
-    return out;
-}
 std::string actionCatalog(const fs::path& project,bool enemy,std::string& error){
     json_object* root=json_object_new_object(),*items=json_object_new_array();
     json_object_object_add(root,"schema",json_object_new_string("voidline-actions-v1"));
@@ -72,31 +63,26 @@ std::string actionCatalog(const fs::path& project,bool enemy,std::string& error)
                     if(descriptor)json_object_put(descriptor);
                     return {};
         }
-        json_object *skeleton=nullptr,*layers=nullptr,*depths=nullptr;
+        json_object *skeleton=nullptr,*layers=nullptr,*depths=nullptr,*frames=nullptr;
         if(json_object_object_get_ex(parsed,"skeleton",&skeleton)){
             json_object_object_get_ex(skeleton,"sequences",&layers);
             json_object_object_get_ex(skeleton,"sequenceDepth",&depths);
+            json_object_object_get_ex(skeleton,"poseFrames",&frames);
         }
         json_object* allLayers=layers&&json_object_is_type(layers,json_type_object)?
                                json_object_get(layers):json_object_new_object();
         json_object* allDepths=depths&&json_object_is_type(depths,json_type_object)?
                                json_object_get(depths):json_object_new_object();
-        if(definitions && json_object_is_type(definitions,json_type_array)){
-            for(size_t n=0;n<json_object_array_length(definitions);++n){
-                json_object* item=json_object_array_get_idx(definitions,n),*id=nullptr,*existing=nullptr;
-                if(!item||!json_object_object_get_ex(item,"id",&id)||
-                   !json_object_is_type(id,json_type_string))continue;
-                const char* name=json_object_get_string(id);
-                if(!json_object_object_get_ex(allLayers,name,&existing))
-                    json_object_object_add(allLayers,name,defaultVector(false));
-                if(!json_object_object_get_ex(allDepths,name,&existing))
-                    json_object_object_add(allDepths,name,defaultVector(true));
-            }
-        }
+        // Export precisely the action layers stored in this individual model.
+        // The shared descriptor is metadata, not a request to synthesize poses.
         json_object* entry=json_object_new_object();
         json_object_object_add(entry,"id",json_object_new_int(i));
         json_object_object_add(entry,"sequences",allLayers);
         json_object_object_add(entry,"sequenceDepth",allDepths);
+        // Frame tracks are literal editable source data. The exporter never
+        // invents, pads or replaces authored motion.
+        json_object_object_add(entry,"poseFrames",frames&&json_object_is_type(frames,json_type_object)?
+                                    json_object_get(frames):json_object_new_object());
         json_object_array_add(items,entry);
         json_object_put(parsed);
     }
@@ -126,6 +112,7 @@ std::string generatedStages(const std::vector<vl::Stage>& stages,bool coop){
         list(out,"cover",s.cover,rect);
         list(out,"beacons",s.beacons,v);
         list(out,"stairs",s.stairs,[](vl::Stair t){return "{"+v(t.from)+","+v(t.to)+"}";});
+        list(out,"ladders",s.ladders,[](vl::Ladder l){return "{"+f(l.x)+","+f(l.top)+","+f(l.bottom)+"}";});
         list(out,"lifts",s.lifts,[](vl::Lift l){return "{"+f(l.x)+","+f(l.y)+","+f(l.w)+","+f(l.dx)+","+f(l.dy)+","+f(l.period)+","+f(l.phase)+"}";});
         list(out,"vents",s.vents,[](vl::Vent t){return "{"+f(t.x)+","+f(t.y)+","+f(t.phase)+"}";});
         list(out,"enemies",s.enemies,[](vl::EnemyPlacement e){return "{static_cast<EnemyKind>("+std::to_string(int(e.kind))+"),"+f(e.x)+","+f(e.y)+","+f(e.patrol)+","+(e.elite?"true":"false")+"}";});

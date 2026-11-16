@@ -1,5 +1,6 @@
 #include "support.hpp"
 #include "content/asset_pack.hpp"
+#include "game/detail.hpp"
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -16,6 +17,34 @@ void runAssetPackTests() {
     AssetPack pack(root);
     CHECK(pack.contains("audio/menu.ogg"));
     CHECK(pack.contains("audio/coop-intro.ogg"));
+    // Every firearm has its own firing texture; impacts distinguish surfaces.
+    for (const char* effect : {"pistol","carbine","smg","shotgun","arc","launcher","railgun",
+                               "enemy","guardian","hit-metal","hit-concrete","hit-rock"}) {
+        for (int variation=1;variation<=4;++variation) {
+            const std::string file=std::string("audio/")+effect+
+                (variation==1?"":"-"+std::to_string(variation))+".ogg";
+            CHECK(pack.contains(file));
+            const auto bytes=pack.read(file);
+            CHECK(bytes.size()>1500 && std::string(bytes.begin(),bytes.begin()+4)=="OggS");
+        }
+    }
+    for (const char* name : {"pistol","carbine","smg","shotgun","arc","launcher","railgun"}) {
+        CHECK(pack.contains(std::string("audio/reload-")+name+".ogg"));
+    }
+    CHECK(std::string(impactSound(Platform{{}, {}, true},Biome::mine))=="hit-rock");
+    CHECK(std::string(impactSound(Platform{{}, {}, true},Biome::water))=="hit-concrete");
+    CHECK(std::string(impactSound(Platform{{}, {}, false},Biome::water))=="hit-metal");
+    CHECK(std::string(impactSound(Platform{{}, {}, false, nullptr, true},Biome::biodome))=="hit-concrete");
+    // Distinct physical boot impacts for material types and left/right gait variation.
+    for (const char* material : {"deck", "grate", "rock"}) {
+        for (int variation=1;variation<=4;++variation) {
+            const std::string name=std::string("audio/boot-")+material+
+                (variation==1?"":"-"+std::to_string(variation))+".ogg";
+            CHECK(pack.contains(name));
+            const auto wav=pack.read(name);
+            CHECK(wav.size()>1500 && std::string(wav.begin(),wav.begin()+4)=="OggS");
+        }
+    }
     CHECK(pack.contains("fonts/font-regular.png"));
     CHECK(pack.contains("fonts/font-regular.txt"));
     CHECK(pack.contains("cinematic/deck.webp"));

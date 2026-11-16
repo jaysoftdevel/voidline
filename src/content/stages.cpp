@@ -1,4 +1,5 @@
 #include "content/stages.hpp"
+#include "game/stairs.hpp"
 #include "content/opening_sectors.hpp"
 #include <utility>
 
@@ -305,6 +306,39 @@ Stage makeMission(const Mission& mission,int rank) {
     return stage;
 }
 
+// Make the guardian's final deck a fight space instead of a firing gallery.
+// Add room to dodge, and two elevated alternate routes connected by stairs.
+void formGuardianArena(Stage& stage) {
+    if(stage.ground.empty() || stage.enemies.empty()) return;
+    auto boss=std::find_if(stage.enemies.rbegin(),stage.enemies.rend(),[](const EnemyPlacement& e) {
+        return e.kind==EnemyKind::boss;
+    });
+    if (boss==stage.enemies.rend()) return;
+    auto& deck=stage.ground.back();
+    const float left=deck.x, floor=deck.y;
+    const float extension=std::max(0.f,1080.f-deck.w);
+    deck.w+=extension;
+    stage.worldWidth+=extension;
+    stage.exit.x+=extension;
+    boss->x=left+deck.w*.61f;
+    boss->y=floor;
+    boss->patrol=deck.w*.42f;
+    // Side gantries leave the main firing lane open. Each joins the floor
+    // with a real staircase and has at least 32px horizontal overlap.
+    for (int lane=0;lane<2;++lane) {
+        const float base=left+125.f+lane*(deck.w-385.f);
+        const float rise=lane==0?88.f:116.f;
+        stage.ledges.push_back({base+109.f,floor-rise,148.f,17.f});
+        stage.stairs.push_back({{base,floor},{base+148.f,floor-rise}});
+    }
+    // Keep the guardian's full-width dash unobstructed; move previous
+    // cover and explosives out of the central collision lane.
+    std::erase_if(stage.cover,[&](const Rect& c) {
+        return c.x>=left+95.f && c.x<left+deck.w-90.f && c.y>=floor-85.f;
+    });
+    // Open floor: no last-minute collider interrupts guardian charges.
+}
+
 // Early sectors are hand-built. Insert coherent additional combat/traversal
 // chapters before their original guardian arenas; keep the boss and exit intact.
 // The original bridge still joins the first extension section.
@@ -399,6 +433,12 @@ const std::array<Stage,sectorCount> stages=[] {
             stage.enemies.insert(stage.enemies.end()-1,
                 {EnemyKind::drone,x,landing.y-135.f,0,sector>=11});
         }
+    }
+    for (auto& stage:campaign) {
+        formGuardianArena(stage);
+        // The exit must be approached on a level floor; a final gantry stair
+        // must not intercept the player directly before the extraction gate.
+        std::erase_if(stage.stairs,[&](const Stair& s){return exitStairConflict(s,stage.exit);});
     }
     // Keep every checkpoint accessible: procedural cover must never overlap
     // the operative at a save beacon, including on an elevated floor.

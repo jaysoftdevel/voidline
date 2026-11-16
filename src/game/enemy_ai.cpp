@@ -1,6 +1,7 @@
 #include "game/game.hpp"
 #include "game/detail.hpp"
 #include "game/enemy_ground.hpp"
+#include "game/boss_tactics.hpp"
 #include "content/enemy_motion.hpp"
 
 namespace vl {
@@ -37,13 +38,15 @@ void Game::moveEnemies(float dt) {
             if (priority(second)<priority(first)) target=second;
         }
         const Vec d=target-origin;
-        if (std::abs(d.x)>690) continue;
-        const bool inRange=std::abs(d.x)<e.reach && std::abs(d.y)<240;
         const bool boss=e.kind==EnemyKind::boss;
+        if (std::abs(d.x)>(boss?760.f:690.f)) continue;
+        const bool inRange=std::abs(d.x)<e.reach && std::abs(d.y)<240;
+        const bool bossSight=boss && std::abs(d.x)<760.f && std::abs(d.y)<315.f;
+        const bool clearSight=!blocked(origin,target);
         // The weapon comes up when the target is in range and drops back after a moment.
-        const bool canAim=(inRange && !blocked(origin,target)) || e.warning>0;
+        const bool canAim=((inRange||bossSight) && clearSight) || e.warning>0;
         e.raise=approach(e.raise,canAim?1.f:0.f,dt*(canAim?7.2f*authored.aimRaise:3.0f*authored.braking));
-        if (boss && std::abs(d.x)<555 && !bossActive) {
+        if (boss && std::abs(d.x)<710 && !bossActive) {
             bossActive=true; message({origin.x,e.box.y-18},stage->boss,hex(stage->accent),1.7f);
             shake=8; audio.event("launch",.76f);
         }
@@ -75,9 +78,13 @@ void Game::moveEnemies(float dt) {
             const bool scavenger=e.kind==EnemyKind::scavenger;
             const bool sniper=e.kind==EnemyKind::sniper;
             const bool heavy=e.kind==EnemyKind::bulwark || e.kind==EnemyKind::juggernaut;
-            if (inRange || (scavenger && std::abs(d.x)<390)) e.facing=sign(d.x);
+            if (inRange || bossSight || (scavenger && std::abs(d.x)<390)) e.facing=sign(d.x);
+            const float integrity=boss?float(e.hp)/std::max(1,e.maxHp):1.f;
+            const auto intent=boss_tactics::decide(time+e.phase*.007f,integrity,bossPhase,
+                std::abs(d.x),e.speed,pace,clearSight);
             float targetSpeed=0;
-            if (scavenger && std::abs(d.x)<390) targetSpeed=e.facing*e.speed*pace*(std::abs(d.x)<170?-.55f:1.f);
+            if (boss && bossActive) targetSpeed=e.facing*intent.desiredSpeed;
+            else if (scavenger && std::abs(d.x)<390) targetSpeed=e.facing*e.speed*pace*(std::abs(d.x)<170?-.55f:1.f);
             else if (sniper && std::abs(d.x)<210) targetSpeed=-e.facing*e.speed*pace;
             else if (sniper && std::abs(d.x)>390) targetSpeed=e.facing*e.speed*.35f*pace;
             else if (stalker || (inRange && e.warning<=0 && std::abs(d.x)>(boss?188:171)))
@@ -85,9 +92,17 @@ void Game::moveEnemies(float dt) {
             else if (!inRange && !boss) targetSpeed=e.facing*e.speed*.60f*pace;
             if (heavy) targetSpeed*=.65f;
             if (e.flinch>0) targetSpeed*=.3f;
-            e.vx=approach(e.vx,targetSpeed,dt*(stalker || scavenger?670.f:420.f)*
+            e.vx=approach(e.vx,targetSpeed,dt*(boss?890.f*(1.f+bossPhase*.22f):(stalker || scavenger?670.f:420.f))*
                             (targetSpeed==0?authored.braking:authored.acceleration));
-            const float desired=clamp(e.box.x+e.vx*dt,e.origin.x-e.patrol,e.origin.x+e.patrol);
+            // Guardians use the actual final ground deck as a large tactical arena,
+            // not a narrow patrol centered on the spawn point.
+            float left=e.origin.x-e.patrol, right=e.origin.x+e.patrol;
+            if (boss && bossActive && !stage->ground.empty()) {
+                const Rect& deck=stage->ground.back();
+                left=std::max(deck.x+72.f,stage->exit.x-1110.f);
+                right=std::max(left,deck.right()-e.box.w-80.f);
+            }
+            const float desired=clamp(e.box.x+e.vx*dt,left,right);
             const float footing=groundedEnemyX(*stage,e,oldX,desired);
             e.box.x=footing;
             // Feet follow the actual stair elevation. Patrol range still caps
@@ -104,7 +119,7 @@ void Game::moveEnemies(float dt) {
                 e.facing=desired>oldX?-1:1;
                 e.vx=0;
             }
-            if (e.box.x==e.origin.x-e.patrol || e.box.x==e.origin.x+e.patrol) {
+            if (e.box.x<=left+.02f || e.box.x>=right-.02f) {
                 if (!inRange && !boss && e.patrol>0) e.facing=e.box.x<e.origin.x?1:-1;
                 e.vx=0;
             }
@@ -118,7 +133,9 @@ void Game::moveEnemies(float dt) {
                 e.box.y=std::min(e.base-e.box.h,e.box.y+e.vertical*dt);
                 if (e.box.bottom()>=e.base-.01f) { if (e.vertical>120) e.landed=1; e.vertical=0; }
             }
-            if (boss) e.box.y=e.origin.y-(stage->biome==Biome::orbital?33+std::sin(time*2.4f)*24:std::max(0.f,std::sin(time*2.7f))*4);
+            if (boss) e.box.y=e.origin.y-(stage->biome==Biome::orbital?
+                33+std::sin(time*(2.4f+bossPhase*.35f))*24+intent.lift:
+                std::max(0.f,std::sin(time*2.7f))*4+intent.lift);
             for (const auto& wall:stage->cover) {
                 if (!e.box.overlaps(wall)) continue;
                 if (oldX+e.box.w<=wall.x) e.box.x=wall.x-e.box.w;
@@ -136,19 +153,21 @@ void Game::moveEnemies(float dt) {
         }
         if (mode!=Mode::active) return;
         if (e.kind==EnemyKind::stalker || e.kind==EnemyKind::scavenger) continue;
-        const bool visible=inRange && entry<.95f && !blocked(origin,target);
+        const bool visible=(inRange||bossSight) && entry<.95f && clearSight;
         if (e.warning>0) {
             e.warning=std::max(0.f,e.warning-dt);
             if (e.warning==0) {
-                if (visible || boss) enemyFire(e,target.x);
-                e.timer=(boss?pattern.interval:spec(e.kind).delay)/pace;
+                if (visible) enemyFire(e,target.x);
+                e.timer=boss?pattern.interval*boss_tactics::decide(time, float(e.hp)/std::max(1,e.maxHp),
+                    bossPhase,std::abs(d.x),e.speed,pace,clearSight).attackInterval/pace:
+                    spec(e.kind).delay/pace;
             }
         } else if (visible) {
             e.timer-=dt;
             if (e.timer<=0) {
                 const float telegraph=e.kind==EnemyKind::sniper?.68f:
                     e.kind==EnemyKind::juggernaut?.52f:
-                    e.kind==EnemyKind::bulwark?.42f:boss?.38f:e.elite?.31f:.26f;
+                    e.kind==EnemyKind::bulwark?.42f:boss?.38f/(1.f+.22f*bossPhase):e.elite?.31f:.26f;
                 e.warning=std::max(boss?.27f:.19f,telegraph/pace);
                 e.aim=std::atan2(d.y,d.x);
             }

@@ -1,4 +1,5 @@
 #include "content/stages.hpp"
+#include "game/stairs.hpp"
 #include <algorithm>
 #include <string>
 
@@ -105,6 +106,26 @@ const std::array<Stage,cooperativeSectorCount> cooperativeStages=[] {
         s.cover.push_back({s.worldWidth-500.f,bottom-43.f,45.f,43.f});
         s.supplies.push_back({SupplyKind::health,s.worldWidth-545.f,bottom});
         s.enemies.push_back({EnemyKind::boss,s.worldWidth-345.f,bottom,140.f,sector>=4});
+        // Co-op guardian encounters also have open final arenas. Keep all
+        // relay gates and their original offsets unchanged.
+        const float originalEnd=s.worldWidth;
+        constexpr float extra=320.f;
+        s.ground.back().w+=extra;
+        s.worldWidth+=extra;
+        s.exit.x+=extra;
+        const float arenaLeft=s.worldWidth-1120.f;
+        for (int side=0;side<2;++side) {
+            const float base=arenaLeft+120.f+side*710.f;
+            const float rise=side==0?88.f:116.f;
+            s.ledges.push_back({base+109.f,bottom-rise,148.f,17.f});
+            s.stairs.push_back({{base,bottom},{base+148.f,bottom-rise}});
+        }
+        s.enemies.back().x=s.worldWidth-430.f;
+        s.enemies.back().patrol=450.f;
+        std::erase_if(s.cover,[&](const Rect& wall) {
+            return wall.x>originalEnd-930.f && wall.y>=bottom-85.f;
+        });
+        std::erase_if(s.stairs,[&](const Stair& stair){return exitStairConflict(stair,s.exit);});
         result[sector]=std::move(s);
     }
     return result;

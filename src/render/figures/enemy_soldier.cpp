@@ -1,6 +1,7 @@
 #include "render/figures/enemy_view.hpp"
 #include "render/figures/humanoid.hpp"
 #include "content/enemy_motion.hpp"
+#include "game/running_cycle.hpp"
 
 namespace vl {
 // Soldier built on the shared human rig. The rifle is carried low until a target is in range, and then raised.
@@ -17,20 +18,20 @@ void Renderer::drawSoldier(const EnemyView& v) {
     h.ground=ground; h.facing=v.facing; h.stride=v.facing; h.turn=v.turn;
     const float cycle=std::fmod(e.distance/56*h.model->walkCycle,1.f);
     const float pace=e.alive?v.pace:0.f;
+    const float stance=.55f; // armed soldiers use a shorter, patrol-speed stride
     for (int i=0;i<2;++i) {
-        const float c=std::fmod(cycle+.5f*i,1.f);
-        const bool stance=c<.61f;
-        const float u=stance?c/.61f:(c-.61f)/.39f;
-        const float xFoot=(stance?mix(15.f,-14.f,u):mix(-14.f,15.f,smooth(u)))*pace*v.facing;
-        const float rise=stance?0.f:std::sin(pi*u)*7.f*pace;
-        h.heels[i]={x+xFoot+(i==0?-3.5f:3.5f),ground.y-rise};
-        const float ang=stance?.26f*(1-smooth(u/.2f))-.34f*smooth((u-.7f)/.3f):mix(-.34f,.26f,smooth(u));
-        h.footAngle[i]=ang*pace;
+        const auto footStep=running::sample(cycle+.5f*i,stance);
+        const float fore=footStep.planted?mix(14.f,-13.f,footStep.progress):
+            mix(-13.f,14.f,footStep.progress);
+        h.heels[i]={x+fore*pace*v.facing+(i==0?-3.5f:3.5f),
+                    ground.y-footStep.clearance*12.f*pace};
+        h.footAngle[i]=footStep.pitch*pace;
     }
     h.grounded=true;
     h.lean=clamp(e.vx/96*.15f,-.2f,.2f)-e.flinch*e.kick*.05f;
     h.run=pace*.55f; h.weight=pace; h.cycle=cycle;
-    h.pelvis=std::cos(cycle*4*pi-.4f)*pace*1.3f;
+    h.pelvis=mix(std::cos(cycle*4*pi-.4f)*.7f,
+                 running::hipOffset(cycle),pace*.55f)*pace;
     if(!e.alive)h.action=ActionPose::death;
     else if(e.flinch>.75f || e.buckle>.8f)h.action=ActionPose::stagger;
     else if(e.flinch>.35f)h.action=ActionPose::hit;
@@ -39,11 +40,16 @@ void Renderer::drawSoldier(const EnemyView& v) {
     else if(e.raise>.2f)h.action=ActionPose::alert;
     else if(std::abs(e.vx)>4.f &&
             std::abs(e.base-(e.origin.y+e.box.h))>8.f)h.action=ActionPose::stairs;
-    else if(std::abs(e.vx)>4.f && e.raise>.2f)h.action=ActionPose::chase;
     else if(std::abs(e.vx)>4.f)h.action=ActionPose::patrol;
     else h.action=ActionPose::idle;
     h.actionWeight=e.alive?1.f:std::min(1.f,v.dead/.25f);
-    h.time=v.time+e.phase; h.velocity={e.vx,0}; h.landed=0; h.flinch=e.flinch;
+    // Humanoid enemies sample the same authored keyframe tracks as players.
+    const float actionTime=v.time+e.phase;
+    h.actionPhase=actionTime-std::floor(actionTime);
+    if(h.action==ActionPose::death)h.actionPhase=clamp(v.dead/.5f);
+    else if(h.action==ActionPose::stagger || h.action==ActionPose::hit)
+        h.actionPhase=clamp(1.f-e.flinch);
+    h.time=actionTime; h.velocity={e.vx,0}; h.landed=0; h.flinch=e.flinch;
     h.headSnap=e.headSnap; h.buckle=e.buckle*.3f;
     h.scarf=false; h.gripFromChest=true; h.farFree=false;
     // The far hand lets go of the rifle while the soldier is walking and hasn't seen the target.

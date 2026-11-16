@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(voidline VERSION 2.10.23 LANGUAGES CXX)
+project(voidline VERSION 2.10.35 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -83,6 +83,9 @@ target_include_directories(voidline PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_compile_options(voidline PRIVATE ${VOIDLINE_WARNINGS})
 target_link_libraries(voidline PRIVATE voidline_ui)
 if(WIN32)
+  enable_language(RC)
+  target_sources(voidline PRIVATE ${CMAKE_SOURCE_DIR}/icons/voidline.rc)
+  target_include_directories(voidline PRIVATE ${CMAKE_SOURCE_DIR}/icons)
   target_link_libraries(voidline PRIVATE d3d12 dxgi dxguid)
   if(MINGW)
     target_link_options(voidline PRIVATE -municode)
@@ -98,6 +101,15 @@ add_custom_command(OUTPUT ${VOIDLINE_ASSET_PACK}
   COMMENT "Bundling artwork and audio into game.vpak"
   VERBATIM)
 add_custom_target(voidline_media ALL DEPENDS ${VOIDLINE_ASSET_PACK})
+# Every incremental build regenerates action catalogs from current source model
+# JSON (if changed), so saving a pose in Model Studio is enough to incorporate
+# it into the next Linux or Windows game build. No editor cache/PAK is an input.
+add_custom_target(voidline_authoring_catalogs
+  COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/pose-keyframes.py
+          ${CMAKE_SOURCE_DIR} --sync
+  COMMENT "Synchronizing editable model animation keyframes"
+  VERBATIM)
+add_dependencies(voidline_media voidline_authoring_catalogs)
 add_dependencies(voidline voidline_media)
 # Editable stages are loose JSON read beside the executable by Game::start.
 # Publish Models+Levels writes only changed overrides to source/levels;
@@ -159,6 +171,8 @@ if(BUILD_TESTING)
   target_compile_definitions(voidline_tests PRIVATE VOIDLINE_TEST_ASSET_ROOT="${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets"
     VOIDLINE_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
   add_test(NAME voidline_tests COMMAND voidline_tests)
+  add_test(NAME voidline_boss_arenas
+           COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/boss-arenas.py ${CMAKE_SOURCE_DIR} --verify)
   add_test(NAME voidline_authored_levels
            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/test_authored_levels.py)
   add_test(NAME voidline_level_sync

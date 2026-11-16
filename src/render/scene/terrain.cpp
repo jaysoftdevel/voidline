@@ -49,6 +49,23 @@ void Renderer::terrain(const Game& g) {
             line(foot,foot+Vec{0,31},2.f,tone.energy(.4f));
         }
     }
+    for (const Ladder& ladder:g.stage->ladders) {
+        if (!visible(ladder.x-28.f,56.f)) continue;
+        const float x=ladder.x+offset.x;
+        const float top=ladder.top+offset.y,bottom=ladder.bottom+offset.y;
+        // A rigid, narrow rung assembly; the operative is drawn afterwards
+        // in front of these rails rather than inside a foreground cage.
+        const Color steel=tone.energy(.84f),rim=cold.energy(1.2f);
+        line({x-12,top},{x-12,bottom},4.f,hex(0x0d1820));
+        line({x+12,top},{x+12,bottom},4.f,hex(0x0d1820));
+        line({x-12,top},{x-12,bottom},2.1f,steel);
+        line({x+12,top},{x+12,bottom},2.1f,steel);
+        for (float y=top+11.f;y<bottom-4.f;y+=18.f) {
+            line({x-10,y},{x+10,y},3.f,hex(0x08121a));
+            line({x-9,y-1},{x+9,y-1},1.5f,rim);
+        }
+        ellipse({x,top},{5,2},accent.energy(1.5f));
+    }
     for (const auto& surface:g.platforms) {
         if (!surface.ground || !visible(surface.box.x,surface.box.w)) continue;
         const auto& b=surface.box;

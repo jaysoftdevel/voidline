@@ -35,10 +35,26 @@ void runEditorTests() {
             CHECK(loaded.worldWidth==input.worldWidth);
             CHECK(loaded.enemies.size()==input.enemies.size());
             CHECK(loaded.stairs.size()==input.stairs.size());
+            CHECK(loaded.ladders.size()==input.ladders.size());
             CHECK(loaded.relays.size()==input.relays.size());
             CHECK(levelFingerprint(loaded)==levelFingerprint(input));
             CHECK(loaded.insertion.x==110.f);
         }
+    }
+    // Ladder edits must round-trip through the same source JSON and change the
+    // multiplayer compatibility fingerprint, without an editor-only cache.
+    {
+        Stage input=stages[0];
+        input.ladders={{275.f,350.f,500.f}};
+        const auto file=levelFile(folder/"levels",0,false);
+        std::string error;
+        CHECK(writeLevel(file,input,0,false,&error));
+        Stage output{};
+        CHECK(readLevel(file,stages[0],output,0,false,&error));
+        CHECK(output.ladders.size()==1);
+        CHECK(output.ladders[0].x==275.f);
+        CHECK(levelFingerprint(input)==levelFingerprint(output));
+        CHECK(levelFingerprint(input)!=levelFingerprint(stages[0]));
     }
     // Optional user-authored angled structure outline persists through the
     // level model and affects its compatibility hash (collision stays rectangular).

@@ -11,6 +11,10 @@ class ClipboardTests(unittest.TestCase):
     def setUp(self):
         self.source=prepare_motion({"schema":"voidline-character-v4","id":1,"name":"Source"})
         self.target=prepare_motion({"schema":"voidline-character-v4","id":4,"name":"Target"})
+        for model in (self.source, self.target):
+            model['skeleton']['sequences'] = {'jump': [[0., 0.] for _ in range(14)],
+                                               'hit': [[0., 0.] for _ in range(14)]}
+            model['skeleton']['sequenceDepth'] = {'jump': [0.]*14, 'hit': [0.]*14}
 
     def test_model_copy_paste_preserves_destination_slot_and_source(self):
         original=copy.deepcopy(self.source)
@@ -31,15 +35,25 @@ class ClipboardTests(unittest.TestCase):
         with self.assertRaises(ValueError):paste_model_payload("{}",self.target,"character")
 
     def test_movement_across_named_poses_and_models(self):
-        self.source["skeleton"]["sequences"]["wall_jump"][2]=[20.0,-9.5]
-        self.source["skeleton"]["sequenceDepth"]["wall_jump"][2]=5.25
-        payload=copy_movement_payload(self.source,"wall_jump")
-        result=paste_movement_payload(payload,self.target,"dodge")
-        self.assertEqual(result["skeleton"]["sequences"]["dodge"][2],[20.,-9.5])
-        self.assertEqual(result["skeleton"]["sequenceDepth"]["dodge"][2],5.25)
-        self.assertNotIn("dodge",self.target["skeleton"]["sequences"])
+        self.source["skeleton"]["sequences"]["jump"][2]=[20.0,-9.5]
+        self.source["skeleton"]["sequenceDepth"]["jump"][2]=5.25
+        payload=copy_movement_payload(self.source,"jump")
+        result=paste_movement_payload(payload,self.target,"hit")
+        self.assertEqual(result["skeleton"]["sequences"]["hit"][2],[20.,-9.5])
+        self.assertEqual(result["skeleton"]["sequenceDepth"]["hit"][2],5.25)
+        self.assertEqual(self.target["skeleton"]["sequences"]["hit"][2],[0.,0.])
+        with self.assertRaisesRegex(ValueError,"valid destination"):
+            paste_movement_payload(payload,self.target,"dodge")
         legacy=paste_movement_payload(payload,self.target,"aim")
         self.assertEqual(legacy["skeleton"]["aim"][2],[20.,-9.5])
+
+    def test_movement_clipboard_includes_animated_keyframes(self):
+        frames=[[[0.0,0.0] for _ in range(14)] for _ in range(5)]
+        frames[2][10]=[3.0,-8.0]
+        self.source['skeleton']['poseFrames']={'jump':frames}
+        output=paste_movement_payload(copy_movement_payload(self.source,'jump'),self.target,'hit')
+        self.assertEqual(output['skeleton']['poseFrames']['hit'][2][10],[3.,-8.])
+        self.assertNotIn('poseFrames',self.target['skeleton'])
 
     def test_bad_movement_data_is_rejected(self):
         data=json.loads(copy_movement_payload(self.source,"run"))

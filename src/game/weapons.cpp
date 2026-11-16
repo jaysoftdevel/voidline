@@ -6,7 +6,12 @@ void Game::reload() {
     auto& g=guns[gun];
     if (g.reload>0 || g.ammo>=g.capacity || g.reserve==0) return;
     g.reload=g.duration;
-    audio.event("reload",1,0,clamp(.73f/g.duration,.58f,1.65f));
+    // Each weapon has its own timed action: magazine latch, shells, rotary
+    // cylinder, energy cell or heavy breech. No global pitch-shifted reload.
+    constexpr const char* reloadSounds[weaponCount]{
+        "reload-carbine","reload-shotgun","reload-arc","reload-pistol",
+        "reload-smg","reload-launcher","reload-railgun"};
+    audio.event(reloadSounds[static_cast<size_t>(gun)],.93f);
 }
 
 void Game::shoot(float dt) {

@@ -18,6 +18,32 @@ class AuthoredLevelTests(unittest.TestCase):
                 ledges = level["ledges"]
                 self.assertTrue(ground)
                 self.assertGreater(len(ledges), 35)
+                # A 39px crouched hitbox must fit, with 8px visual clearance.
+                # Intersecting solid geometry is not an accessible corridor.
+                for upper in ledges:
+                    for lower in ground + ledges:
+                        if upper is lower or upper[1] >= lower[1]:
+                            continue
+                        horizontal = min(upper[0] + upper[2], lower[0] + lower[2]) - max(upper[0], lower[0])
+                        gap = lower[1] - upper[1] - upper[3]
+                        if horizontal > 36 and gap >= 0:
+                            self.assertGreaterEqual(gap, 46.9, "Crouched operative cannot fit beneath platform")
+                # Climbable ladders have a supported entry/exit and descend
+                # to a lower deck. The final scripted lift moves up and down.
+                self.assertGreaterEqual(len(level.get('ladders', [])), 3)
+                self.assertGreaterEqual(len(level.get('lifts', [])), 1)
+                lift = level['lifts'][-1]
+                self.assertGreaterEqual(abs(lift[4]), 35)
+                self.assertGreater(lift[5], 0)
+                for x, top, bottom in level['ladders']:
+                    self.assertGreater(bottom - top, 50)
+                    self.assertTrue(any(abs(deck[1]-top)<3 and deck[0]-8 <= x <= deck[0]+deck[2]+8
+                                        for deck in ground+ledges), "Ladder top has no deck")
+                    self.assertTrue(any(abs(deck[1]-bottom)<3 and deck[0]-8 <= x <= deck[0]+deck[2]+8
+                                        for deck in ground+ledges), "Ladder bottom has no deck")
+                if path.name.startswith('sector-'):
+                    self.assertGreater(max(r[1] for r in ledges), min(r[1] for r in ground) + 30,
+                                       "Campaign levels need a lower-baseline service route")
                 self.assertGreaterEqual(ground[0][2], 200)
                 self.assertAlmostEqual(level["insertion"][1], ground[0][1], delta=10)
                 # No vertical cover blocks a first step or extraction interaction.

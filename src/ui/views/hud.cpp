@@ -131,9 +131,9 @@ void App::hud() {
     if (view==View::play && !coopPaused && Rect{0,0,width,height}.contains(mouse) && !input.aimStickActive()) {
         // The luminous lime reticle has a dark silhouette even over white
         // flashes, sky, vegetation and highly saturated enemy projectiles.
-        const Color mark=hex(0xeaff46);
+        const Color mark=hex(0x68e6ac);
         const Color border=hex(0x061018);
-        const float spin=clock*(slow?1.3f:.23f);
+        constexpr float spin=0.f; // fixed orientation, independent of frame time and bullet time
         const float radius=slow?14.f:10.f;
         r.ellipse(mouse,{4.8f,4.8f},border.alpha(.94f));
         for (int i=0;i<4;++i) {

@@ -1,5 +1,6 @@
 #include "ui/app.hpp"
 #include "ui/common.hpp"
+#include "ui/sector_story.hpp"
 #include <iomanip>
 #include <sstream>
 
@@ -40,7 +41,11 @@ void App::show(View v) {
     }
     if (v!=View::multiplayer) SDL_StopTextInput();
     SDL_ShowCursor(v==View::play?0:1);
-    if (v!=View::play && v!=View::pause && v!=View::intro && v!=View::failed && v!=View::epilogue) audio.track("menu");
+    if (v!=View::play && v!=View::pause && v!=View::intro && v!=View::failed && v!=View::epilogue && v!=View::gameMenu) {
+        const bool calm=v==View::settings || v==View::graphics || v==View::controls;
+        const bool planning=v==View::armory || v==View::campaign || v==View::create;
+        audio.track(calm?"menu-atmosphere":planning?"menu-hangar":"menu");
+    }
 }
 
 void App::inform(std::string message) { notification=std::move(message); notice=4; }
@@ -96,8 +101,38 @@ void App::closeAction() {
     case View::cleared:
     case View::failed: showMap(); break;
     case View::confirm: show(confirmReturn); break;
+    case View::gameMenu: {
+        const View destination=gameMenuReturn;
+        show(destination);
+        if (destination==View::multiplayer && lobby!=Lobby::menu &&
+            network.state()==net::Session::State::idle) SDL_StartTextInput();
+        if (destination==View::intro) audio.track("coop-intro",false,film);
+        if (destination==View::epilogue && film>0)
+            audio.track(story::track(game.index),false,film);
+        break;
+    }
     default: show(View::menu); break;
     }
+}
+
+void App::openGameMenu() {
+    // Escape in the main menu retains the original Quit shortcut; every
+    // subsequent single-player screen gets a dedicated game-menu frame.
+    if (view==View::splash || view==View::menu) { closeAction(); return; }
+    if (view==View::gameMenu || view==View::pause) { closeAction(); return; }
+    if (view==View::confirm &&
+        (confirmReturn==View::gameMenu || confirmReturn==View::pause)) {
+        show(confirmReturn); return;
+    }
+    if (view==View::play) { closeAction(); return; } // Pause owns the simulation.
+    if ((view==View::settings || view==View::graphics || view==View::controls) &&
+        (settingsReturn==View::gameMenu || settingsReturn==View::pause)) {
+        rebinding=-1; show(settingsReturn); return;
+    }
+    if (view==View::controls) rebinding=-1;
+    gameMenuReturn=view;
+    if (view==View::intro || view==View::epilogue) audio.track("");
+    show(View::gameMenu);
 }
 
 void App::navigate(int direction) {
@@ -141,7 +176,7 @@ void App::event(const SDL_Event& e) {
     }
     if ((view==View::intro || (view==View::coopLoading && mission==1 && loadingMusic)) &&
         (e.type==sdl::mouseDown || (e.type==sdl::keyDown && !e.key.repeat &&
-          (e.key.keysym.scancode==sdl::key::esc || e.key.keysym.scancode==sdl::key::space || e.key.keysym.scancode==sdl::key::enter)) ||
+          (e.key.keysym.scancode==sdl::key::space || e.key.keysym.scancode==sdl::key::enter)) ||
          (e.type==sdl::controllerButton && e.cbutton.state))) {
         // A prologue skip owns the input edge; it cannot click through into gameplay.
         skipPrologue();
@@ -180,9 +215,10 @@ void App::event(const SDL_Event& e) {
     const int key=e.key.keysym.scancode;
     if (key==sdl::key::f11) { changeFullscreen(); return; }
     if (key==sdl::key::f3) { settings.diagnostics=!settings.diagnostics; input.resetPeak(); commitSettings(); return; }
+    // Escape opens a consistent menu from every screen beyond the main menu;
+    // unlike Space/Enter, it no longer skips the opening cinematic.
+    if (key==sdl::key::esc) { openGameMenu(); return; }
     if (view==View::controls && rebinding>=0) { captureKey(key); return; }
-    // Esc is reserved, so it always works. P and the gamepad's Start button pause through the polled action.
-    if (key==sdl::key::esc) { closeAction(); return; }
     if (view==View::play && !coopPaused) return;
     if (view==View::intro && (key==sdl::key::space || key==sdl::key::enter)) { launch(0); return; }
     if (key==sdl::key::down || key==sdl::key::right || key==sdl::key::tab) navigate(1);
@@ -239,6 +275,7 @@ void App::draw() {
     switch (view) {
     case View::splash: splash(); break;
     case View::menu: menu(); break;
+    case View::gameMenu: gameMenu(); break;
     case View::multiplayer: multiplayer(); break;
     case View::create: create(); break;
     case View::load: load(); break;
@@ -277,7 +314,7 @@ void App::draw() {
         break;
     }
     if (settings.diagnostics && view!=View::coopLoading && view!=View::epilogue) diagnostics();
-    if (settings.fpsCounter) {
+    if (settings.fpsCounter && !r.drawFpsOutside(fpsDisplayed,settings.fpsCorner)) {
         const bool left=settings.fpsCorner==0 || settings.fpsCorner==2;
         const bool top=settings.fpsCorner<2;
         // Keep corner placement clear of menu headings and the gameplay HUD.

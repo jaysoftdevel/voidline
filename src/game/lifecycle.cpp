@@ -199,6 +199,7 @@ void Game::input(Key key,bool down) {
     if (state || mode!=Mode::active) return;
     state=true;
     if (key==Key::jump) player.jumpBuffer=.135f;
+    if (key==Key::crouch) player.stairDropRequested=true;
     if (key==Key::reload) reload();
     if (key==Key::fire || key==Key::automatic) player.fireBuffer=.115f;
 }

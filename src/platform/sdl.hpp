@@ -7,6 +7,7 @@ using U16 = uint16_t;
 using U32 = uint32_t;
 struct SDL_Window;
 struct SDL_GameController;
+struct SDL_Surface;
 struct SDL_Rect { int x,y,w,h; };
 struct SDL_AudioSpec {
     int freq; U16 format; U8 channels,silence; U16 samples,padding; U32 size;
@@ -38,6 +39,9 @@ int SDL_GL_LoadLibrary(const char*);
 SDL_Window* SDL_CreateWindow(const char*,int,int,int,int,U32);
 void SDL_DestroyWindow(SDL_Window*);
 void SDL_SetWindowTitle(SDL_Window*,const char*);
+SDL_Surface* SDL_CreateRGBSurfaceFrom(void*,int,int,int,int,U32,U32,U32,U32);
+void SDL_SetWindowIcon(SDL_Window*,SDL_Surface*);
+void SDL_FreeSurface(SDL_Surface*);
 void SDL_SetWindowMinimumSize(SDL_Window*,int,int);
 U32 SDL_GetWindowFlags(SDL_Window*);
 int SDL_SetWindowFullscreen(SDL_Window*,U32);

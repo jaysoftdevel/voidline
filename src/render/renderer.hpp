@@ -34,6 +34,8 @@ public:
     float renderScale() const { return resolution; }
     void begin();
     void end();
+    // Draw the FPS badge in the unused letterbox, or return false if there is none.
+    bool drawFpsOutside(int fps,int corner);
     void drawWorld(const Game& game,bool motion,float interpolation,const Player& previous,float previousCamera,float previousCameraY,const Player* previousPartner=nullptr,
                    const WorldMotion* previousWorld=nullptr,Vec tilt={});
     Vec worldAt(Vec screen) const { return cameraView.sample(screen)-offset; }

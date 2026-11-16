@@ -109,6 +109,12 @@ bool readLevel(const std::filesystem::path& file,const Stage& base,Stage& result
             std::array<float,8> a{};if (!tuple(j,4,a)) return false;
             s={{a[0],a[1]},{a[2],a[3]}};return validStair(s);
         })) return fail(error,"Invalid staircase endpoints.");
+    if (field(root.get(),"ladders") &&
+        !readArray(root.get(),"ladders",edit.ladders,[](json_object* j,Ladder& l) {
+            std::array<float,8> a{};if (!tuple(j,3,a)) return false;
+            l={a[0],a[1],a[2]};
+            return l.x>=0.f && l.top>=-500.f && l.bottom>l.top+45.f && l.bottom<2000.f;
+        })) return fail(error,"Invalid climbable ladder.");
     if (!readArray(root.get(),"lifts",edit.lifts,[](json_object* j,Lift& l) {
             std::array<float,8> a{};if (!tuple(j,7,a)) return false;
             l={a[0],a[1],a[2],a[3],a[4],a[5],a[6]};
@@ -191,7 +197,8 @@ bool readLevel(const std::filesystem::path& file,const Stage& base,Stage& result
     if (edit.exit.x<0 || edit.exit.x>edit.worldWidth || edit.insertion.x<0 ||
         edit.insertion.x>edit.worldWidth-48.f || edit.ground.front().x>100 ||
         edit.ground.front().w<200 ||
-        std::any_of(edit.stairs.begin(),edit.stairs.end(),[&](const Stair& s) {return s.from.x<0||s.to.x>edit.worldWidth;}))
+        std::any_of(edit.stairs.begin(),edit.stairs.end(),[&](const Stair& s) {return s.from.x<0||s.to.x>edit.worldWidth;}) ||
+        std::any_of(edit.ladders.begin(),edit.ladders.end(),[&](const Ladder& l) {return l.x>edit.worldWidth;}))
         return fail(error,"Invalid insertion point, exit, or staircase bounds.");
     result=std::move(edit);
     return true;
@@ -216,6 +223,7 @@ bool writeLevel(const std::filesystem::path& file,const Stage& s,int sector,
     putArray(root.get(),"cover",s.cover,rect);
     putArray(root.get(),"beacons",s.beacons,vec);
     putArray(root.get(),"stairs",s.stairs,[](const Stair& st){return array({st.from.x,st.from.y,st.to.x,st.to.y});});
+    putArray(root.get(),"ladders",s.ladders,[](const Ladder& l){return array({l.x,l.top,l.bottom});});
     putArray(root.get(),"lifts",s.lifts,[](const Lift& l){return array({l.x,l.y,l.w,l.dx,l.dy,l.period,l.phase});});
     putArray(root.get(),"vents",s.vents,[](const Vent& v){return array({v.x,v.y,v.phase});});
     putArray(root.get(),"enemies",s.enemies,[](const EnemyPlacement& e){return array({float(int(e.kind)),e.x,e.y,e.patrol,float(e.elite)});});
@@ -259,6 +267,7 @@ uint32_t levelFingerprint(const Stage& s) {
     feed(uint32_t(s.ledges.size()));for(auto& a:s.ledges)rect(a);
     feed(uint32_t(s.cover.size()));for(auto& a:s.cover)rect(a);
     feed(uint32_t(s.stairs.size()));for(auto& a:s.stairs){vec(a.from);vec(a.to);}
+    feed(uint32_t(s.ladders.size()));for(auto& a:s.ladders){f(a.x);f(a.top);f(a.bottom);}
     feed(uint32_t(s.lifts.size()));for(auto& a:s.lifts){f(a.x);f(a.y);f(a.w);f(a.dx);f(a.dy);f(a.period);f(a.phase);}
     feed(uint32_t(s.enemies.size()));for(auto& a:s.enemies){feed(uint32_t(a.kind));f(a.x);f(a.y);f(a.patrol);feed(a.elite);}
     feed(uint32_t(s.beacons.size()));for(auto& a:s.beacons)vec(a);

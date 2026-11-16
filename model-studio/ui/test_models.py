@@ -37,6 +37,26 @@ class ModelTests(unittest.TestCase):
         p15=sample_joint(doc,12,"run",15)
         self.assertNotEqual(p0[0],p15[0])
 
+    def test_authored_nonlocomotion_sequences_animate_across_frames(self):
+        from pathlib import Path
+        import json
+        root=Path(__file__).resolve().parents[2]
+        doc=json.loads((root/'models/characters/0.vlcharacter.json').read_text())
+        for pose,joint in (("jump",12),("fall",12),("land",0),("crouch",0)):
+            a=sample_joint(doc,joint,pose,0)
+            b=sample_joint(doc,joint,pose,24)
+            self.assertNotEqual(a[:2],b[:2],pose)
+        # The exact authored frame must be linearly interpolated, not replaced
+        # with a hidden editor-only animation.
+        rig=doc['skeleton']
+        pose='jump';joint=12
+        original=rig['poseFrames'][pose][0][joint][:]
+        rig['poseFrames'][pose][0][joint][0]+=3.5
+        changed=sample_joint(doc,joint,pose,0)
+        rig['poseFrames'][pose][0][joint]=original
+        baseline=sample_joint(doc,joint,pose,0)
+        self.assertAlmostEqual(changed[0]-baseline[0],3.5)
+
     def test_pose_is_not_mutated_by_preview(self):
         doc=prepare_motion({"schema":"voidline-enemy-v2","id":0})
         original=copy.deepcopy(doc)

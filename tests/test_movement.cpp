@@ -2,11 +2,50 @@
 #include "support.hpp"
 #include "game/enemy_ground.hpp"
 #include "game/detail.hpp"
+#include "game/running_cycle.hpp"
+#include "game/boss_tactics.hpp"
+#include "game/geometry.hpp"
+#include "game/stairs.hpp"
+#include "content/skeleton_types.hpp"
 
 using namespace test;
 using namespace vl;
 
 namespace {
+void bossAggression() {
+    using namespace vl::boss_tactics;
+    const auto early=decide(1.f,1.f,0,400.f,67.f,1.f,true);
+    const auto raging=decide(1.f,.16f,2,400.f,67.f,1.f,true);
+    CHECK(raging.desiredSpeed>early.desiredSpeed);
+    CHECK(raging.attackInterval<early.attackInterval);
+    CHECK(raging.telegraph<early.telegraph);
+    CHECK(decide(1.f,.16f,2,400.f,67.f,1.f,false).attack==false);
+    CHECK(decide(1.f,.16f,2,90.f,67.f,1.f,true).desiredSpeed<0.f);
+}
+
+void bossArenaPursuit() {
+    Silent audio;
+    Game game(audio);
+    game.start(0,startSave());
+    game.entry=0;
+    const auto bossIt=std::find_if(game.enemies.begin(),game.enemies.end(),[](const Enemy& e) {
+        return e.kind==EnemyKind::boss;
+    });
+    CHECK(bossIt!=game.enemies.end());
+    if (bossIt==game.enemies.end()) return;
+    Enemy& boss=*bossIt;
+    game.player.box.x=boss.box.x-450.f;
+    game.player.box.y=boss.box.bottom()-game.player.box.h;
+    const float original=boss.box.x;
+    for (int i=0;i<120;++i) game.tick();
+    CHECK(game.bossActive);
+    CHECK(boss.box.x<original-12.f);
+    CHECK(boss.box.x>=game.stage->ground.back().x);
+    boss.hp=std::max(1,boss.maxHp/4);
+    for (int i=0;i<6;++i) game.tick();
+    CHECK(game.bossPhase>=2);
+}
+
 void chordsDriveTheGame() {
     using namespace vl;
     Silent audio;
@@ -257,7 +296,196 @@ void stairJoinsRaisedPlatformInBothDirections() {
 }
 }
 
+void runningStrideFootfallSequence() {
+    // At one full run cycle two feet land half a stride apart. There must be
+    // an airborne phase between each pair of contacts, not sliding feet.
+    constexpr float stance=.38f;
+    const auto strike=running::sample(0.f,stance);
+    CHECK(strike.planted && strike.pitch>.2f);
+    CHECK(running::sample(.32f,stance).planted);
+    CHECK(!running::sample(.40f,stance).planted);
+    CHECK(running::sample(.68f,stance).clearance>.65f);
+    CHECK(running::sample(.68f,stance).progress>running::sample(.40f,stance).progress);
+    CHECK(running::sample(.9999f,stance).clearance<.01f);
+    CHECK(std::abs(running::sample(1.f,stance).pitch-strike.pitch)<.001f);
+    for(float phase: {0.f,.25f,.40f,.50f,.68f,.90f}) {
+        const auto far=running::sample(phase,stance);
+        const auto near=running::sample(phase+.5f,stance);
+        CHECK(running::sample(phase+1.f,stance).planted==far.planted);
+        CHECK(std::abs(running::hipOffset(phase)-running::hipOffset(phase+.5f))<.0002f);
+        if(phase==.40f || phase==.90f) CHECK(!far.planted && !near.planted);
+    }
+}
+
+void testHumanLimbKinematics() {
+    // Leg lengths must remain physical across large airborne foot offsets,
+    // regardless of the direction or scaling of the model.
+    for(float scale: {.84f,1.f,1.16f}) {
+        const float thigh=15.6f*scale,shin=14.6f*scale;
+        const Vec hip{0,-32};
+        for(Vec target: {Vec{0,60},Vec{100,30},Vec{-95,-80},Vec{3,-33},Vec{0,-35},Vec{0,0}}) {
+            const Vec ankle=reachableAnkle(hip,target,thigh,shin);
+            const Vec knee=solveKnee(hip,ankle,thigh,shin,1);
+            CHECK(std::abs(length(hip-knee)-thigh)<.01f);
+            CHECK(std::abs(length(knee-ankle)-shin)<.01f);
+            CHECK(length(ankle-hip)<=thigh+shin);
+        }
+    }
+    // The actual forward foot decides the shoulder pair, independently of
+    // running direction: same-side shoulder behind, opposite shoulder ahead.
+    for(float axis: {-1.f,1.f}) {
+        const float leadNear=running::footLead(14.f*axis,-14.f*axis,axis);
+        const float leadFar=running::footLead(-14.f*axis,14.f*axis,axis);
+        const auto near=running::counterShoulders(leadNear,4.f);
+        const auto far=running::counterShoulders(leadFar,4.f);
+        CHECK(leadNear>.99f && leadFar<-.99f);
+        CHECK(near.near<0.f && near.far>0.f);
+        CHECK(far.near>0.f && far.far<0.f);
+        CHECK(std::abs(near.near+near.far)<.00001f);
+        CHECK(std::abs(near.near-far.far)<.00001f);
+        CHECK(std::abs(near.far-far.near)<.00001f);
+        CHECK(running::counterShoulders(0.f,4.f).near==0.f);
+        CHECK(running::counterShoulders(leadNear,0.f).near==0.f);
+    }
+    // Pelvis and shoulders counter-rotate; the other footstep reverses the
+    // motion. Hip bob repeats twice in each full two-step cycle.
+    for(float phase: {.06f,.13f,.29f,.43f}) {
+        CHECK(std::abs(running::girdleTurn(phase)+running::girdleTurn(phase+.5f))<.0001f);
+        CHECK(std::abs(running::hipOffset(phase)-running::hipOffset(phase+.5f))<.0002f);
+    }
+}
+
+namespace {
+void ladderTraversalAndDropThrough() {
+    Silent audio;
+    Game game(audio);
+    game.start(0,startSave()); game.entry=0;
+    Stage field=*game.stage;
+    field.ground={{0,500,720,100}};
+    field.ledges={{220,350,170,16},{410,595,190,16}};
+    field.ladders={{288,350,500}};
+    field.stairs.clear(); field.lifts.clear();
+    field.enemies.clear(); field.supplies.clear();
+    game.stage=&field;
+    game.platforms={{{0,500,720,100},{},true},{{220,350,170,16},{}},{{410,595,190,16},{}}};
+    auto& player=game.player;
+    player.box={272,444,32,56};player.velocity={};player.support=0;
+    game.resetPose();
+    game.input(Key::jump,true);
+    run(game,8);
+    CHECK(player.ladder==0 && player.support==-1);
+    const float feet=player.box.bottom();
+    run(game,36);
+    CHECK(player.box.bottom()<feet-30.f); // climbing, not free-falling
+    const int loaded=game.guns[game.gun].ammo;
+    game.input(Key::fire,true);
+    run(game,12);
+    CHECK(game.guns[game.gun].ammo<loaded); // upper body can shoot on rungs
+    CHECK(player.ladder==0);
+    game.input(Key::fire,false);
+    run(game,115);
+    CHECK(player.ladder==-1 && player.support==1);
+    CHECK(std::abs(player.box.bottom()-350.f)<2.f);
+    game.input(Key::jump,false);
+    game.input(Key::crouch,true);
+    run(game,18);
+    CHECK(player.ladder==0 && player.dropThrough>0.f);
+    CHECK(player.box.bottom()>366.f); // controlled descent through top deck
+    run(game,155);
+    CHECK(player.ladder==-1 && player.support==0); // steps off at bottom
+    CHECK(std::abs(player.box.bottom()-500.f)<2.f);
+    game.input(Key::crouch,false);
+    // Re-enter the ladder by falling down its face. A falling operative is
+    // caught by the rungs rather than passing through the open ladder path.
+    player.box={272,301,32,56}; player.velocity={0,180}; player.support=-1;
+    player.dropThrough=0;player.dropPlatform=-1;
+    run(game,3);
+    CHECK(player.ladder==0);
+    game.input(Key::crouch,true);
+    const float descendFeet=player.box.bottom();
+    run(game,3);
+    CHECK(player.ladder==0 && player.velocity.y==0.f);
+    CHECK(player.box.bottom()>descendFeet);
+}
+}
+
+namespace {
+void airborneMomentumAndStairDrop() {
+    Silent audio;
+    Game game(audio);
+    game.start(0,startSave()); game.entry=0;
+    Stage field=*game.stage;
+    field.ground={{0,500,850,100}};
+    field.ledges.clear();field.stairs.clear();field.ladders.clear();
+    field.lifts.clear();field.enemies.clear();field.supplies.clear();
+    game.stage=&field;
+    game.platforms={{{0,500,850,100},{},true}};
+    game.player.box={190,444,32,56};game.player.velocity={};game.player.support=0;
+    game.resetPose();
+    game.input(Key::right,true);
+    run(game,15);
+    game.input(Key::jump,true);
+    run(game,9);
+    CHECK(game.player.support<0 && game.player.velocity.y<0);
+    const float takeoffV=game.player.velocity.x;
+    CHECK(takeoffV>40);
+    game.input(Key::right,false);game.input(Key::left,true);
+    run(game,22);
+    // Reversing direction in the air must not reverse momentum.
+    CHECK(game.player.velocity.x>takeoffV-3.0f);
+    game.input(Key::jump,false);
+    game.input(Key::jump,true); // existing midair flip adds vertical impulse only
+    const float beforeFlip=game.player.velocity.x;
+    run(game,3);
+    CHECK(game.player.velocity.x>beforeFlip-1.f);
+
+    field.stairs={{{230,500},{355,420}}};
+    game.player.box={284,stairY(field.stairs[0],300)-56,32,56};
+    game.player.velocity={};game.player.support=-1;
+    game.player.jumpAge=0;game.player.dropThrough=0;
+    game.input(Key::left,false);game.input(Key::jump,false);
+    game.input(Key::crouch,true);
+    const float startY=game.player.box.bottom();
+    run(game,10);
+    CHECK(game.player.dropThrough>0.f);
+    CHECK(game.player.box.bottom()>startY+5.f);
+    CHECK(game.player.ladder<0);
+}
+
+void clearExtractionGates() {
+    for(const Stage& field:stages)
+        for(const Stair& stair:field.stairs)
+            CHECK(!exitStairConflict(stair,field.exit));
+    for(const Stage& field:cooperativeStages)
+        for(const Stair& stair:field.stairs)
+            CHECK(!exitStairConflict(stair,field.exit));
+}
+} // namespace
+
 void runMovementTests() {
+    bossAggression();
+    bossArenaPursuit();
+    // Game action sampling uses the very same five editable poses that the
+    // editor previews and the JSON export writes. No hidden pose lookup.
+    SkeletonProfile authored{};
+    const auto knee=static_cast<size_t>(SkeletonJoint::nearKnee);
+    authored.actionFrames[static_cast<size_t>(ActionPose::jump)][0][knee]={0.f,0.f};
+    authored.actionFrames[static_cast<size_t>(ActionPose::jump)][1][knee]={0.f,-4.f};
+    authored.actionFrames[static_cast<size_t>(ActionPose::jump)][2][knee]={2.f,-6.f};
+    authored.actionFrames[static_cast<size_t>(ActionPose::jump)][3][knee]={1.f,-3.f};
+    authored.actionFrames[static_cast<size_t>(ActionPose::jump)][4][knee]={0.f,0.f};
+    const auto first=skeletonOffset(authored,SkeletonJoint::nearKnee,0,0,ActionPose::jump,1.f,0.f);
+    const auto quarter=skeletonOffset(authored,SkeletonJoint::nearKnee,0,0,ActionPose::jump,1.f,.25f);
+    const auto middle=skeletonOffset(authored,SkeletonJoint::nearKnee,0,0,ActionPose::jump,1.f,.5f);
+    const auto eighth=skeletonOffset(authored,SkeletonJoint::nearKnee,0,0,ActionPose::jump,1.f,.375f);
+    CHECK(first.y==0.f && quarter.y==-4.f && middle.y==-6.f);
+    CHECK(eighth.x==1.f && eighth.y==-5.f);
+    CHECK(skeletonOffset(authored,SkeletonJoint::nearKnee,0,0,ActionPose::jump,.5f,.5f).y==-3.f);
+    testHumanLimbKinematics();
+    ladderTraversalAndDropThrough();
+    airborneMomentumAndStairDrop();
+    clearExtractionGates();
+    runningStrideFootfallSequence();
     testEnemyGapSafety();
     cameraFollowsCursorButNeverLosesPlayer();
     stairJoinsRaisedPlatformInBothDirections();

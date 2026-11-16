@@ -53,10 +53,11 @@ Options parseOptions(int argc,char** argv) {
                 "Graphics: --renderer auto|opengl\n"
 #endif
                 "Move: A/D or arrows. Jump (twice to flip): Space, W, Up or K. Sprint: Shift. Crouch: C, S, Down or Ctrl.\n"
+                "Ladders: W/Up to climb; S/Down to descend through upper landings. Stairs: Down drops off.\n"
                 "Fire: mouse, F or J. Bullet time: Q, X or right mouse. Reload: R. Weapons: 1-7, V or mouse wheel. Interact with levers: E (gamepad D-pad up).\n"
                 "Pause: Esc or P. Fullscreen: F11. A gamepad is supported when connected.\n"
                 "Runtime model verification: --model-report\n"
-                "Diagnostics: --smoke-test [--frames N] [--width PIXELS] [--scene 1..20|splash|enemy-roster|operative0..5|map|summary|multiplayer-join|multiplayer-roster|cooperative-menu|cooperative-insertion|cooperative-gate|prologue-N|menu|create|armory|intro|cinematic-arrival|cinematic-close|cinematic-detail|cinematic-recover|stand[0-2]|gallery[0-2]|walk|flip|slow] [--screenshot PATH.ppm]\n";
+                "Diagnostics: --smoke-test [--frames N] [--width PIXELS] [--scene 1..20|splash|enemy-roster|operative0..5|map|summary|multiplayer-join|multiplayer-roster|cooperative-menu|cooperative-insertion|cooperative-gate|prologue-N|menu|game-menu|create|armory|armory-locked|intro|cinematic-arrival|cinematic-close|cinematic-detail|cinematic-recover|stand[0-2]|gallery[0-2]|walk|flip|slow] [--screenshot PATH.ppm]\n";
             std::exit(0);
         } else if (arg=="--version") {
 #ifdef _WIN32
@@ -68,7 +69,7 @@ Options parseOptions(int argc,char** argv) {
         } else throw std::runtime_error("Unknown option "+arg+" (see --help).");
     }
     if (result.frames<0 || (result.smoke && result.frames==0)) throw std::runtime_error("Frame count must be positive.");
-    const bool named=result.scene=="map" || result.scene=="summary" || result.scene=="multiplayer-join" || result.scene=="multiplayer-host" || result.scene=="multiplayer-roster" || result.scene=="cooperative-menu" || result.scene=="cooperative-insertion" || result.scene=="cooperative-gate" || result.scene.rfind("prologue-",0)==0 || result.scene=="menu" || result.scene=="splash" || result.scene=="settings-fps" || result.scene=="graphics-settings" || result.scene=="graphics-effects" || result.scene=="graphics-low" || result.scene=="graphics-ultra" || result.scene=="fps-game" || result.scene=="enemy-roster" || result.scene.rfind("operative",0)==0 || result.scene=="create" || result.scene.rfind("armory",0)==0 || result.scene=="intro" || result.scene.rfind("cinematic-",0)==0 ||
+    const bool named=result.scene=="map" || result.scene=="summary" || result.scene=="multiplayer-join" || result.scene=="multiplayer-host" || result.scene=="multiplayer-roster" || result.scene=="cooperative-menu" || result.scene=="cooperative-insertion" || result.scene=="cooperative-gate" || result.scene.rfind("prologue-",0)==0 || result.scene=="menu" || result.scene=="game-menu" || result.scene=="splash" || result.scene=="settings-fps" || result.scene=="graphics-settings" || result.scene=="graphics-effects" || result.scene=="graphics-low" || result.scene=="graphics-ultra" || result.scene=="fps-game" || result.scene=="enemy-roster" || result.scene.rfind("operative",0)==0 || result.scene=="create" || result.scene.rfind("armory",0)==0 || result.scene=="intro" || result.scene.rfind("cinematic-",0)==0 ||
         result.scene=="flip" || result.scene=="slow" || result.scene.rfind("stand",0)==0 || result.scene.rfind("gallery",0)==0 || result.scene=="controls" || result.scene.rfind("hit",0)==0 || result.scene.rfind("arms",0)==0 || result.scene.rfind("event",0)==0 || result.scene=="walk" || result.scene=="boss";
     if (result.smoke && !named) {
         int sector=0;

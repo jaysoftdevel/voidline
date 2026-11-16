@@ -27,6 +27,7 @@ struct Perk { const char *key,*name,*description; int base,maxRank; };
 // A sloped, walkable staircase between two footholds, left endpoint first.
 // Characters and ground enemies travel on its surface using normal left/right controls.
 struct Stair { Vec from,to; };
+struct Ladder { float x,top,bottom; };
 struct Lift { float x,y,w,dx,dy,period,phase; };
 struct Vent { float x,y,phase; };
 struct EnemyPlacement { EnemyKind kind; float x,y,patrol; bool elite=false; };
@@ -68,6 +69,7 @@ struct Stage {
     std::vector<CratePlacement> crates{};
     std::vector<RelayGate> relays{};
     std::vector<Stair> stairs{};
+    std::vector<Ladder> ladders{};
     std::vector<StructurePolygon> structurePolygons{};
     Vec insertion{}; // Zero y: initial floor elevation. Editable per-level operative spawn.
 };

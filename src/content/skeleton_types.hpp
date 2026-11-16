@@ -8,7 +8,7 @@ namespace vl {
 // Rig editing coordinates: logical pixels from the ground contact point, looking right.
 // These are authoring offsets to the original procedural animation, not world-space positions.
 inline constexpr size_t skeletonJointCount=14, skeletonPoseCount=3;
-inline constexpr size_t actionPoseCount=18;
+inline constexpr size_t actionPoseCount=16, actionFrameCount=5;
 enum class SkeletonJoint : size_t {
     pelvis,waist,neck,head,nearShoulder,farShoulder,nearElbow,farElbow,
     nearHand,farHand,nearKnee,farKnee,nearAnkle,farAnkle
@@ -21,10 +21,10 @@ inline constexpr std::array<const char*,skeletonJointCount> skeletonJointNames{{
 inline constexpr std::array<const char*,skeletonPoseCount> skeletonPoseNames{{"base","aim","run"}};
 inline constexpr std::array<const char*,actionPoseCount> actionPoseNames{{
     "idle","walk","sprint","crouch","jump","fall","land","fire","reload",
-    "hit","death","patrol","chase","alert","recoil","stagger","stairs","interact"
+    "hit","death","patrol","alert","recoil","stagger","stairs"
 }};
 enum class ActionPose : int { idle,walk,sprint,crouch,jump,fall,land,fire,reload,hit,death,
-                              patrol,chase,alert,recoil,stagger,stairs,interact,none=-1 };
+                              patrol,alert,recoil,stagger,stairs,none=-1 };
 inline constexpr std::array<Vec,skeletonJointCount> skeletonReference{{
     {0,-33},{0,-41},{2,-49},{4,-59},{6,-46},{-5,-46},{14,-35},
     {-13,-35},{18,-28},{-16,-29},{8,-19},{-8,-19},{10,-5},{-10,-5}
@@ -53,15 +53,27 @@ struct SkeletonProfile {
     float armLength=1.f,legLength=1.f,weaponSeat=0.f;
     // Motion timing, braking and procedural reaction blend factors.
     float walkCycle=1.f,acceleration=1.f,braking=1.f,recoil=1.f,idleBreath=1.f;
+    // Normalized 0..1 timeline for each authored action. Each track is stored
+    // in models/*/*.json and shipped in *.actions.json; never generated at draw time.
+    // Older archives default to zero-valued tracks and keep their prior appearance.
+    std::array<std::array<std::array<Vec,skeletonJointCount>,actionFrameCount>,actionPoseCount> actionFrames{};
 };
 inline Vec skeletonOffset(const SkeletonProfile& s,SkeletonJoint joint,float aiming,float running,
-                          ActionPose action=ActionPose::none,float actionWeight=0.f){
+                          ActionPose action=ActionPose::none,float actionWeight=0.f,float actionPhase=0.f){
     const auto j=static_cast<size_t>(joint);
     const Vec b=s.offsets[0][j],a=s.offsets[1][j],r=s.offsets[2][j];
     Vec result=b+a*std::clamp(aiming,0.f,1.f)+r*std::clamp(running,0.f,1.f);
     const int aidx=static_cast<int>(action);
-    if(aidx>=0 && aidx<static_cast<int>(actionPoseCount))
-        result+=s.actionOffsets[static_cast<size_t>(aidx)][j]*std::clamp(actionWeight,0.f,1.f);
+    if(aidx>=0 && aidx<static_cast<int>(actionPoseCount)){
+        const auto index=static_cast<size_t>(aidx);
+        const float position=std::clamp(actionPhase,0.f,1.f)*float(actionFrameCount-1);
+        const auto lo=static_cast<size_t>(position);
+        const auto hi=std::min(lo+1,actionFrameCount-1);
+        const float fraction=position-float(lo);
+        const Vec animated=s.actionFrames[index][lo][j]*(1.f-fraction)+
+                           s.actionFrames[index][hi][j]*fraction;
+        result+=(s.actionOffsets[index][j]+animated)*std::clamp(actionWeight,0.f,1.f);
+    }
     return result;
 }
 // Canonical editable bind pose, with dimensions applied consistently in the editor

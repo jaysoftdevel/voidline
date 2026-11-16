@@ -25,6 +25,17 @@ float segment(Vec p,Vec d,Rect r) {
     return near;
 }
 
+Vec reachableAnkle(Vec hip,Vec target,float thigh,float shin) {
+    const Vec delta=target-hip;
+    const float distance=length(delta);
+    // Retain a little knee flexion, even at maximum reach. The lower bound
+    // prevents degenerate configurations for significantly mismatched bones.
+    const float nearest=std::abs(thigh-shin)+.05f;
+    const float farthest=thigh+shin-.35f;
+    const Vec direction=distance>.0001f?normal(delta):Vec{0,1};
+    return hip+direction*clamp(distance,nearest,farthest);
+}
+
 Vec solveKnee(Vec hip,Vec ankle,float thigh,float shin,int forward) {
     Vec delta=ankle-hip;
     const float d=clamp(length(delta),std::abs(thigh-shin)+.01f,thigh+shin-.01f);

@@ -1,4 +1,4 @@
-# VOIDLINE Model Studio 0.0.19 — live game-source editor
+# VOIDLINE Model Studio 0.0.20 — live game-source editor
 
 Model Studio is a standalone **Linux-only** desktop application integrated into
 VOIDLINE v2.10.15's source checkout. It uses the **game's actual input files**;
@@ -33,6 +33,17 @@ From the game source root:
 ./run-model-studio.sh --open-workspace "$PWD"
 ```
 
+Launching `./run-model-studio.sh` without arguments automatically opens the
+game source checkout containing the editor. No last-project cache is read, and
+no initial workspace picker is needed. `--open-workspace /path/to/game` still
+overrides automatic discovery. A source checkout always takes precedence over
+the shell working directory.
+
+The running preview uses the same phased 12-step left/right gait as the game:
+heel strike, planted support, toe-off, airborne recovery and forward knee
+drive. The phase animation is procedural; authored pose offsets remain in the
+source JSON files and are never replaced by opening the editor.
+
 The selected source root must contain `CMakeLists.txt`, `models/`, `levels/`,
 and `assets/`. Selecting a build folder inside that checkout resolves to the
 same source root. Standalone installed PAK folders are not editable workspaces.
@@ -46,7 +57,7 @@ editor caches are ignored completely.
 ## Edit and save
 
 - **Characters/enemies:** Edit scalar properties, articulated joints, depth
-  offsets, and any of the 104 defined movement sequences. Model inputs live in
+  offsets, and only the movement sequences present in the selected model JSON. Procedural enemies expose no articulated poses. Model inputs live in
   `models/characters/*.vlcharacter.json`, `models/enemies/*.vlenemy.json`, and
   `models/movement-descriptions.json`.
 - **Levels:** Move, add, delete, and reshape objects, including polygon corners;
@@ -77,3 +88,21 @@ the same model and level files; Model Studio itself is not compiled on Windows.
 
 See [../MODEL-STUDIO-WORKFLOW.md](../MODEL-STUDIO-WORKFLOW.md) for exact commands
 and how to migrate wanted edits from old caches without losing user data.
+
+## Authoritative action keyframes (v0.0.22)
+
+All articulated action poses shown in the editor have five normalized
+XY keyframes in the game source JSON (`skeleton.poseFrames`). The Frame slider
+scrubs the motion; dragging a joint modifies the nearest keyframe, and Ctrl+S
+saves the source file directly. The existing `skeleton.sequences` fields remain
+static offsets and are applied alongside the keyframes. Copy/Paste Movement
+includes both the static pose and its keyframes. Physics and IK remain
+procedural at runtime and are not reproduced pixel-for-pixel in Model Studio.
+
+The game's incremental `build.sh` automatically regenerates action catalogs in
+`assets/models` from the current source model JSON before packing `game.vpak`.
+The optional **Export Project Sources** command creates `export/` with generated
+C++ source snapshots, model binaries and action catalogs for offline inspection
+or manual integration. Nothing in `export/` is loaded as a model workspace or
+implicitly compiled by the normal build. Its contents can be discarded after
+verifying they are no longer needed. See `MODEL-POSE-SYNC-v2.10.27.md`.

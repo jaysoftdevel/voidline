@@ -1,4 +1,5 @@
 #include "engine/engine.hpp"
+#include "../../icons/window_rgba.hpp"
 #include "platform/paths.hpp"
 #include "content/model_io.hpp"
 #include "content/runtime_model_catalog.hpp"
@@ -43,6 +44,12 @@ struct Engine::Platform {
             const U32 flags=sdl::openGL|sdl::resizable|sdl::highDPI|(options.smoke?sdl::hidden:0);
             window=SDL_CreateWindow("VOIDLINE",sdl::centered,sdl::centered,options.width,options.width/2,flags);
             if (!window) throw std::runtime_error(SDL_GetError());
+            // An embedded icon is available even when the distributable has only game.vpak.
+            // RGBA masks are little-endian in SDL's SDL_CreateRGBSurfaceFrom ABI.
+            auto* icon=SDL_CreateRGBSurfaceFrom(
+                const_cast<std::uint8_t*>(window_icon::rgba),window_icon::width,window_icon::height,
+                32,window_icon::width*4,0x000000ffu,0x0000ff00u,0x00ff0000u,0xff000000u);
+            if (icon) { SDL_SetWindowIcon(window,icon); SDL_FreeSurface(icon); }
             SDL_SetWindowMinimumSize(window,720,360);
             SDL_StopTextInput();
             context=SDL_GL_CreateContext(window);

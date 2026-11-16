@@ -8,7 +8,7 @@ namespace vl {
 // Rig editing coordinates: logical pixels from the ground contact point, looking right.
 // These are authoring offsets to the original procedural animation, not world-space positions.
 inline constexpr size_t skeletonJointCount=14, skeletonPoseCount=3;
-inline constexpr size_t actionPoseCount=18;
+inline constexpr size_t actionPoseCount=16;
 enum class SkeletonJoint : size_t {
     pelvis,waist,neck,head,nearShoulder,farShoulder,nearElbow,farElbow,
     nearHand,farHand,nearKnee,farKnee,nearAnkle,farAnkle
@@ -21,10 +21,10 @@ inline constexpr std::array<const char*,skeletonJointCount> skeletonJointNames{{
 inline constexpr std::array<const char*,skeletonPoseCount> skeletonPoseNames{{"base","aim","run"}};
 inline constexpr std::array<const char*,actionPoseCount> actionPoseNames{{
     "idle","walk","sprint","crouch","jump","fall","land","fire","reload",
-    "hit","death","patrol","chase","alert","recoil","stagger","stairs","interact"
+    "hit","death","patrol","alert","recoil","stagger","stairs"
 }};
 enum class ActionPose : int { idle,walk,sprint,crouch,jump,fall,land,fire,reload,hit,death,
-                              patrol,chase,alert,recoil,stagger,stairs,interact,none=-1 };
+                              patrol,alert,recoil,stagger,stairs,none=-1 };
 inline constexpr std::array<Vec,skeletonJointCount> skeletonReference{{
     {0,-33},{0,-41},{2,-49},{4,-59},{6,-46},{-5,-46},{14,-35},
     {-13,-35},{18,-28},{-16,-29},{8,-19},{-8,-19},{10,-5},{-10,-5}

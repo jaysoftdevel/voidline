@@ -16,27 +16,43 @@ class ActionTests(unittest.TestCase):
         self.char=json.loads((ROOT/'starter-project/models/characters/2.vlcharacter.json').read_text())
         self.enemy=json.loads((ROOT/'starter-project/models/enemies/1.vlenemy.json').read_text())
 
-    def test_all_supported_movement_states_exposed(self):
-        names=movement_sequences('character',self.char)
-        self.assertTrue(set(('base','run','sprint','crouch','jump','fall','land',
-                             'aim','fire','reload','hit','death','interact')).issubset(names))
-        self.assertIn('patrol',movement_sequences('enemy',self.enemy))
-        self.assertIn('sprint',movement_sequences('enemy',{'id':0}))
-        self.assertGreaterEqual(len(ACTION_STATES),90)
-        self.assertIn('wall_jump',movement_sequences('character',self.char))
-        self.assertIn('melee_combo',movement_sequences('enemy',self.enemy))
+    def test_model_specific_pose_choices(self):
+        expected_player={'base','aim','run','idle','walk','sprint','crouch','jump',
+                         'fall','land','fire','reload','hit','death','alert','stairs'}
+        self.assertEqual(set(movement_sequences('character',self.char)), expected_player)
+        self.assertNotIn('wall_jump', movement_sequences('character',self.char))
+        self.assertNotIn('interact', movement_sequences('character',self.char))
+        self.assertEqual(set(movement_sequences('enemy',self.enemy)),
+                         {'base','aim','run','idle','patrol','stairs','alert','fire',
+                          'recoil','hit','stagger','death'})
+        for ident in (0,2,3,4,5,8):
+            self.assertEqual(movement_sequences('enemy',{'id':ident,'skeleton':self.enemy['skeleton']}),())
+        # A custom authored pose is listed if and only if it exists in the model.
+        altered=copy.deepcopy(self.char)
+        altered['skeleton']['sequences']['my_pose']=[[0.,0.]]*14
+        altered['skeleton']['sequenceDepth']['my_pose']=[0.]*14
+        self.assertIn('my_pose', movement_sequences('character',altered))
+        before=copy.deepcopy(self.char)
+        ensure_sequences(self.char)
+        self.assertEqual(self.char,before)
 
-    def test_source_model_files_and_descriptions_are_complete(self):
+    def test_source_model_files_match_runtime_pose_inventory(self):
         game=ROOT.parent
         catalog=json.loads((game/'models/movement-descriptions.json').read_text())
         self.assertEqual(len(catalog['movements']),len(ACTION_STATES))
-        self.assertEqual(len({item['id'] for item in catalog['movements']}),len(ACTION_STATES))
-        for kind,n,ext in (("characters",6,"vlcharacter"),("enemies",10,"vlenemy")):
+        self.assertEqual(len(ACTION_STATES),16)
+        player={'idle','walk','sprint','crouch','jump','fall','land','fire',
+                'reload','hit','death','alert','stairs'}
+        soldier={'idle','patrol','stairs','alert','fire','recoil','hit','stagger','death'}
+        self.assertEqual(set(ACTION_STATES),player|soldier)
+        for kind,n,ext in (('characters',6,'vlcharacter'),('enemies',10,'vlenemy')):
             for ident in range(n):
                 doc=json.loads((game/f'models/{kind}/{ident}.{ext}.json').read_text())
                 self.assertEqual(doc['id'],ident)
-                self.assertTrue(set(ACTION_STATES).issubset(doc['skeleton']['sequences']))
-                self.assertTrue(set(ACTION_STATES).issubset(doc['skeleton']['sequenceDepth']))
+                expected=(player if kind=='characters' else
+                          soldier if ident in (1,6,7,9) else set())
+                self.assertEqual(set(doc['skeleton']['sequences']),expected)
+                self.assertEqual(set(doc['skeleton']['sequenceDepth']),expected)
                 self.assertTrue(all(len(x)==14 for x in doc['skeleton']['sequences'].values()))
                 self.assertTrue(all(len(x)==14 for x in doc['skeleton']['sequenceDepth'].values()))
 

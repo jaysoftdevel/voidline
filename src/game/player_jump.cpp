@@ -22,7 +22,7 @@ void Game::airFlip(int direction) {
     p.airJumpUsed=true; p.jumpBuffer=0; p.jumpAge=.001f;
     p.velocity.y=-(character->jump*jumpScale)*.82f;
     p.flip=flipSeconds; p.flipDirection=p.facing>=0?1.f:-1.f;
-    if (direction) p.velocity.x=approach(p.velocity.x,direction*(character->speed*speedScale)*1.08f,160);
+    (void)direction; // The player cannot redirect their center of mass in mid-air.
     audio.event("jump",.8f,0,1.22f);
     burst({p.box.center().x,p.box.bottom()-6},hex(stage->cold),9,92,ParticleKind::smoke);
     ring({p.box.center().x,p.box.bottom()-4},hex(stage->cold),34,.32f);

@@ -47,9 +47,12 @@ struct Player {
     Rect box;
     Vec velocity,safe;
     int support=-1, facing=1, hp=0, sprintDirection=0;
+    int ladder=-1,dropPlatform=-1;
+    float dropThrough=0.f;
     float aim=0,coyote=0,jumpBuffer=0,jumpAge=0,windup=0,flash=0,muzzle=0,fireDelay=0,fireBuffer=0;
     float flip=0,flipDirection=1,turn=1,landed=0;
     bool crouched=false,sprinting=false,aiming=false,airJumpUsed=false,crouchLatch=false;
+    bool stairDropRequested=false; // Down-key press edge, not continuous crouch hold.
     // The weapon is raised (1) while aiming, firing or reloading and carried low (0) afterwards.
     float ready=1,readyTimer=0;
     Gait gait;

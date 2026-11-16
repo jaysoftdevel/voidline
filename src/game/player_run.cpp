@@ -17,12 +17,18 @@ void Game::runHorizontal(float dt,int direction,bool grounded) {
     }
     if (p.crouched) p.sprinting=false;
     const float speed=baseSpeed*(p.crouched?.40f:p.sprinting?1.28f:1.f);
-    const float acceleration=grounded
-        ? (reversing?3380.f:p.crouched && std::abs(p.velocity.x)>speed?3200.f:direction?mix(2700.f,1730.f,pace):3000.f)
-        : (direction?1320.f:105.f);
-    float targetSpeed=direction*speed;
-    if (!grounded && p.sprinting && direction!=p.sprintDirection) targetSpeed=direction*baseSpeed;
-    p.velocity.x=approach(p.velocity.x,targetSpeed,acceleration*dt*(direction?model.acceleration:model.braking));
+    if (grounded) {
+        // The planted feet supply horizontal acceleration and braking.
+        const float acceleration=reversing?3380.f:p.crouched && std::abs(p.velocity.x)>speed?3200.f:
+            direction?mix(2700.f,1730.f,pace):3000.f;
+        p.velocity.x=approach(p.velocity.x,direction*speed,acceleration*dt*
+            (direction?model.acceleration:model.braking));
+    } else {
+        // Once airborne there is no ground reaction force with which to steer.
+        // Retain take-off momentum; only very light aerodynamic drag applies.
+        // A flip is an animation/vertical impulse, not an air-brake or air-dash.
+        p.velocity.x=approach(p.velocity.x,0.f,9.f*dt);
+    }
     const float edge=bossDead?stage->worldWidth-playerW:stage->exit.x-106;
     const float nextX=p.box.x+p.velocity.x*dt;
     p.box.x=clamp(nextX,12,edge);
@@ -67,7 +73,7 @@ void Game::collideWalls(float oldX,bool grounded) {
         // precedence over the deck's vertical side collision; the one-way
         // surface landing still prevents falling through the deck.
         bool stairEntry=false;
-        if (grounded && p.jumpAge==0 && p.velocity.y>=-15.f && p.velocity.y<130.f &&
+        if (grounded && p.dropThrough==0 && p.jumpAge==0 && p.velocity.y>=-15.f && p.velocity.y<130.f &&
             p.box.bottom()>s.y && p.box.bottom()-s.y<=45.f) {
             const float center=p.box.center().x;
             for (const Stair& stair:stage->stairs) {

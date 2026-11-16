@@ -27,6 +27,12 @@ Renderer::Face Renderer::drawHead(const Humanoid& h,const Rig& g) {
     ellipse(head,{6.7f,7.f},ink);
     ellipse(head,{5.9f,6.3f},h.skin);
     ellipse(head+Vec{tf*1.6f*fa,3.2f},{4.4f,3.2f},h.skin.energy(.9f));
+    if (h.ladder && !h.ladderAiming) {
+        // Back of head/helmet, not a sideways face peering through the rungs.
+        ellipse(head,{6.4f,6.6f},h.shell);
+        line(head+Vec{-3.8f,-2.7f},head+Vec{3.8f,-2.7f},1.4f,h.edge.alpha(.7f));
+        return face;
+    }
     face.ear=Vec{head.x+tf*(-2.4f)*fa,head.y+.9f}+Vec{(1-fa)*(-5.2f),0};
     ellipse(face.ear,{1.5f,2.f},h.skin.energy(.85f));
     face.eyeA=Vec{head.x+ft*3.f*fa+(1-fa)*2.3f,head.y-.3f-g.look*.9f};

@@ -63,6 +63,42 @@ void loadActionSequences(const AssetPack& pack,const char* name,
                 profiles[i].actionOffsets[action][j]={xyz[0],xyz[1]};
             }
         }
+        json_object* tracks=nullptr;
+        if(json_object_object_get_ex(entry,"poseFrames",&tracks)){
+            if(!json_object_is_type(tracks,json_type_object))
+                throw std::runtime_error("Invalid poseFrames object");
+            for(size_t action=0;action<actionPoseCount;++action){
+                json_object* track=nullptr;
+                if(!json_object_object_get_ex(tracks,actionPoseNames[action],&track))continue;
+                if(!json_object_is_type(track,json_type_array) ||
+                   json_object_array_length(track)!=actionFrameCount)
+                    throw std::runtime_error("Invalid action keyframe count");
+                for(size_t frame=0;frame<actionFrameCount;++frame){
+                    json_object* joints=json_object_array_get_idx(track,frame);
+                    if(!joints || !json_object_is_type(joints,json_type_array) ||
+                       json_object_array_length(joints)!=skeletonJointCount)
+                        throw std::runtime_error("Invalid action keyframe joint count");
+                    for(size_t j=0;j<skeletonJointCount;++j){
+                        json_object* pair=json_object_array_get_idx(joints,j);
+                        if(!pair || !json_object_is_type(pair,json_type_array) ||
+                           json_object_array_length(pair)!=2)
+                            throw std::runtime_error("Invalid action keyframe vector");
+                        float values[2]{};
+                        for(int axis=0;axis<2;++axis){
+                            auto* number=json_object_array_get_idx(pair,axis);
+                            if(!number || !(json_object_is_type(number,json_type_int) ||
+                                            json_object_is_type(number,json_type_double)))
+                                throw std::runtime_error("Invalid keyframe component");
+                            const double value=json_object_get_double(number);
+                            if(!std::isfinite(value) || std::abs(value)>65536.0)
+                                throw std::runtime_error("Keyframe component outside allowed range");
+                            values[axis]=float(value);
+                        }
+                        profiles[i].actionFrames[action][frame][j]={values[0],values[1]};
+                    }
+                }
+            }
+        }
     }
     std::cout<<"Action sequences: "<<N<<" profiles loaded from "<<name<<"\n";
 }

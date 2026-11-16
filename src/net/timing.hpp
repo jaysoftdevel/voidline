@@ -6,7 +6,7 @@ namespace vl::net {
 using Millis=uint64_t;
 inline constexpr float snapshotInterval=1.f/60;
 inline constexpr float inputInterval=1.f/120;
-inline constexpr Millis openingDuration=31500;
+inline constexpr Millis openingDuration=10500;
 inline constexpr Millis transitionDuration=1250;
 inline constexpr Millis preparationTimeout=12000;
 

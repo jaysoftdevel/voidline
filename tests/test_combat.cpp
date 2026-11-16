@@ -165,6 +165,33 @@ void coverAndCrates() {
     CHECK(game.crates[0].spent && game.crates[1].spent);
 }
 
+// Projectile wall impacts must use the material of the actual collided
+// surface, rather than the last configured biome or a generic gunshot sound.
+void projectileMaterialAudio() {
+    struct RecordingAudio final : vl::AudioSink {
+        std::vector<std::string> names;
+        void event(std::string_view name,float,float,float) override { names.emplace_back(name); }
+    };
+    for (int material=0;material<3;++material) {
+        RecordingAudio sound;
+        Game game(sound);
+        game.start(0,startSave()); // Mine ground should sound rocky.
+        game.entry=0;
+        run(game,8);
+        game.enemies.clear(); game.crates.clear(); game.hostile.clear(); game.shots.clear();
+        const float startX=game.player.box.x+44;
+        const float shotY=game.player.box.y+11;
+        game.platforms.clear();
+        Platform obstacle{{startX+84,shotY-16,28,56}, {},material==0};
+        obstacle.cover=material==1; // concrete cover or metal raised deck
+        game.platforms.push_back(obstacle);
+        game.shots.push_back({{startX,shotY},{1450,0},.8f,6.f,hex(0xffffff)});
+        run(game,8);
+        const std::string expected=material==0?"hit-rock":material==1?"hit-concrete":"hit-metal";
+        CHECK(std::find(sound.names.begin(),sound.names.end(),expected)!=sound.names.end());
+    }
+}
+
 void piercingBeyondThirtyTwoEnemies() {
     Silent audio;
     Game game(audio);
@@ -197,4 +224,5 @@ void runCombatTests() {
     explosives();
     coverAndCrates();
     piercingBeyondThirtyTwoEnemies();
+    projectileMaterialAudio();
 }

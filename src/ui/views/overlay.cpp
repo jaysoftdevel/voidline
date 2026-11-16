@@ -12,7 +12,7 @@ void App::overlay() {
     r.rect({panel.x,panel.y,5,panel.h},amber);
     const bool pause=view==View::pause, fail=view==View::failed;
     label({323,181},"SECTOR "+digits(game.index+1)+"  /  "+game.stage->name,amber);
-    const std::string title=pause?"Paused":fail?"No lives remaining":game.index==sectorCount-1?"Campaign complete":"Sector cleared";
+    const std::string title=pause?"Game menu":fail?"No lives remaining":game.index==sectorCount-1?"Campaign complete":"Sector cleared";
     r.text({321,240},title,48,white,true);
     if (pause) {
         r.text({325,277},"A / D  Move     SPACE  Jump (twice to flip)     SHIFT  Sprint     C  Crouch",15,pale);

@@ -30,20 +30,30 @@ def movement_definitions(catalog=None):
 ACTION_STATES = tuple(item["id"] for item in movement_definitions())
 
 def movement_sequences(kind, doc, catalog=None):
-    if kind not in ("character", "enemy"):
+    """List exactly the poses in the loaded model, never synthesize catalog states.
+
+    Only humanoid rigs consume the three legacy offset layers. Procedural
+    enemies have no selectable articulated poses, despite a compatibility
+    skeleton used for motion scalars and the fixed binary record.
+    """
+    if kind not in ("character", "enemy") or not isinstance(doc, dict):
         return ()
-    # Expose every authored state for every model. Procedural enemies still
-    # cannot have their unused humanoid joints dragged (see can_edit_joint).
-    return LEGACY_STATES + tuple(entry["id"] for entry in movement_definitions(catalog)
-                                 if entry["id"] not in LEGACY_STATES)
+    if kind == "enemy" and not can_edit_joint(kind, doc):
+        return ()
+    rig = doc.get("skeleton", {})
+    if not isinstance(rig, dict):
+        return ()
+    legacy = tuple(name for name in LEGACY_STATES
+                   if name in rig and name in rig.get("depth", {}))
+    seq, depth = rig.get("sequences", {}), rig.get("sequenceDepth", {})
+    if not isinstance(seq, dict) or not isinstance(depth, dict):
+        return legacy
+    # Preserve model file order and explicitly authored custom states.
+    return legacy + tuple(name for name in seq if name not in LEGACY_STATES and name in depth)
+
 
 def ensure_sequences(doc, catalog=None):
-    skeleton = doc.setdefault("skeleton", {})
-    seq = skeleton.setdefault("sequences", {})
-    depth = skeleton.setdefault("sequenceDepth", {})
-    for state in (item["id"] for item in movement_definitions(catalog)):
-        seq.setdefault(state, [[0.0, 0.0] for _ in range(14)])
-        depth.setdefault(state, [0.0 for _ in range(14)])
+    """Backward-compatible call, without mutating the selected source model."""
     return doc
 
 def create_model_from_template(template, kind, name, new_id):
@@ -53,7 +63,6 @@ def create_model_from_template(template, kind, name, new_id):
     result['name']=name.strip()
     result['id']=int(new_id)
     result['templateOf']=int(template.get('id',0))
-    ensure_sequences(result)
     return result
 
 def assign_model_to_slot(prototype, slot):
@@ -81,6 +90,13 @@ def _validated_pose(data):
            not isfinite(number) or abs(number)>65536 for number in depth):
         raise ValueError("Movement contains invalid depth coordinates")
     return copy.deepcopy(xy),copy.deepcopy(depth)
+
+def _validated_keyframes(frames):
+    """Reject malformed or nonfinite authored keyframes on clipboard imports."""
+    if not isinstance(frames,list) or len(frames)!=5:
+        raise ValueError("A movement requires five keyframes")
+    for frame in frames:
+        _validated_pose({"xy":frame,"depth":[0.0]*14})
 
 def copy_model_payload(doc, kind):
     """Encode the full editable model in a versioned, system-clipboard format."""
@@ -116,6 +132,11 @@ def paste_model_payload(payload, destination, kind):
     for key in ("id","schema"):
         if key in destination:result[key]=destination[key]
     result.pop("templateOf",None)
+    # A procedural destination does not consume humanoid action layers.
+    # Keep its required compatibility rig, but not a copied soldier pose list.
+    if kind == "enemy" and not can_edit_joint("enemy", result):
+        result["skeleton"]["sequences"] = {}
+        result["skeleton"]["sequenceDepth"] = {}
     return result
 
 def copy_movement_payload(doc, pose):
@@ -128,8 +149,11 @@ def copy_movement_payload(doc, pose):
     else:
         xy=rig.get("sequences",{}).get(pose);depth=rig.get("sequenceDepth",{}).get(pose)
     _validated_pose({"xy":xy,"depth":depth})
+    track=rig.get("poseFrames",{}).get(pose)
+    if track is not None:
+        _validated_keyframes(track)
     return json.dumps({"format":CLIPBOARD_FORMAT,"operation":"movement", "sourcePose":pose,
-                       "data":{"xy":xy,"depth":depth}},allow_nan=False)
+                       "data":{"xy":xy,"depth":depth,"poseFrames":track}},allow_nan=False)
 
 def paste_movement_payload(payload, destination, pose):
     """Return an updated copy, mapping copied joint offsets into the selected pose."""
@@ -141,14 +165,21 @@ def paste_movement_payload(payload, destination, pose):
         raise ValueError("Clipboard does not contain a VOIDLINE movement; use Copy Movement")
     if not isinstance(destination,dict) or not isinstance(destination.get("skeleton"),dict):
         raise ValueError("Select a destination model")
-    xy,depth=_validated_pose(clip.get("data"))
+    source_data=clip.get("data")
+    if not isinstance(source_data,dict):raise ValueError("Invalid movement clipboard")
+    xy,depth=_validated_pose({"xy":source_data.get("xy"),"depth":source_data.get("depth")})
+    incoming_frames=source_data.get("poseFrames")
+    if incoming_frames is not None:_validated_keyframes(incoming_frames)
     result=copy.deepcopy(destination)
     rig=result["skeleton"]
     if pose in LEGACY_STATES:
         rig[pose]=xy;rig.setdefault("depth",{})[pose]=depth
-    elif isinstance(pose,str) and re.fullmatch(r"[a-z][a-z0-9_]*",pose):
-        rig.setdefault("sequences",{})[pose]=xy
-        rig.setdefault("sequenceDepth",{})[pose]=depth
+    elif (isinstance(pose,str) and re.fullmatch(r"[a-z][a-z0-9_]*",pose)
+          and pose in rig.get("sequences",{}) and pose in rig.get("sequenceDepth",{})):
+        rig["sequences"][pose]=xy
+        rig["sequenceDepth"][pose]=depth
+        if incoming_frames is not None:
+            rig.setdefault("poseFrames",{})[pose]=copy.deepcopy(incoming_frames)
     else:raise ValueError("Choose a valid destination movement")
     return result
 
@@ -389,3 +420,54 @@ def edit_scalar_property(doc, group, key, text):
     if old==new:return False
     target[key]=new
     return True
+
+
+def discover_game_workspace(*candidates):
+    """Find a real source checkout only; do not read remembered editor projects.
+
+    Candidates are deliberately explicit: the editor installation's parent and
+    the process working directory. We never inspect per-user cache directories.
+    """
+    for path in candidates:
+        if path is None:
+            continue
+        root = Path(path).expanduser().resolve()
+        if ((root / 'CMakeLists.txt').is_file()
+                and (root / 'assets').is_dir()
+                and (root / 'models/characters').is_dir()
+                and (root / 'models/enemies').is_dir()
+                and (root / 'levels').is_dir()):
+            return root
+    return None
+
+
+def running_foot(phase, stance=0.38):
+    """Sample the game's 12-stage alternating heel strike/recovery cycle.
+
+    Return planted, horizontal advance, clearance, toe pitch. Only the
+    preview uses these values: editing and saving remain source-owned.
+    """
+    from math import sin, pi
+    phase = phase % 1.0
+    stance = max(.27, min(.75, float(stance)))
+    def ease(v):
+        v = max(0., min(1., v))
+        return v*v*(3.-2.*v)
+    if phase < stance:
+        t = phase / stance
+        return True, t, 0., .28*(1.-ease(t/.27))-.43*ease((t-.66)/.34)
+    t = (phase-stance)/(1.-stance)
+    lift = max(0., sin(pi*t))**1.12 * (1.10-.20*t)
+    return False, ease(t), lift, -.43*(1.-ease(t/.36))+.28*ease((t-.69)/.31)
+
+
+def running_hip_offset(phase):
+    t = (phase*2.) % 1.
+    def ease(v):
+        v=max(0., min(1., v))
+        return v*v*(3.-2.*v)
+    if t < .19:
+        return 1.2+1.0*ease(t/.19)
+    if t < .66:
+        return 2.2-4.8*ease((t-.19)/.47)
+    return -2.6+3.8*ease((t-.66)/.34)

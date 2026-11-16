@@ -13,6 +13,14 @@ void App::sceneForTest(std::string_view scene) {
         save.cleared=sectorCount-1; sector=sectorCount-1; showMap(); return;
     }
     if (scene=="menu") { show(View::menu); return; }
+    if (scene=="game-menu") {
+        save.cleared=1; showArmory();
+        SDL_Event esc{}; esc.type=sdl::keyDown;
+        esc.key.keysym.scancode=sdl::key::esc;
+        event(esc); // Exercise the real keyboard -> menu path.
+        return;
+    }
+    if (scene=="armory-locked") { save.cleared=0; save.equipped=3; showArmory(); return; }
     if (scene=="settings-fps") {
         settings.fpsCounter=true; settings.fpsCorner=1;
         settingsReturn=View::menu; show(View::settings); return;
@@ -49,8 +57,7 @@ void App::sceneForTest(std::string_view scene) {
         return;
     }
     if (scene.rfind("prologue-",0)==0) {
-        const int shot=std::clamp(std::atoi(std::string(scene.substr(9)).c_str()),0,6);
-        film=story::opening[shot].at+.6f;
+        film=.6f; // all old prologue-N diagnostics intentionally show the same single screen
         show(View::intro);
         return;
     }

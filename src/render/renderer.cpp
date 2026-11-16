@@ -1,4 +1,5 @@
 #include "render/renderer.hpp"
+#include "render/fps_border.hpp"
 #include "render/shaders.hpp"
 #include "render/shaders/cinematic.hpp"
 #include <chrono>
@@ -126,6 +127,25 @@ void Renderer::begin() {
     output();
     gl.ClearColor(.008f,.012f,.022f,1); gl.Clear(GL_COLOR_BUFFER_BIT);
     gl.Enable(GL_BLEND); gl.BlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+}
+
+bool Renderer::drawFpsOutside(int fps,int corner) {
+    // Keep the font at its normal physical size: temporarily shift the same
+    // 1200x600 OpenGL viewport so only this badge lands in the black gutter.
+    const int panelW=std::max(1,int(std::lround(93.f*viewW/width)));
+    const int panelH=std::max(1,int(std::lround(27.f*viewH/height)));
+    const int margin=std::max(4,int(std::lround(6.f*viewH/height)));
+    const auto badge=fpsBorderPlacement(pixelW,pixelH,viewX,viewY,viewW,viewH,
+                                        corner,panelW,panelH,margin);
+    if (!badge.outside) return false;
+    flush();
+    gl.Viewport(badge.x,pixelH-badge.y-viewH,viewW,viewH);
+    const Rect tile{0,0,93,27};
+    rect(tile,hex(0x06121b).alpha(.85f));
+    outline(tile,hex(0x3a8794).alpha(.75f));
+    text({10,19},std::to_string(fps)+" FPS",15,hex(0x8ef4da),true);
+    output(); // Flush the badge and restore the main content viewport.
+    return true;
 }
 
 void Renderer::end() { flush(); SDL_GL_SwapWindow(window); }

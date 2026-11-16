@@ -41,20 +41,47 @@ void Renderer::drawPlayer(const Game& g,const Operative& op) {
     const Vec ground{p.box.center().x+shift.x,p.box.bottom()+shift.y};
     Humanoid h=operativeFigure(*op.character);
     h.ground=ground; h.facing=p.facing; h.turn=p.turn;
+    h.ladder=p.ladder>=0;
+    h.ladderAiming=h.ladder && (p.aiming || p.muzzle>0 || p.fireBuffer>0);
+    // Face the rungs square-on while gripping them. Firing rotates just the
+    // upper torso back into the aim-facing profile, without twisting the feet.
+    if (h.ladder) h.turn=h.ladderAiming?float(p.facing)*.88f:0.f;
     const bool moving=std::abs(p.velocity.x)>25;
-    h.stride=moving?pose.direction:p.facing;
+    const bool backwards=moving && p.velocity.x*float(p.facing)<0;
+    // The gait is measured relative to facing: downhill backsteps must not
+    // invert the pelvis while preserving a forward-running torso twist.
+    h.stride=backwards?-1:1;
     for (int i=0;i<2;++i) { h.heels[i]=drawHeels[i]+offset; h.footAngle[i]=drawFootAngles[i]; }
-    h.grounded=p.support>=0;
+    const bool onStair=g.stage && stairFooting(*g.stage,p.box.center().x,p.box.bottom(),17.f).has_value();
+    h.grounded=p.support>=0 || p.ladder>=0 || onStair;
     h.lean=pose.lean; h.crouch=pose.crouch; h.run=pose.run; h.weight=pose.weight; h.cycle=pose.cycle;
     h.compression=pose.compression; h.pelvis=pose.pelvis; h.tuck=pose.tuck;
+    if (backwards && onStair) {
+        // Lower the shoulder/pelvis exaggeration while backpedaling downhill.
+        h.weight*=.66f;
+        h.lean*=.62f;
+        h.run*=.40f;
+        h.cycle=1.f-h.cycle;
+    }
     // Deterministic simulation-driven animation selection. Every state maps to
     // one optional editable pose layer; transitions are eased by the rig's
     // existing gait/aim/crouch blends rather than snapping the whole body.
+    if (p.ladder>=0) {
+        h.action=ActionPose::stairs; h.actionPhase=p.gait.cycle;
+        h.run=0; h.stride=1; h.weight=p.gait.weight; h.crouch=0;
+        h.lean=0; h.pelvis=0;
+        for (int i=0;i<2;++i) {
+            const float phase=p.gait.cycle+i*.5f;
+            const float rungStep=std::sin(phase*2*pi);
+            h.heels[i]={ground.x+(i==0?-7.f:7.f),ground.y-8.f-std::max(0.f,rungStep)*14.f};
+        }
+    }
     if (p.hp<=0) h.action=ActionPose::death;
+    else if (p.ladder>=0) h.action=ActionPose::stairs;
     else if (p.flash>.12f) h.action=ActionPose::hit;
     else if (op.guns[op.gun].reload>0) h.action=ActionPose::reload;
     else if (p.muzzle>0) h.action=ActionPose::fire;
-    else if (p.support<0) h.action=p.velocity.y<0?ActionPose::jump:ActionPose::fall;
+    else if (p.support<0 && !onStair) h.action=p.velocity.y<0?ActionPose::jump:ActionPose::fall;
     else if (p.landed>.1f) h.action=ActionPose::land;
     else if (p.crouched) h.action=ActionPose::crouch;
     else if (moving && g.stage && stairFooting(*g.stage,p.box.center().x,p.box.bottom(),8.f))
@@ -63,6 +90,22 @@ void Renderer::drawPlayer(const Game& g,const Operative& op) {
     else if (p.aiming) h.action=ActionPose::alert;
     else h.action=ActionPose::idle;
     h.actionWeight=(h.action==ActionPose::walk||h.action==ActionPose::sprint||h.action==ActionPose::stairs)?std::clamp(h.weight,0.f,1.f):1.f;
+    // Authoring timeline: poseFrames are the same five normalized keyframes
+    // visible in Model Studio. Sample jumps by upward velocity, falls by fall
+    // velocity, crouch by stance blending, and land by recovery time. The
+    // existing physics, IK and terrain contact remain authoritative.
+    if (p.ladder>=0) h.actionPhase=p.gait.cycle;
+    else switch(h.action){
+    case ActionPose::jump: h.actionPhase=clamp(1.f+p.velocity.y/700.f); break;
+    case ActionPose::fall: h.actionPhase=clamp(p.velocity.y/650.f); break;
+    case ActionPose::crouch: h.actionPhase=clamp(p.gait.crouch); break;
+    case ActionPose::land: h.actionPhase=clamp(1.f-p.landed/.38f); break;
+    case ActionPose::walk: case ActionPose::sprint: case ActionPose::stairs:
+        h.actionPhase=pose.cycle-std::floor(pose.cycle); break;
+    case ActionPose::fire: h.actionPhase=clamp(1.f-p.muzzle/.08f); break;
+    case ActionPose::hit: h.actionPhase=clamp(1.f-p.flash/.7f); break;
+    default: h.actionPhase=g.time-std::floor(g.time); break;
+    }
     h.time=g.time; h.velocity=p.velocity; h.landed=p.landed;
     h.flinch=smooth((p.flash-.45f)/.24f);
     h.spin=p.flip>0?p.flipDirection*2*pi*smooth(1-p.flip/flipSeconds):0.f;
@@ -101,6 +144,14 @@ void Renderer::drawPlayer(const Game& g,const Operative& op) {
         h.farHand=muzzle+axisU*(model.foreU-1)+axisV*(model.foreV-model.muzzleV);
     };
     layout();
+    if (h.ladder && !h.ladderAiming) {
+        // The weapon is slung while both hands alternate on the rungs.
+        // The legs and pelvis stay on the ladder's axis, not inside it.
+        const float stride=std::sin(p.gait.cycle*2*pi);
+        h.nearHand=ground+Vec{-9.f,-30.f-8.f*std::max(0.f,stride)};
+        h.farHand=ground+Vec{9.f,-31.f-8.f*std::max(0.f,-stride)};
+        h.relax=0; h.nearRelax=0; h.shoulder=0;
+    }
     // The support hand must reach the foregrip with a bent elbow. If the weapon is held too far out, it slides
     // back into the shoulder instead of stretching the arm.
     if (lowered>.04f) {
@@ -113,7 +164,7 @@ void Renderer::drawPlayer(const Game& g,const Operative& op) {
         if (reach>comfortable) { muzzle=muzzle-aim*(std::min(10.f,reach-comfortable)*lowered); layout(); }
     }
     const Color gunColor=hex(weapons[op.gun].color);
-    h.weapon=[&](Vec,Vec) {
+    if (!h.ladder || h.ladderAiming) h.weapon=[&](Vec,Vec) {
         sprite(model.name,muzzle,axisU,axisV,{1.f,model.muzzleV});
     };
     humanoid(h);

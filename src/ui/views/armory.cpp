@@ -1,5 +1,6 @@
 #include "ui/app.hpp"
 #include "ui/common.hpp"
+#include "ui/weapon_tabs.hpp"
 #include <iomanip>
 #include <sstream>
 
@@ -10,6 +11,12 @@ void App::armory() {
     shell("foundry");
     const bool debug=settings.debugUnlockLevels;
     const Save& loadout=effectiveLoadout();
+    if (weapon>=0 && weapon<int(weaponCount) &&
+        !ui::weaponTabSelectable(weapon,loadout.cleared,debug)) {
+        // A saved selection may refer to a sector-locked weapon. Don't show
+        // its buy/upgrade controls until the corresponding level is cleared.
+        weapon=weaponDisplayOrder[0];
+    }
     heading("EQUIPMENT","Armory",debug?"DEBUG LOADOUT  /  upgrades cycle 0 -> max -> 0; no credits used":
         std::to_string(loadout.credits)+" credits available");
     constexpr int operative=static_cast<int>(weaponCount);
@@ -17,11 +24,11 @@ void App::armory() {
     constexpr float tabGap=5,tabWidth=(1090-tabGap*(weaponCount+1))/(weaponCount+2);
     for (int i=0;i<=skillTab;++i) {
         const int id=i<operative?weaponDisplayOrder[i]:i;
-        const bool locked=!debug && i<operative && loadout.cleared<weapons[id].unlock;
+        const bool locked=i<operative && !ui::weaponTabSelectable(id,loadout.cleared,debug);
         const std::string name=i==operative?"OPERATIVE":i==skillTab?"SKILLS":
             std::string(weapons[id].shortName)+(locked?" [L]":!loadout.owned[id]?" [$]":"");
         const Rect box{55+i*(tabWidth+tabGap),162,tabWidth,34};
-        button(box,name,[this,id]{weapon=id;},true,id==weapon);
+        button(box,name,[this,id]{weapon=id;},!locked,id==weapon);
     }
     auto pips=[&](Rect cell,int count,int filled,Color tint) {
         const float span=count*13.f-5;

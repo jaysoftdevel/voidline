@@ -325,11 +325,11 @@ void App::loadCoop() {
         return;
     }
 
-    const size_t artwork=(mission==1?story::opening.size():0);
+    const size_t artwork=(mission==1?story::openingArtCount:0);
     const size_t total=artwork+story::missionPreloads;
     if (preloadStep<total) {
         try {
-            if (preloadStep<artwork) r.preload(story::opening[preloadStep].art);
+            if (preloadStep<artwork) r.preload(story::openingArt);
             else switch (preloadStep-artwork) {
             case 0: r.preload(game.stage->art); break;
             case 1: r.preload("carbine"); break;

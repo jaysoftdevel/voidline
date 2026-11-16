@@ -81,63 +81,34 @@ bool seedMissingSourceLevels(const fs::path& source,std::string& error){
     }
     return true;
 }
+// Validate but NEVER create missing poses. The game's source JSON is the
+// authority for which action states an individual character/enemy exposes.
 bool completeInputMovementLayers(const fs::path& project,std::string& error){
-    const auto catalogFile=project/"models/movement-descriptions.json";
-    if(!fs::is_regular_file(catalogFile))return true;
-    json_object* catalog=json_object_from_file(catalogFile.string().c_str());
-    json_object* movements=nullptr;
-    if(!catalog||!json_object_object_get_ex(catalog,"movements",&movements)||
-       !json_object_is_type(movements,json_type_array)){
-        if(catalog)json_object_put(catalog);
-        error="Invalid editable movement-descriptions.json";return false;
-    }
-    for(int group=0;group<2;++group)for(int id=0;id<(group?int(specs.size()):int(characters.size()));++id){
+    for(int group=0;group<2;++group)
+      for(int id=0;id<(group?int(specs.size()):int(characters.size()));++id){
         const auto file=group?enemyModelFile(project/"models",id):characterModelFile(project/"models",id);
         json_object* doc=json_object_from_file(file.string().c_str());
-        json_object* sk=nullptr,*seq=nullptr,*depth=nullptr;
-        if(!doc||!json_object_object_get_ex(doc,"skeleton",&sk)||
-           !json_object_is_type(sk,json_type_object)){
-            if(doc)json_object_put(doc);
-            json_object_put(catalog);
-            error="Invalid authoring skeleton: "+file.string();return false;
-        }
-        if(!json_object_object_get_ex(sk,"sequences",&seq)||!json_object_is_type(seq,json_type_object)){
-            seq=json_object_new_object();json_object_object_add(sk,"sequences",seq);
-        }
-        if(!json_object_object_get_ex(sk,"sequenceDepth",&depth)||!json_object_is_type(depth,json_type_object)){
-            depth=json_object_new_object();json_object_object_add(sk,"sequenceDepth",depth);
-        }
-        bool changed=false;
-        for(size_t n=0;n<json_object_array_length(movements);++n){
-            json_object* item=json_object_array_get_idx(movements,n),*nameObj=nullptr,*existing=nullptr;
-            if(!item||!json_object_object_get_ex(item,"id",&nameObj)||
-               !json_object_is_type(nameObj,json_type_string))continue;
-            const char* name=json_object_get_string(nameObj);
-            if(!json_object_object_get_ex(seq,name,&existing)){
-                json_object* vec=json_object_new_array();
-                for(int j=0;j<14;++j){json_object* xy=json_object_new_array();
-                    json_object_array_add(xy,json_object_new_double(0));
-                    json_object_array_add(xy,json_object_new_double(0));json_object_array_add(vec,xy);}
-                json_object_object_add(seq,name,vec);changed=true;
-            }
-            if(!json_object_object_get_ex(depth,name,&existing)){
-                json_object* z=json_object_new_array();
-                for(int j=0;j<14;++j)json_object_array_add(z,json_object_new_double(0));
-                json_object_object_add(depth,name,z);changed=true;
+        json_object *sk=nullptr,*seq=nullptr,*depth=nullptr;
+        const bool valid=doc && json_object_object_get_ex(doc,"skeleton",&sk) &&
+            json_object_is_type(sk,json_type_object) &&
+            json_object_object_get_ex(sk,"sequences",&seq) && json_object_is_type(seq,json_type_object) &&
+            json_object_object_get_ex(sk,"sequenceDepth",&depth) && json_object_is_type(depth,json_type_object);
+        if(!valid){if(doc)json_object_put(doc);error="Invalid action source: "+file.string();return false;}
+        json_object_object_foreach(seq, key, value){
+            json_object* matching=nullptr;
+            if(!json_object_object_get_ex(depth,key,&matching) ||
+                !json_object_is_type(value,json_type_array) ||
+                !json_object_is_type(matching,json_type_array) ||
+                json_object_array_length(value)!=14 || json_object_array_length(matching)!=14){
+                json_object_put(doc);error="Action sequence/depth mismatch: "+file.string()+" ("+key+")";return false;
             }
         }
-        if(changed){
-            const auto temp=fs::path(file.string()+".vlstudio-writing");
-            if(json_object_to_file_ext(temp.string().c_str(),doc,JSON_C_TO_STRING_PRETTY)<0){
-                json_object_put(doc);json_object_put(catalog);error="Cannot expand authored movement sequences";return false;
-            }
-            std::error_code ec;fs::rename(temp,file,ec);
-            if(ec){std::error_code ignored;fs::remove(file,ignored);ec.clear();fs::rename(temp,file,ec);}
-            if(ec){json_object_put(doc);json_object_put(catalog);error="Cannot commit movement sequences";return false;}
+        if(json_object_object_length(seq)!=json_object_object_length(depth)){
+            json_object_put(doc);error="Orphaned action depth data: "+file.string();return false;
         }
         json_object_put(doc);
-    }
-    json_object_put(catalog);return true;
+      }
+    return true;
 }
 bool validate(const fs::path& project,std::string& error) {
     for(int group=0;group<2;++group)for(int id=0;id<(group?cooperativeSectorCount:sectorCount);++id){

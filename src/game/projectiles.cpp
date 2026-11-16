@@ -15,7 +15,11 @@ void Game::moveShots(float dt) {
         while (s.life>0 && length(change)>.0001f) {
             float first=infinity;
             int hit=-1;
-            for (const auto& surface:platforms) first=std::min(first,segment(s.p,change,surface.box));
+            int hitSurface=-1;
+            for (int j=0;j<static_cast<int>(platforms.size());++j) {
+                const float distance=segment(s.p,change,platforms[j].box);
+                if (distance<first) { first=distance; hitSurface=j; }
+            }
             const int crate=crateOnSegment(s.p,change,first);
             for (int i=0;i<static_cast<int>(enemies.size());++i) {
                 if (!enemies[i].alive || std::find(s.passed.begin(),s.passed.end(),i)!=s.passed.end()) continue;
@@ -29,6 +33,10 @@ void Game::moveShots(float dt) {
             if (hit>=0) ring(s.p,s.color,16,.2f);
             if (hit<0) {
                 if (crate>=0) strikeCrate(crates[crate],s.p);
+                else if (hitSurface>=0 && s.blast<=0) {
+                    audio.event(impactSound(platforms[hitSurface],stage->biome),.43f,
+                        (s.p.x-player.box.x)/width,.95f+random()*.12f);
+                }
                 if (s.blast>0) explode(s.p,s.blast,s.damage,s.color);
                 s.life=0; break;
             }
@@ -48,7 +56,11 @@ void Game::moveShots(float dt) {
         if (s.life<=0) continue;
         const Vec change=s.v*dt;
         float cover=infinity;
-        for (const auto& surface:platforms) cover=std::min(cover,segment(s.p,change,surface.box));
+        int hitSurface=-1;
+        for (int j=0;j<static_cast<int>(platforms.size());++j) {
+            const float distance=segment(s.p,change,platforms[j].box);
+            if (distance<cover) { cover=distance; hitSurface=j; }
+        }
         const int crate=crateOnSegment(s.p,change,cover);
         const auto hitBody=[&](const Player& body) {
             const auto& p=body.box;
@@ -63,7 +75,11 @@ void Game::moveShots(float dt) {
         else if (cover<=1) {
             const Vec at=s.p+change*cover;
             if (crate>=0) strikeCrate(crates[crate],at);
-            else burst(at,s.color,3,77);
+            else {
+                burst(at,s.color,3,77);
+                if (hitSurface>=0) audio.event(impactSound(platforms[hitSurface],stage->biome),.32f,
+                    (at.x-player.box.x)/width,.92f+random()*.14f);
+            }
             s.life=0;
         }
         s.p+=change;

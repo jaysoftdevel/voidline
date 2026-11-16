@@ -86,7 +86,7 @@ FIELDS(Color,v.r,v.g,v.b,v.a)
 FIELDS(Foot,v.heel,v.angle)
 FIELDS(Gait,v.feet[0],v.feet[1],v.cycle,v.weight,v.run,v.lean,v.compression,
     v.crouch,v.tuck,v.reach,v.pelvis,v.launchFoot,v.direction)
-FIELDS(Player,v.box,v.velocity,v.support,v.facing,v.hp,v.aim,v.flash,v.muzzle,v.flip,v.flipDirection,
+FIELDS(Player,v.box,v.velocity,v.support,v.ladder,v.dropPlatform,v.dropThrough,v.facing,v.hp,v.aim,v.flash,v.muzzle,v.flip,v.flipDirection,
     v.turn,v.landed,v.crouched,v.sprinting,v.aiming,v.ready,v.gait)
 FIELDS(Gun,v.capacity,v.ammo,v.reserve,v.duration,v.reload,v.available)
 FIELDS(Wound,v.local,v.age,v.angle,v.size)
@@ -132,6 +132,7 @@ bool validOperative(const Game& game,const Operative& op,int character) {
     return character>=0 && character<static_cast<int>(characters.size()) &&
         op.gun>=0 && op.gun<static_cast<int>(weaponCount) && op.maxHealth>0 &&
         op.player.support>=-1 && op.player.support<static_cast<int>(game.platforms.size()) &&
+        op.player.ladder>=-1 && (!game.stage || op.player.ladder<static_cast<int>(game.stage->ladders.size())) &&
         op.player.box.w>0 && op.player.box.h>0;
 }
 bool validEnemy(const Enemy& e) {
